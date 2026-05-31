@@ -20,6 +20,20 @@ Run the stdio MCP server:
 npm start
 ```
 
+Launch TradingView Desktop with CDP enabled on macOS:
+
+```bash
+npm run tv:launch -- --port 9222
+```
+
+Check CDP health and chart-target discovery:
+
+```bash
+npm run tv:health -- --port 9222
+```
+
+If TradingView is installed outside `/Applications/TradingView.app` or `~/Applications/TradingView.app`, pass `--app /path/to/TradingView.app` or set `TRADINGVIEW_APP_PATH`.
+
 For Codex, configure the built server as a local stdio MCP command:
 
 ```toml
