@@ -15,7 +15,7 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 ## Operating Model
 
 - Local TypeScript/Node MCP server over stdio.
-- TradingView Desktop integration will use local desktop/browser control in later issues.
+- TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Configuration should stay repo-local or user-local; secrets and paid-service credentials must not be committed.
 - GitHub Issues are the source of task scope.
 
