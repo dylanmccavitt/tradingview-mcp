@@ -1,0 +1,33 @@
+{
+  "name": "tradingview-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local MCP server scaffold for manual TradingView Desktop charting workflows.",
+  "type": "module",
+  "bin": {
+    "tradingview-mcp": "./dist/src/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "dev": "tsx src/index.ts",
+    "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
+    "start": "node dist/src/index.js",
+    "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.19.41",
+    "eslint": "^10.4.1",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.0"
+  }
+}
