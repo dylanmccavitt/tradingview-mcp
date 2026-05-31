@@ -8,12 +8,13 @@ The current repo is a local TypeScript/Node MCP server scaffold with the first T
 - a stdio MCP server entry point
 - a small domain module that records project identity and guardrails
 - a TradingView Desktop CDP launch and health CLI
+- a narrow one-symbol chart capture CLI for weekly, daily, and 65-minute screenshots
 - typed internal health-result shaping for later MCP tools
 - tests that pin the manual-only boundary
-- tests for CDP target discovery and health failures without requiring a live TradingView session
+- tests for CDP target discovery, health failures, chart planning, output naming, and chart-runner failures without requiring a live TradingView session
 - repo docs for issue-driven development
 
-No chart control, chartbook generation, screenshot capture, Pine extraction, scanner, or broker behavior exists yet.
+No chartbook generation, Pine extraction, scanner, or broker behavior exists yet.
 
 ## Major Components
 
@@ -37,11 +38,23 @@ No chart control, chartbook generation, screenshot capture, Pine extraction, sca
 
 `src/cli.ts` exposes local commands for launch, launch-command, and health checks.
 
+### One-Symbol Chart Capture
+
+`src/tradingview/chart-plan.ts` validates exchange-qualified symbols, defines the default weekly/daily/65-minute timeframe plan, builds TradingView chart URLs, and maps screenshots to deterministic local artifact paths.
+
+`src/tradingview/cdp-session.ts` maintains a small CDP WebSocket command client.
+
+`src/tradingview/chart-page.ts` drives a single TradingView chart page through CDP navigation, render polling, and screenshot capture.
+
+`src/tradingview/chart-runner.ts` combines health checks, page control, output directory creation, and per-timeframe success/failure reporting for one symbol.
+
 ### Tests
 
 `test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary.
 
 `test/tradingview-targets.test.ts` and `test/tradingview-health.test.ts` cover CDP target filtering and health-result shaping with fake CDP responses.
+
+`test/chart-plan.test.ts` and `test/chart-runner.test.ts` cover command planning, deterministic output naming, and per-timeframe error handling with fake clients.
 
 ### Project Docs
 
@@ -69,6 +82,14 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 4. Run `npm run tv:health -- --port 9222`.
 5. Read the status and next steps from the CLI output.
 
+### One-Symbol Chart Capture
+
+1. Complete the TradingView CDP health flow until a chart target is healthy.
+2. Run `npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222`.
+3. The CLI navigates the active chart target through weekly, daily, and 65-minute URLs.
+4. For each timeframe, it waits for a rendered chart canvas and writes a PNG under `artifacts/tradingview-charts/<SYMBOL-SLUG>/`.
+5. The CLI prints per-timeframe success or failure.
+
 ### MCP Startup
 
 1. Build with `npm run build`.
@@ -80,5 +101,6 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - The server must remain local-first.
 - TradingView Desktop access must be user-controlled and subscription-respecting.
 - CDP health checks must use only the user's local TradingView Desktop session.
+- One-symbol chart capture must stay user-directed and must report per-timeframe failures without converting them into scanner/ranking output.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.

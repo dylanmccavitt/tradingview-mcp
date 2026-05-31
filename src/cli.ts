@@ -3,6 +3,12 @@
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 
+import {
+  chartOneSymbol,
+  type ChartOneSymbolOptions,
+  type ChartOneSymbolResult
+} from "./tradingview/chart-runner.js";
+import { ChartPlanError } from "./tradingview/chart-plan.js";
 import { formatCdpEndpoint } from "./tradingview/cdp.js";
 import {
   DEFAULT_CDP_HOST,
@@ -38,11 +44,13 @@ const USAGE = `Usage:
   tradingview-mcp-cli health [--host 127.0.0.1] [--port 9222] [--timeout-ms 2500] [--app /Applications/TradingView.app] [--json]
   tradingview-mcp-cli launch [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
+  tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
 
 npm scripts:
   npm run tv:health -- --port 9222
   npm run tv:launch -- --port 9222
   npm run tv:launch-command -- --port 9222
+  npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 `;
 
 function parsePositiveInteger(value: string | undefined, label: string): number {
@@ -114,6 +122,52 @@ function healthOptionsFromCli(
   return healthOptions;
 }
 
+function chartOptionsFromCli(
+  values: Record<string, string | boolean | string[] | undefined>,
+  common: CommonCliOptions,
+  symbolFromPosition?: string
+): ChartOneSymbolOptions {
+  const symbol = getStringOption(values, "symbol") ?? symbolFromPosition;
+
+  if (!symbol) {
+    throw new Error("--symbol is required for chart.");
+  }
+
+  const chartOptions: ChartOneSymbolOptions = {
+    symbol,
+    host: common.host,
+    port: common.port,
+    timeoutMs: common.timeoutMs
+  };
+
+  if (common.appPath) {
+    chartOptions.appPath = common.appPath;
+  }
+
+  const outputRoot = getStringOption(values, "output-dir");
+  if (outputRoot) {
+    chartOptions.outputRoot = outputRoot;
+  }
+
+  const renderTimeoutMs = getStringOption(values, "render-timeout-ms");
+  if (renderTimeoutMs) {
+    chartOptions.renderTimeoutMs = parsePositiveInteger(
+      renderTimeoutMs,
+      "--render-timeout-ms"
+    );
+  }
+
+  const renderSettleMs = getStringOption(values, "render-settle-ms");
+  if (renderSettleMs) {
+    chartOptions.renderSettleMs = parsePositiveInteger(
+      renderSettleMs,
+      "--render-settle-ms"
+    );
+  }
+
+  return chartOptions;
+}
+
 function formatHealthResult(result: TradingViewHealthResult): string {
   const lines = [
     `Status: ${result.status}`,
@@ -150,6 +204,33 @@ function writeJson(stream: Writable, value: unknown): void {
   stream.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function formatChartResult(result: ChartOneSymbolResult): string {
+  const lines = [
+    `Status: ${result.ok ? "success" : "failed"}`,
+    `Symbol: ${result.symbol}`,
+    `Endpoint: ${result.endpoint}`,
+    `Output directory: ${result.outputDirectory}`
+  ];
+
+  if (result.target) {
+    lines.push(`Chart target: ${result.target.title} <${result.target.url}>`);
+  }
+
+  lines.push("Timeframes:");
+
+  for (const item of result.results) {
+    if (item.ok) {
+      lines.push(`- ${item.timeframe} (${item.interval}): OK ${item.outputPath}`);
+    } else {
+      lines.push(
+        `- ${item.timeframe} (${item.interval}): FAILED ${item.error ?? "Unknown error"}`
+      );
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 export async function runCli(
   argv = process.argv.slice(2),
   streams: CliStreams = {
@@ -177,9 +258,22 @@ export async function runCli(
         json: {
           type: "boolean"
         },
+        "output-dir": {
+          type: "string"
+        },
         port: {
           type: "string",
           short: "p"
+        },
+        "render-settle-ms": {
+          type: "string"
+        },
+        "render-timeout-ms": {
+          type: "string"
+        },
+        symbol: {
+          type: "string",
+          short: "s"
         },
         "timeout-ms": {
           type: "string"
@@ -221,6 +315,40 @@ export async function runCli(
       writeJson(streams.stdout, result);
     } else {
       streams.stdout.write(formatHealthResult(result));
+    }
+
+    return result.ok ? 0 : 1;
+  }
+
+  if (command === "chart") {
+    let chartOptions: ChartOneSymbolOptions;
+
+    try {
+      chartOptions = chartOptionsFromCli(
+        parsed.values,
+        options,
+        parsed.positionals[1]
+      );
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n\n${USAGE}`);
+      return 2;
+    }
+
+    let result: ChartOneSymbolResult;
+
+    try {
+      result = await chartOneSymbol(chartOptions);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n`);
+      return error instanceof ChartPlanError ? 2 : 1;
+    }
+
+    if (options.json) {
+      writeJson(streams.stdout, result);
+    } else {
+      streams.stdout.write(formatChartResult(result));
     }
 
     return result.ok ? 0 : 1;
