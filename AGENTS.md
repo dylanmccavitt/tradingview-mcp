@@ -39,6 +39,13 @@ Chart one exchange-qualified symbol across the default weekly, daily, and
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 ```
 
+List local universe groups and resolve chart symbols from the sample config:
+
+```bash
+npm run tv:universe -- list
+npm run tv:universe -- resolve --group semis --tier core
+```
+
 If TradingView is installed outside `/Applications/TradingView.app` or `~/Applications/TradingView.app`, pass `--app /path/to/TradingView.app` or set `TRADINGVIEW_APP_PATH`.
 
 For Codex, configure the built server as a local stdio MCP command:
@@ -68,6 +75,7 @@ Run all three before marking an implementation issue ready for review.
 - Keep MCP tool schemas small, explicit, and documented near the tool implementation.
 - Prefer small modules with domain names over generic utility files.
 - Keep screenshot output paths deterministic and under ignored local artifact directories unless a later issue documents an export format.
+- Treat local universe config files as the v1 source of truth for chart symbol lists; do not depend on TradingView watchlists for universe resolution.
 - Keep docs durable; do not put scratch notes, issue-specific plans, or temporary findings in this file.
 - Add or update tests when behavior changes.
 

@@ -16,6 +16,7 @@
     "start": "node dist/src/index.js",
     "tv:chart": "tsx src/cli.ts chart",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "tv:universe": "tsx src/cli.ts universe",
     "tv:health": "tsx src/cli.ts health",
     "tv:launch": "tsx src/cli.ts launch",
     "tv:launch-command": "tsx src/cli.ts launch-command",

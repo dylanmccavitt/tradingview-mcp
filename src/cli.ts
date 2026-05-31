@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { parseArgs } from "node:util";
+import { resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -24,6 +25,19 @@ import {
   type CheckTradingViewHealthOptions,
   type TradingViewHealthResult
 } from "./tradingview/health.js";
+import {
+  DEFAULT_UNIVERSE_CONFIG_PATH,
+  listUniverseGroups,
+  loadUniverseConfig,
+  resolveUniverseSelection,
+  UNIVERSE_TIERS,
+  UniverseConfigError,
+  type ResolvedUniverseSymbol,
+  type ResolveUniverseSelectionOptions,
+  type UniverseConfig,
+  type UniverseGroupSummary,
+  type UniverseSelectionTier
+} from "./universe/config.js";
 
 type Writable = Pick<NodeJS.WritableStream, "write">;
 
@@ -45,12 +59,16 @@ const USAGE = `Usage:
   tradingview-mcp-cli launch [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
+  tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
+  tradingview-mcp-cli universe resolve [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--json]
 
 npm scripts:
   npm run tv:health -- --port 9222
   npm run tv:launch -- --port 9222
   npm run tv:launch-command -- --port 9222
   npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+  npm run tv:universe -- list
+  npm run tv:universe -- resolve --group semis --tier core
 `;
 
 function parsePositiveInteger(value: string | undefined, label: string): number {
@@ -204,6 +222,74 @@ function writeJson(stream: Writable, value: unknown): void {
   stream.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function parseGroupSelection(groupOption: string | undefined): string[] | undefined {
+  if (!groupOption) {
+    return undefined;
+  }
+
+  const groupIds = groupOption
+    .split(",")
+    .map((group) => group.trim())
+    .filter(Boolean);
+
+  return groupIds.length > 0 ? groupIds : undefined;
+}
+
+function isUniverseTier(value: string): boolean {
+  return (UNIVERSE_TIERS as readonly string[]).includes(value);
+}
+
+function parseUniverseTier(value: string | undefined): UniverseSelectionTier {
+  const tier = value ?? "core";
+
+  if (tier === "all" || isUniverseTier(tier)) {
+    return tier as UniverseSelectionTier;
+  }
+
+  throw new Error("--tier must be core, extended, or all.");
+}
+
+function formatTagSuffix(tags: readonly string[]): string {
+  return tags.length > 0 ? ` [${tags.join(", ")}]` : "";
+}
+
+function formatUniverseGroups(
+  configPath: string,
+  groups: UniverseGroupSummary[]
+): string {
+  const lines = [`Config: ${resolvePath(configPath)}`, "Groups:"];
+
+  for (const group of groups) {
+    lines.push(
+      `- ${group.id}: ${group.label} (core ${group.coreCount}, extended ${group.extendedCount})${formatTagSuffix(group.tags)}`
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+function formatResolvedUniverseSymbols(
+  configPath: string,
+  groupIds: string[] | undefined,
+  tier: UniverseSelectionTier,
+  symbols: ResolvedUniverseSymbol[]
+): string {
+  const lines = [
+    `Config: ${resolvePath(configPath)}`,
+    `Selection: groups ${groupIds?.join(", ") ?? "all"}, tier ${tier}`,
+    "Symbols:"
+  ];
+
+  for (const symbol of symbols) {
+    const name = symbol.name ? ` ${symbol.name}` : "";
+    lines.push(
+      `- ${symbol.symbol} (${symbol.alias})${name}${formatTagSuffix(symbol.tags)} groups=${symbol.groups.join(",")} tiers=${symbol.tiers.join(",")}`
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatChartResult(result: ChartOneSymbolResult): string {
   const lines = [
     `Status: ${result.ok ? "success" : "failed"}`,
@@ -248,6 +334,12 @@ export async function runCli(
         app: {
           type: "string"
         },
+        config: {
+          type: "string"
+        },
+        group: {
+          type: "string"
+        },
         help: {
           type: "boolean",
           short: "h"
@@ -274,6 +366,9 @@ export async function runCli(
         symbol: {
           type: "string",
           short: "s"
+        },
+        tier: {
+          type: "string"
         },
         "timeout-ms": {
           type: "string"
@@ -352,6 +447,89 @@ export async function runCli(
     }
 
     return result.ok ? 0 : 1;
+  }
+
+  if (command === "universe") {
+    const subcommand = parsed.positionals[1] ?? "list";
+    const configPath =
+      getStringOption(parsed.values, "config") ?? DEFAULT_UNIVERSE_CONFIG_PATH;
+
+    let config: UniverseConfig;
+
+    try {
+      config = await loadUniverseConfig(configPath);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n`);
+      return error instanceof UniverseConfigError ? 2 : 1;
+    }
+
+    if (subcommand === "list") {
+      const groups = listUniverseGroups(config);
+
+      if (options.json) {
+        writeJson(streams.stdout, {
+          configPath: resolvePath(configPath),
+          groups
+        });
+      } else {
+        streams.stdout.write(formatUniverseGroups(configPath, groups));
+      }
+
+      return 0;
+    }
+
+    if (subcommand === "resolve") {
+      let groupIds: string[] | undefined;
+      let tier: UniverseSelectionTier;
+
+      try {
+        groupIds = parseGroupSelection(getStringOption(parsed.values, "group"));
+        tier = parseUniverseTier(getStringOption(parsed.values, "tier"));
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        streams.stderr.write(`${detail}\n\n${USAGE}`);
+        return 2;
+      }
+
+      let symbols: ResolvedUniverseSymbol[];
+
+      try {
+        const selectionOptions: ResolveUniverseSelectionOptions = {
+          tier
+        };
+
+        if (groupIds) {
+          selectionOptions.groupIds = groupIds;
+        }
+
+        symbols = resolveUniverseSelection(config, selectionOptions);
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        streams.stderr.write(`${detail}\n`);
+        return error instanceof UniverseConfigError ? 2 : 1;
+      }
+
+      if (options.json) {
+        writeJson(streams.stdout, {
+          configPath: resolvePath(configPath),
+          selection: {
+            groups: groupIds ?? "all",
+            tier
+          },
+          symbols
+        });
+      } else {
+        streams.stdout.write(
+          formatResolvedUniverseSymbols(configPath, groupIds, tier, symbols)
+        );
+      }
+
+      return 0;
+    }
+
+    streams.stderr.write(`Unknown universe command: ${subcommand}\n\n${USAGE}`);
+    return 2;
   }
 
   if (command === "launch") {
