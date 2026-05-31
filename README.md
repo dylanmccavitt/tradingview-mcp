@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a minimal TypeScript MCP server scaffold and a local TradingView Desktop CDP launch/health workflow. Chart control, chartbooks, Pine extraction, and screenshot capture are intentionally deferred.
+This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, and a narrow one-symbol chart capture CLI. Chartbooks, Pine extraction, and universe workflows are intentionally deferred.
 
 ## Requirements
 
@@ -29,6 +29,7 @@ npm run lint
 npm test
 npm run tv:launch -- --port 9222
 npm run tv:health -- --port 9222
+npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 ```
 
 ## TradingView Desktop CDP
@@ -58,6 +59,25 @@ npm run tv:health -- --port 9222
 ```
 
 The health command reports actionable failures for a missing app, unreachable or wrong CDP port, unexpected CDP response shape, and a reachable session with no open TradingView chart page. It does not automate login, bypass subscriptions, place orders, or scan/rank symbols.
+
+## Chart One Symbol
+
+After TradingView Desktop is running with CDP enabled and a chart tab is open, capture one exchange-qualified symbol across the default weekly, daily, and 65-minute timeframes:
+
+```bash
+npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+```
+
+The command navigates the active TradingView chart target by URL, waits for each timeframe to render, and writes PNG screenshots to a deterministic local directory:
+
+```text
+artifacts/tradingview-charts/NASDAQ-NVDA/
+  NASDAQ-NVDA-weekly.png
+  NASDAQ-NVDA-daily.png
+  NASDAQ-NVDA-65-minute.png
+```
+
+Use `--output-dir <path>` to choose a different artifact root. The command reports each timeframe as `OK` or `FAILED`; it does not scan, rank, place orders, or bypass TradingView access controls.
 
 ## Run the MCP Server
 

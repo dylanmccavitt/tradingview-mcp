@@ -32,6 +32,13 @@ Check CDP health and chart-target discovery:
 npm run tv:health -- --port 9222
 ```
 
+Chart one exchange-qualified symbol across the default weekly, daily, and
+65-minute timeframes:
+
+```bash
+npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+```
+
 If TradingView is installed outside `/Applications/TradingView.app` or `~/Applications/TradingView.app`, pass `--app /path/to/TradingView.app` or set `TRADINGVIEW_APP_PATH`.
 
 For Codex, configure the built server as a local stdio MCP command:
@@ -60,6 +67,7 @@ Run all three before marking an implementation issue ready for review.
 - Keep runtime code local-first and deterministic.
 - Keep MCP tool schemas small, explicit, and documented near the tool implementation.
 - Prefer small modules with domain names over generic utility files.
+- Keep screenshot output paths deterministic and under ignored local artifact directories unless a later issue documents an export format.
 - Keep docs durable; do not put scratch notes, issue-specific plans, or temporary findings in this file.
 - Add or update tests when behavior changes.
 
