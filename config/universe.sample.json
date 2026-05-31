@@ -114,6 +114,18 @@
           "tags": ["developer-tools"]
         },
         {
+          "symbol": "NASDAQ:CRWD",
+          "alias": "CRWD",
+          "name": "CrowdStrike",
+          "tags": ["security"]
+        },
+        {
+          "symbol": "NASDAQ:PANW",
+          "alias": "PANW",
+          "name": "Palo Alto Networks",
+          "tags": ["security"]
+        },
+        {
           "symbol": "NYSE:PATH",
           "alias": "PATH",
           "name": "UiPath",
