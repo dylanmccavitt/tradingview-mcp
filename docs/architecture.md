@@ -9,8 +9,9 @@ The current repo is a local TypeScript/Node MCP server scaffold with the first T
 - a small domain module that records project identity and guardrails
 - a TradingView Desktop CDP launch and health CLI
 - a narrow one-symbol chart capture CLI for weekly, daily, and 65-minute screenshots
+- a local universe config parser and CLI selection workflow
 - typed internal health-result shaping for later MCP tools
-- tests that pin the manual-only boundary
+- tests that pin the manual-only boundary and universe parsing behavior
 - tests for CDP target discovery, health failures, chart planning, output naming, and chart-runner failures without requiring a live TradingView session
 - repo docs for issue-driven development
 
@@ -48,6 +49,14 @@ No chartbook generation, Pine extraction, scanner, or broker behavior exists yet
 
 `src/tradingview/chart-runner.ts` combines health checks, page control, output directory creation, and per-timeframe success/failure reporting for one symbol.
 
+### Local Universe Config
+
+`config/universe.sample.json` is the tracked v1 sample universe. It defines core and extended lists for semiconductors, AI software, AI infrastructure, and enterprise software using exchange-qualified TradingView symbols, display aliases, optional company names, and tags.
+
+`src/universe/config.ts` validates the local JSON format, normalizes TradingView symbols, lists group summaries, and resolves selected groups/tiers into an ordered, de-duplicated symbol list for charting.
+
+`src/cli.ts` exposes `universe list` and `universe resolve` commands. These commands read local config only and do not depend on TradingView watchlists.
+
 ### Tests
 
 `test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary.
@@ -55,6 +64,8 @@ No chartbook generation, Pine extraction, scanner, or broker behavior exists yet
 `test/tradingview-targets.test.ts` and `test/tradingview-health.test.ts` cover CDP target filtering and health-result shaping with fake CDP responses.
 
 `test/chart-plan.test.ts` and `test/chart-runner.test.ts` cover command planning, deterministic output naming, and per-timeframe error handling with fake clients.
+
+`test/universe-config.test.ts` and `test/cli-universe.test.ts` cover local universe parsing, duplicate handling, invalid symbols, group selection, and CLI formatting.
 
 ### Project Docs
 
@@ -90,6 +101,14 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 4. For each timeframe, it waits for a rendered chart canvas and writes a PNG under `artifacts/tradingview-charts/<SYMBOL-SLUG>/`.
 5. The CLI prints per-timeframe success or failure.
 
+### Universe Selection
+
+1. Keep the chart universe in a local JSON file such as `config/universe.sample.json` or ignored `config/universe.local.json`.
+2. Run `npm run tv:universe -- list` to inspect configured groups.
+3. Run `npm run tv:universe -- resolve --group semis --tier core` to produce an ordered symbol list.
+4. Use `--tier all` or comma-separated group ids for broader manual charting selections.
+5. The resolver de-duplicates repeated symbols in first-seen order and reports source groups and tiers without ranking or scoring them.
+
 ### MCP Startup
 
 1. Build with `npm run build`.
@@ -102,5 +121,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - TradingView Desktop access must be user-controlled and subscription-respecting.
 - CDP health checks must use only the user's local TradingView Desktop session.
 - One-symbol chart capture must stay user-directed and must report per-timeframe failures without converting them into scanner/ranking output.
+- Local universe config is the v1 source of truth for chart symbol lists; TradingView watchlists are not required or read for universe resolution.
+- Universe selection preserves configured order and de-duplicates symbols without scoring, ranking, or generating candidates.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.

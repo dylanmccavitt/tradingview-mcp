@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, and a narrow one-symbol chart capture CLI. Chartbooks, Pine extraction, and universe workflows are intentionally deferred.
+This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, and a local universe config workflow. Chartbooks and Pine extraction are intentionally deferred.
 
 ## Requirements
 
@@ -30,7 +30,33 @@ npm test
 npm run tv:launch -- --port 9222
 npm run tv:health -- --port 9222
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+npm run tv:universe -- list
+npm run tv:universe -- resolve --group semis --tier core
 ```
+
+## Local Universe Config
+
+The v1 universe source of truth is a local JSON file, not TradingView watchlists. The tracked sample lives at [`config/universe.sample.json`](./config/universe.sample.json) and includes core and extended groups for semiconductors, AI software, AI infrastructure, and enterprise software.
+
+List the configured groups:
+
+```bash
+npm run tv:universe -- list
+```
+
+Resolve ordered chart symbols for a group and tier:
+
+```bash
+npm run tv:universe -- resolve --group semis --tier core
+```
+
+Use `--tier extended` or `--tier all` to change the selection. Use comma-separated group ids to resolve more than one group:
+
+```bash
+npm run tv:universe -- resolve --group semis,ai-software --tier all
+```
+
+Use `--config <path>` to point at a user-local copy, for example `config/universe.local.json`. Local `*.local.json` universe files are ignored by Git. Resolution de-duplicates symbols while preserving the first configured order and keeping source group/tier metadata in JSON output.
 
 ## TradingView Desktop CDP
 

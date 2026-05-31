@@ -1,0 +1,281 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "semis",
+      "label": "Semiconductors",
+      "tags": ["semis", "hardware", "ai"],
+      "core": [
+        {
+          "symbol": "NASDAQ:NVDA",
+          "alias": "NVDA",
+          "name": "NVIDIA",
+          "tags": ["gpu", "accelerators"]
+        },
+        {
+          "symbol": "NASDAQ:AMD",
+          "alias": "AMD",
+          "name": "Advanced Micro Devices",
+          "tags": ["gpu", "cpu"]
+        },
+        {
+          "symbol": "NASDAQ:AVGO",
+          "alias": "AVGO",
+          "name": "Broadcom",
+          "tags": ["networking", "custom-silicon"]
+        },
+        {
+          "symbol": "NYSE:TSM",
+          "alias": "TSM",
+          "name": "Taiwan Semiconductor",
+          "tags": ["foundry"]
+        },
+        {
+          "symbol": "NASDAQ:ASML",
+          "alias": "ASML",
+          "name": "ASML",
+          "tags": ["equipment", "lithography"]
+        }
+      ],
+      "extended": [
+        {
+          "symbol": "NASDAQ:ARM",
+          "alias": "ARM",
+          "name": "Arm Holdings",
+          "tags": ["ip", "cpu"]
+        },
+        {
+          "symbol": "NASDAQ:MU",
+          "alias": "MU",
+          "name": "Micron",
+          "tags": ["memory"]
+        },
+        {
+          "symbol": "NASDAQ:MRVL",
+          "alias": "MRVL",
+          "name": "Marvell",
+          "tags": ["networking", "custom-silicon"]
+        },
+        {
+          "symbol": "NASDAQ:LRCX",
+          "alias": "LRCX",
+          "name": "Lam Research",
+          "tags": ["equipment"]
+        },
+        {
+          "symbol": "NASDAQ:AMAT",
+          "alias": "AMAT",
+          "name": "Applied Materials",
+          "tags": ["equipment"]
+        }
+      ]
+    },
+    {
+      "id": "ai-software",
+      "label": "AI Software",
+      "tags": ["ai", "software"],
+      "core": [
+        {
+          "symbol": "NYSE:PLTR",
+          "alias": "PLTR",
+          "name": "Palantir",
+          "tags": ["analytics", "government"]
+        },
+        {
+          "symbol": "NYSE:SNOW",
+          "alias": "SNOW",
+          "name": "Snowflake",
+          "tags": ["data-cloud"]
+        },
+        {
+          "symbol": "NASDAQ:DDOG",
+          "alias": "DDOG",
+          "name": "Datadog",
+          "tags": ["observability"]
+        },
+        {
+          "symbol": "NYSE:NET",
+          "alias": "NET",
+          "name": "Cloudflare",
+          "tags": ["edge", "security"]
+        },
+        {
+          "symbol": "NASDAQ:MDB",
+          "alias": "MDB",
+          "name": "MongoDB",
+          "tags": ["database"]
+        }
+      ],
+      "extended": [
+        {
+          "symbol": "NASDAQ:GTLB",
+          "alias": "GTLB",
+          "name": "GitLab",
+          "tags": ["developer-tools"]
+        },
+        {
+          "symbol": "NASDAQ:CRWD",
+          "alias": "CRWD",
+          "name": "CrowdStrike",
+          "tags": ["security"]
+        },
+        {
+          "symbol": "NASDAQ:PANW",
+          "alias": "PANW",
+          "name": "Palo Alto Networks",
+          "tags": ["security"]
+        },
+        {
+          "symbol": "NYSE:PATH",
+          "alias": "PATH",
+          "name": "UiPath",
+          "tags": ["automation"]
+        },
+        {
+          "symbol": "NYSE:AI",
+          "alias": "AI",
+          "name": "C3.ai",
+          "tags": ["enterprise-ai"]
+        },
+        {
+          "symbol": "NYSE:ESTC",
+          "alias": "ESTC",
+          "name": "Elastic",
+          "tags": ["search", "observability"]
+        },
+        {
+          "symbol": "NASDAQ:S",
+          "alias": "S",
+          "name": "SentinelOne",
+          "tags": ["security"]
+        }
+      ]
+    },
+    {
+      "id": "ai-infrastructure",
+      "label": "AI Infrastructure",
+      "tags": ["ai", "cloud", "infrastructure"],
+      "core": [
+        {
+          "symbol": "NASDAQ:MSFT",
+          "alias": "MSFT",
+          "name": "Microsoft",
+          "tags": ["cloud", "hyperscaler"]
+        },
+        {
+          "symbol": "NASDAQ:AMZN",
+          "alias": "AMZN",
+          "name": "Amazon",
+          "tags": ["cloud", "hyperscaler"]
+        },
+        {
+          "symbol": "NASDAQ:GOOGL",
+          "alias": "GOOGL",
+          "name": "Alphabet",
+          "tags": ["cloud", "hyperscaler"]
+        },
+        {
+          "symbol": "NASDAQ:META",
+          "alias": "META",
+          "name": "Meta Platforms",
+          "tags": ["ai-labs", "platform"]
+        },
+        {
+          "symbol": "NASDAQ:NBIS",
+          "alias": "NBIS",
+          "name": "Nebius",
+          "tags": ["ai-cloud"]
+        }
+      ],
+      "extended": [
+        {
+          "symbol": "NYSE:ORCL",
+          "alias": "ORCL",
+          "name": "Oracle",
+          "tags": ["cloud", "database"]
+        },
+        {
+          "symbol": "NYSE:DELL",
+          "alias": "DELL",
+          "name": "Dell Technologies",
+          "tags": ["servers"]
+        },
+        {
+          "symbol": "NYSE:HPE",
+          "alias": "HPE",
+          "name": "Hewlett Packard Enterprise",
+          "tags": ["servers", "networking"]
+        },
+        {
+          "symbol": "NASDAQ:SMCI",
+          "alias": "SMCI",
+          "name": "Super Micro Computer",
+          "tags": ["servers"]
+        }
+      ]
+    },
+    {
+      "id": "enterprise-software",
+      "label": "Enterprise Software",
+      "tags": ["enterprise", "software"],
+      "core": [
+        {
+          "symbol": "NASDAQ:MSFT",
+          "alias": "MSFT",
+          "name": "Microsoft",
+          "tags": ["productivity", "cloud"]
+        },
+        {
+          "symbol": "NYSE:ORCL",
+          "alias": "ORCL",
+          "name": "Oracle",
+          "tags": ["database", "cloud"]
+        },
+        {
+          "symbol": "NYSE:CRM",
+          "alias": "CRM",
+          "name": "Salesforce",
+          "tags": ["crm"]
+        },
+        {
+          "symbol": "NYSE:NOW",
+          "alias": "NOW",
+          "name": "ServiceNow",
+          "tags": ["workflow"]
+        },
+        {
+          "symbol": "NASDAQ:ADBE",
+          "alias": "ADBE",
+          "name": "Adobe",
+          "tags": ["creative", "marketing"]
+        }
+      ],
+      "extended": [
+        {
+          "symbol": "NASDAQ:INTU",
+          "alias": "INTU",
+          "name": "Intuit",
+          "tags": ["finance-software"]
+        },
+        {
+          "symbol": "NASDAQ:ADSK",
+          "alias": "ADSK",
+          "name": "Autodesk",
+          "tags": ["design-software"]
+        },
+        {
+          "symbol": "NASDAQ:TEAM",
+          "alias": "TEAM",
+          "name": "Atlassian",
+          "tags": ["collaboration"]
+        },
+        {
+          "symbol": "NASDAQ:WDAY",
+          "alias": "WDAY",
+          "name": "Workday",
+          "tags": ["hr", "finance-software"]
+        }
+      ]
+    }
+  ]
+}
