@@ -67,6 +67,11 @@ npm run typecheck
 ```
 
 Run all three before marking an implementation issue ready for review.
+For Pine overlay changes, also run the targeted static check:
+
+```bash
+npm run test:pine
+```
 
 ## Coding Rules
 
@@ -76,6 +81,7 @@ Run all three before marking an implementation issue ready for review.
 - Prefer small modules with domain names over generic utility files.
 - Keep screenshot output paths deterministic and under ignored local artifact directories unless a later issue documents an export format.
 - Treat local universe config files as the v1 source of truth for chart symbol lists; do not depend on TradingView watchlists for universe resolution.
+- Keep Pine overlays self-contained from chart OHLCV and manually installed in TradingView unless a later ADR explicitly changes that boundary.
 - Keep docs durable; do not put scratch notes, issue-specific plans, or temporary findings in this file.
 - Add or update tests when behavior changes.
 
