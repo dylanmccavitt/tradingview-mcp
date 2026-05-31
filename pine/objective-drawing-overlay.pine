@@ -161,18 +161,42 @@ var label swingHighLabel = na
 var line swingLowLine = na
 var label swingLowLabel = na
 
-[pdhLine, pdhLabel] := f_upsert_level(pdhLine, pdhLabel, priorDayHigh, "PDH", color.new(color.blue, 0), showPriorDayLevels, levelWidth)
-[pdlLine, pdlLabel] := f_upsert_level(pdlLine, pdlLabel, priorDayLow, "PDL", color.new(color.blue, 0), showPriorDayLevels, levelWidth)
-[pwhLine, pwhLabel] := f_upsert_level(pwhLine, pwhLabel, priorWeekHigh, "PWH", color.new(color.purple, 0), showPriorWeekLevels, levelWidth)
-[pwlLine, pwlLabel] := f_upsert_level(pwlLine, pwlLabel, priorWeekLow, "PWL", color.new(color.purple, 0), showPriorWeekLevels, levelWidth)
-[pmhLine, pmhLabel] := f_upsert_level(pmhLine, pmhLabel, priorMonthHigh, "PMH", color.new(color.orange, 0), showPriorMonthLevels, levelWidth + 1)
-[pmlLine, pmlLabel] := f_upsert_level(pmlLine, pmlLabel, priorMonthLow, "PML", color.new(color.orange, 0), showPriorMonthLevels, levelWidth + 1)
-[high20Line, high20Label] := f_upsert_level(high20Line, high20Label, breakout20High, "20D-H", color.new(color.teal, 0), showBreakoutLevels and not isWeeklyChart, breakoutWidth)
-[low20Line, low20Label] := f_upsert_level(low20Line, low20Label, breakout20Low, "20D-L", color.new(color.teal, 0), showBreakoutLevels and not isWeeklyChart, breakoutWidth)
-[high50Line, high50Label] := f_upsert_level(high50Line, high50Label, breakout50High, "50D-H", color.new(color.green, 0), showBreakoutLevels, breakoutWidth)
-[low50Line, low50Label] := f_upsert_level(low50Line, low50Label, breakout50Low, "50D-L", color.new(color.green, 0), showBreakoutLevels, breakoutWidth)
-[swingHighLine, swingHighLabel] := f_upsert_swing(swingHighLine, swingHighLabel, lastSwingHigh, lastSwingHighBar, "SW-H", color.new(color.red, 0), showSwingLevels, swingWidth)
-[swingLowLine, swingLowLabel] := f_upsert_swing(swingLowLine, swingLowLabel, lastSwingLow, lastSwingLowBar, "SW-L", color.new(color.lime, 0), showSwingLevels, swingWidth)
+[nextPdhLine, nextPdhLabel] = f_upsert_level(pdhLine, pdhLabel, priorDayHigh, "PDH", color.new(color.blue, 0), showPriorDayLevels, levelWidth)
+pdhLine := nextPdhLine
+pdhLabel := nextPdhLabel
+[nextPdlLine, nextPdlLabel] = f_upsert_level(pdlLine, pdlLabel, priorDayLow, "PDL", color.new(color.blue, 0), showPriorDayLevels, levelWidth)
+pdlLine := nextPdlLine
+pdlLabel := nextPdlLabel
+[nextPwhLine, nextPwhLabel] = f_upsert_level(pwhLine, pwhLabel, priorWeekHigh, "PWH", color.new(color.purple, 0), showPriorWeekLevels, levelWidth)
+pwhLine := nextPwhLine
+pwhLabel := nextPwhLabel
+[nextPwlLine, nextPwlLabel] = f_upsert_level(pwlLine, pwlLabel, priorWeekLow, "PWL", color.new(color.purple, 0), showPriorWeekLevels, levelWidth)
+pwlLine := nextPwlLine
+pwlLabel := nextPwlLabel
+[nextPmhLine, nextPmhLabel] = f_upsert_level(pmhLine, pmhLabel, priorMonthHigh, "PMH", color.new(color.orange, 0), showPriorMonthLevels, levelWidth + 1)
+pmhLine := nextPmhLine
+pmhLabel := nextPmhLabel
+[nextPmlLine, nextPmlLabel] = f_upsert_level(pmlLine, pmlLabel, priorMonthLow, "PML", color.new(color.orange, 0), showPriorMonthLevels, levelWidth + 1)
+pmlLine := nextPmlLine
+pmlLabel := nextPmlLabel
+[nextHigh20Line, nextHigh20Label] = f_upsert_level(high20Line, high20Label, breakout20High, "20D-H", color.new(color.teal, 0), showBreakoutLevels and not isWeeklyChart, breakoutWidth)
+high20Line := nextHigh20Line
+high20Label := nextHigh20Label
+[nextLow20Line, nextLow20Label] = f_upsert_level(low20Line, low20Label, breakout20Low, "20D-L", color.new(color.teal, 0), showBreakoutLevels and not isWeeklyChart, breakoutWidth)
+low20Line := nextLow20Line
+low20Label := nextLow20Label
+[nextHigh50Line, nextHigh50Label] = f_upsert_level(high50Line, high50Label, breakout50High, "50D-H", color.new(color.green, 0), showBreakoutLevels, breakoutWidth)
+high50Line := nextHigh50Line
+high50Label := nextHigh50Label
+[nextLow50Line, nextLow50Label] = f_upsert_level(low50Line, low50Label, breakout50Low, "50D-L", color.new(color.green, 0), showBreakoutLevels, breakoutWidth)
+low50Line := nextLow50Line
+low50Label := nextLow50Label
+[nextSwingHighLine, nextSwingHighLabel] = f_upsert_swing(swingHighLine, swingHighLabel, lastSwingHigh, lastSwingHighBar, "SW-H", color.new(color.red, 0), showSwingLevels, swingWidth)
+swingHighLine := nextSwingHighLine
+swingHighLabel := nextSwingHighLabel
+[nextSwingLowLine, nextSwingLowLabel] = f_upsert_swing(swingLowLine, swingLowLabel, lastSwingLow, lastSwingLowBar, "SW-L", color.new(color.lime, 0), showSwingLevels, swingWidth)
+swingLowLine := nextSwingLowLine
+swingLowLabel := nextSwingLowLabel
 
 // Gap zones.
 var array<box> gapBoxes = array.new_box()
@@ -202,6 +226,7 @@ if isAtrCompression and not na(compressionBox)
     box.set_top(compressionBox, rangeHigh)
     box.set_bottom(compressionBox, rangeLow)
 if not isAtrCompression and not na(compressionBox)
+    box.delete(compressionBox)
     compressionBox := na
 
 // Opening range/premarket levels on intraday charts.
@@ -232,10 +257,18 @@ var line openingRangeHighLine = na
 var label openingRangeHighLabel = na
 var line openingRangeLowLine = na
 var label openingRangeLowLabel = na
-[premarketHighLine, premarketHighLabel] := f_upsert_level(premarketHighLine, premarketHighLabel, premarketHigh, "PMKT-H", color.new(color.gray, 0), showIntradayLevels, 1)
-[premarketLowLine, premarketLowLabel] := f_upsert_level(premarketLowLine, premarketLowLabel, premarketLow, "PMKT-L", color.new(color.gray, 0), showIntradayLevels, 1)
-[openingRangeHighLine, openingRangeHighLabel] := f_upsert_level(openingRangeHighLine, openingRangeHighLabel, openingRangeHigh, "OR-H", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
-[openingRangeLowLine, openingRangeLowLabel] := f_upsert_level(openingRangeLowLine, openingRangeLowLabel, openingRangeLow, "OR-L", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
+[nextPremarketHighLine, nextPremarketHighLabel] = f_upsert_level(premarketHighLine, premarketHighLabel, premarketHigh, "PMKT-H", color.new(color.gray, 0), showIntradayLevels, 1)
+premarketHighLine := nextPremarketHighLine
+premarketHighLabel := nextPremarketHighLabel
+[nextPremarketLowLine, nextPremarketLowLabel] = f_upsert_level(premarketLowLine, premarketLowLabel, premarketLow, "PMKT-L", color.new(color.gray, 0), showIntradayLevels, 1)
+premarketLowLine := nextPremarketLowLine
+premarketLowLabel := nextPremarketLowLabel
+[nextOpeningRangeHighLine, nextOpeningRangeHighLabel] = f_upsert_level(openingRangeHighLine, openingRangeHighLabel, openingRangeHigh, "OR-H", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
+openingRangeHighLine := nextOpeningRangeHighLine
+openingRangeHighLabel := nextOpeningRangeHighLabel
+[nextOpeningRangeLowLine, nextOpeningRangeLowLabel] = f_upsert_level(openingRangeLowLine, openingRangeLowLabel, openingRangeLow, "OR-L", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
+openingRangeLowLine := nextOpeningRangeLowLine
+openingRangeLowLabel := nextOpeningRangeLowLabel
 
 // Anchored VWAP from a major gap or confirmed pivot.
 majorGapAnchor = not na(atr14) and math.abs(open - close[1]) >= atr14 * gapAtrMultiplier

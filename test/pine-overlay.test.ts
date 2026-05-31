@@ -48,6 +48,14 @@ void test("Pine overlay contains all required objective drawing sections", () =>
   }
 });
 
+void test("Pine overlay avoids tuple reassignment syntax", () => {
+  assert.doesNotMatch(
+    overlaySource,
+    /\[[^\]\n]+\]\s*:=/,
+    "Pine tuple returns should be declared with =, then persistent vars reassigned one by one."
+  );
+});
+
 void test("Pine overlay avoids subjective patterns, scanner terms, and trade actions", () => {
   const forbidden = [
     /bull\s*flag/i,
