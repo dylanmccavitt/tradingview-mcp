@@ -1,0 +1,309 @@
+//@version=5
+indicator("TVMCP Objective Drawing Overlay", shorttitle="TVMCP Objective Overlay", overlay=true, max_lines_count=120, max_labels_count=80, max_boxes_count=60)
+
+// Required visible study name for downstream extraction:
+// TVMCP Objective Drawing Overlay
+
+stylePreset = input.string("levels", "Style preset", options=["clean", "levels", "full-debug"])
+pivotLeft = input.int(3, "Confirmed swing left bars", minval=1, maxval=20)
+pivotRight = input.int(3, "Confirmed swing right bars", minval=1, maxval=20)
+openingRangeSession = input.session("0930-1000", "Opening range session")
+premarketSession = input.session("0400-0929", "Premarket session")
+rangeLookback = input.int(20, "ATR compression range lookback", minval=5, maxval=100)
+compressionLookback = input.int(100, "ATR compression baseline lookback", minval=20, maxval=300)
+gapAtrMultiplier = input.float(0.75, "Major gap ATR multiple", minval=0.1, maxval=5.0, step=0.05)
+zoneExtendBars = input.int(80, "Zone extension bars", minval=10, maxval=300)
+
+isClean = stylePreset == "clean"
+isLevels = stylePreset == "levels"
+isFullDebug = stylePreset == "full-debug"
+isWeeklyChart = timeframe.isweekly
+isDailyChart = timeframe.isdaily
+isIntradayChart = timeframe.isintraday
+is65MinuteChart = isIntradayChart and timeframe.multiplier == 65
+isSupportedReviewChart = isWeeklyChart or isDailyChart or is65MinuteChart
+isUnsupportedIntradayChart = isIntradayChart and not is65MinuteChart
+
+levelWidth = isWeeklyChart ? 2 : 1
+breakoutWidth = isDailyChart ? 2 : 1
+swingWidth = isWeeklyChart or isDailyChart ? 2 : 1
+showLevelText = (not isClean and not isUnsupportedIntradayChart) or isFullDebug
+showDebugText = isFullDebug
+showPriorDayLevels = (not isClean and (isDailyChart or is65MinuteChart)) or isFullDebug
+showPriorWeekLevels = (isWeeklyChart or isDailyChart or is65MinuteChart) or isFullDebug
+showPriorMonthLevels = isWeeklyChart or isDailyChart or isFullDebug
+showBreakoutLevels = (not isClean and (isDailyChart or is65MinuteChart)) or isFullDebug
+showSwingLevels = (not isClean and isSupportedReviewChart) or isFullDebug
+showGapZones = (not isClean and (isDailyChart or is65MinuteChart)) or isFullDebug
+showRangeBoxes = ((isLevels or isFullDebug) and (isDailyChart or is65MinuteChart)) or isFullDebug
+showIntradayLevels = is65MinuteChart or (isIntradayChart and isFullDebug)
+showAnchoredVwap = isSupportedReviewChart or isFullDebug
+
+atr14 = ta.atr(14)
+
+// Prior day/week/month levels.
+priorDayHigh = request.security(syminfo.tickerid, "D", high[1], barmerge.gaps_off, barmerge.lookahead_off)
+priorDayLow = request.security(syminfo.tickerid, "D", low[1], barmerge.gaps_off, barmerge.lookahead_off)
+priorWeekHigh = request.security(syminfo.tickerid, "W", high[1], barmerge.gaps_off, barmerge.lookahead_off)
+priorWeekLow = request.security(syminfo.tickerid, "W", low[1], barmerge.gaps_off, barmerge.lookahead_off)
+priorMonthHigh = request.security(syminfo.tickerid, "M", high[1], barmerge.gaps_off, barmerge.lookahead_off)
+priorMonthLow = request.security(syminfo.tickerid, "M", low[1], barmerge.gaps_off, barmerge.lookahead_off)
+
+// 20D/50D breakout levels.
+breakout20High = request.security(syminfo.tickerid, "D", ta.highest(high, 20)[1], barmerge.gaps_off, barmerge.lookahead_off)
+breakout20Low = request.security(syminfo.tickerid, "D", ta.lowest(low, 20)[1], barmerge.gaps_off, barmerge.lookahead_off)
+breakout50High = request.security(syminfo.tickerid, "D", ta.highest(high, 50)[1], barmerge.gaps_off, barmerge.lookahead_off)
+breakout50Low = request.security(syminfo.tickerid, "D", ta.lowest(low, 50)[1], barmerge.gaps_off, barmerge.lookahead_off)
+
+// Confirmed swing highs/lows.
+confirmedSwingHigh = ta.pivothigh(high, pivotLeft, pivotRight)
+confirmedSwingLow = ta.pivotlow(low, pivotLeft, pivotRight)
+lastSwingHigh = ta.valuewhen(not na(confirmedSwingHigh), confirmedSwingHigh, 0)
+lastSwingLow = ta.valuewhen(not na(confirmedSwingLow), confirmedSwingLow, 0)
+lastSwingHighBar = ta.valuewhen(not na(confirmedSwingHigh), bar_index - pivotRight, 0)
+lastSwingLowBar = ta.valuewhen(not na(confirmedSwingLow), bar_index - pivotRight, 0)
+
+f_level_text(string name, float price) =>
+    showDebugText ? str.format("{0} {1}", name, str.tostring(price, format.mintick)) : name
+
+f_upsert_level(line currentLine, label currentLabel, float price, string name, color levelColor, bool visible, int width) =>
+    line nextLine = currentLine
+    label nextLabel = currentLabel
+    if visible and not na(price)
+        if na(nextLine)
+            nextLine := line.new(bar_index - 1, price, bar_index, price, extend=extend.both, color=levelColor, width=width, style=line.style_dashed)
+        else
+            line.set_xy1(nextLine, bar_index - 1, price)
+            line.set_xy2(nextLine, bar_index, price)
+            line.set_extend(nextLine, extend.both)
+            line.set_color(nextLine, levelColor)
+            line.set_width(nextLine, width)
+            line.set_style(nextLine, line.style_dashed)
+        if showLevelText or showDebugText
+            labelText = f_level_text(name, price)
+            if na(nextLabel)
+                nextLabel := label.new(bar_index, price, labelText, style=label.style_label_left, color=levelColor, textcolor=color.white, size=size.tiny)
+            else
+                label.set_xy(nextLabel, bar_index, price)
+                label.set_text(nextLabel, labelText)
+                label.set_color(nextLabel, levelColor)
+                label.set_textcolor(nextLabel, color.white)
+                label.set_size(nextLabel, size.tiny)
+        else
+            if not na(nextLabel)
+                label.delete(nextLabel)
+                nextLabel := na
+    else
+        if not na(nextLine)
+            line.delete(nextLine)
+            nextLine := na
+        if not na(nextLabel)
+            label.delete(nextLabel)
+            nextLabel := na
+    [nextLine, nextLabel]
+
+f_upsert_swing(line currentLine, label currentLabel, float price, int startBarValue, string name, color levelColor, bool visible, int width) =>
+    line nextLine = currentLine
+    label nextLabel = currentLabel
+    if visible and not na(price) and not na(startBarValue)
+        startBar = startBarValue
+        if na(nextLine)
+            nextLine := line.new(startBar, price, bar_index, price, extend=extend.right, color=levelColor, width=width, style=line.style_solid)
+        else
+            line.set_xy1(nextLine, startBar, price)
+            line.set_xy2(nextLine, bar_index, price)
+            line.set_extend(nextLine, extend.right)
+            line.set_color(nextLine, levelColor)
+            line.set_width(nextLine, width)
+            line.set_style(nextLine, line.style_solid)
+        if showLevelText or showDebugText
+            labelText = f_level_text(name, price)
+            if na(nextLabel)
+                nextLabel := label.new(bar_index, price, labelText, style=label.style_label_left, color=levelColor, textcolor=color.white, size=size.tiny)
+            else
+                label.set_xy(nextLabel, bar_index, price)
+                label.set_text(nextLabel, labelText)
+                label.set_color(nextLabel, levelColor)
+                label.set_textcolor(nextLabel, color.white)
+                label.set_size(nextLabel, size.tiny)
+        else
+            if not na(nextLabel)
+                label.delete(nextLabel)
+                nextLabel := na
+    else
+        if not na(nextLine)
+            line.delete(nextLine)
+            nextLine := na
+        if not na(nextLabel)
+            label.delete(nextLabel)
+            nextLabel := na
+    [nextLine, nextLabel]
+
+var line pdhLine = na
+var label pdhLabel = na
+var line pdlLine = na
+var label pdlLabel = na
+var line pwhLine = na
+var label pwhLabel = na
+var line pwlLine = na
+var label pwlLabel = na
+var line pmhLine = na
+var label pmhLabel = na
+var line pmlLine = na
+var label pmlLabel = na
+var line high20Line = na
+var label high20Label = na
+var line low20Line = na
+var label low20Label = na
+var line high50Line = na
+var label high50Label = na
+var line low50Line = na
+var label low50Label = na
+var line swingHighLine = na
+var label swingHighLabel = na
+var line swingLowLine = na
+var label swingLowLabel = na
+
+[nextPdhLine, nextPdhLabel] = f_upsert_level(pdhLine, pdhLabel, priorDayHigh, "PDH", color.new(color.blue, 0), showPriorDayLevels, levelWidth)
+pdhLine := nextPdhLine
+pdhLabel := nextPdhLabel
+[nextPdlLine, nextPdlLabel] = f_upsert_level(pdlLine, pdlLabel, priorDayLow, "PDL", color.new(color.blue, 0), showPriorDayLevels, levelWidth)
+pdlLine := nextPdlLine
+pdlLabel := nextPdlLabel
+[nextPwhLine, nextPwhLabel] = f_upsert_level(pwhLine, pwhLabel, priorWeekHigh, "PWH", color.new(color.purple, 0), showPriorWeekLevels, levelWidth)
+pwhLine := nextPwhLine
+pwhLabel := nextPwhLabel
+[nextPwlLine, nextPwlLabel] = f_upsert_level(pwlLine, pwlLabel, priorWeekLow, "PWL", color.new(color.purple, 0), showPriorWeekLevels, levelWidth)
+pwlLine := nextPwlLine
+pwlLabel := nextPwlLabel
+[nextPmhLine, nextPmhLabel] = f_upsert_level(pmhLine, pmhLabel, priorMonthHigh, "PMH", color.new(color.orange, 0), showPriorMonthLevels, levelWidth + 1)
+pmhLine := nextPmhLine
+pmhLabel := nextPmhLabel
+[nextPmlLine, nextPmlLabel] = f_upsert_level(pmlLine, pmlLabel, priorMonthLow, "PML", color.new(color.orange, 0), showPriorMonthLevels, levelWidth + 1)
+pmlLine := nextPmlLine
+pmlLabel := nextPmlLabel
+[nextHigh20Line, nextHigh20Label] = f_upsert_level(high20Line, high20Label, breakout20High, "20D-H", color.new(color.teal, 0), showBreakoutLevels and not isWeeklyChart, breakoutWidth)
+high20Line := nextHigh20Line
+high20Label := nextHigh20Label
+[nextLow20Line, nextLow20Label] = f_upsert_level(low20Line, low20Label, breakout20Low, "20D-L", color.new(color.teal, 0), showBreakoutLevels and not isWeeklyChart, breakoutWidth)
+low20Line := nextLow20Line
+low20Label := nextLow20Label
+[nextHigh50Line, nextHigh50Label] = f_upsert_level(high50Line, high50Label, breakout50High, "50D-H", color.new(color.green, 0), showBreakoutLevels, breakoutWidth)
+high50Line := nextHigh50Line
+high50Label := nextHigh50Label
+[nextLow50Line, nextLow50Label] = f_upsert_level(low50Line, low50Label, breakout50Low, "50D-L", color.new(color.green, 0), showBreakoutLevels, breakoutWidth)
+low50Line := nextLow50Line
+low50Label := nextLow50Label
+[nextSwingHighLine, nextSwingHighLabel] = f_upsert_swing(swingHighLine, swingHighLabel, lastSwingHigh, lastSwingHighBar, "SW-H", color.new(color.red, 0), showSwingLevels, swingWidth)
+swingHighLine := nextSwingHighLine
+swingHighLabel := nextSwingHighLabel
+[nextSwingLowLine, nextSwingLowLabel] = f_upsert_swing(swingLowLine, swingLowLabel, lastSwingLow, lastSwingLowBar, "SW-L", color.new(color.lime, 0), showSwingLevels, swingWidth)
+swingLowLine := nextSwingLowLine
+swingLowLabel := nextSwingLowLabel
+
+// Gap zones.
+var array<box> gapBoxes = array.new_box()
+gapUp = showGapZones and not na(atr14) and low > high[1] and (low - high[1]) >= atr14 * gapAtrMultiplier
+gapDown = showGapZones and not na(atr14) and high < low[1] and (low[1] - high) >= atr14 * gapAtrMultiplier
+if gapUp
+    gapBox = box.new(left=bar_index - 1, top=low, right=bar_index + zoneExtendBars, bottom=high[1], border_color=color.new(color.green, 10), bgcolor=color.new(color.green, 88))
+    array.push(gapBoxes, gapBox)
+if gapDown
+    gapBox = box.new(left=bar_index - 1, top=low[1], right=bar_index + zoneExtendBars, bottom=high, border_color=color.new(color.red, 10), bgcolor=color.new(color.red, 88))
+    array.push(gapBoxes, gapBox)
+if not showGapZones and array.size(gapBoxes) > 0
+    while array.size(gapBoxes) > 0
+        hiddenGapBox = array.shift(gapBoxes)
+        box.delete(hiddenGapBox)
+while array.size(gapBoxes) > 12
+    oldGapBox = array.shift(gapBoxes)
+    box.delete(oldGapBox)
+
+// ATR compression/range boxes.
+atrBaseline = ta.lowest(atr14, compressionLookback)[1]
+isAtrCompression = showRangeBoxes and not na(atrBaseline) and atr14 <= atrBaseline * 1.15
+rangeHigh = ta.highest(high, rangeLookback)
+rangeLow = ta.lowest(low, rangeLookback)
+var box compressionBox = na
+if isAtrCompression and na(compressionBox)
+    compressionBox := box.new(left=bar_index - rangeLookback + 1, top=rangeHigh, right=bar_index, bottom=rangeLow, border_color=color.new(color.yellow, 10), bgcolor=color.new(color.yellow, 90))
+if isAtrCompression and not na(compressionBox)
+    box.set_left(compressionBox, bar_index - rangeLookback + 1)
+    box.set_right(compressionBox, bar_index)
+    box.set_top(compressionBox, rangeHigh)
+    box.set_bottom(compressionBox, rangeLow)
+if not isAtrCompression and not na(compressionBox)
+    box.delete(compressionBox)
+    compressionBox := na
+
+// Opening range/premarket levels on intraday charts.
+newDay = ta.change(time("D")) != 0
+inPremarket = isIntradayChart and not na(time(timeframe.period, premarketSession))
+inOpeningRange = isIntradayChart and not na(time(timeframe.period, openingRangeSession))
+var float premarketHigh = na
+var float premarketLow = na
+var float openingRangeHigh = na
+var float openingRangeLow = na
+if newDay
+    premarketHigh := na
+    premarketLow := na
+    openingRangeHigh := na
+    openingRangeLow := na
+if inPremarket
+    premarketHigh := na(premarketHigh) ? high : math.max(premarketHigh, high)
+    premarketLow := na(premarketLow) ? low : math.min(premarketLow, low)
+if inOpeningRange
+    openingRangeHigh := na(openingRangeHigh) ? high : math.max(openingRangeHigh, high)
+    openingRangeLow := na(openingRangeLow) ? low : math.min(openingRangeLow, low)
+
+var line premarketHighLine = na
+var label premarketHighLabel = na
+var line premarketLowLine = na
+var label premarketLowLabel = na
+var line openingRangeHighLine = na
+var label openingRangeHighLabel = na
+var line openingRangeLowLine = na
+var label openingRangeLowLabel = na
+[nextPremarketHighLine, nextPremarketHighLabel] = f_upsert_level(premarketHighLine, premarketHighLabel, premarketHigh, "PMKT-H", color.new(color.gray, 0), showIntradayLevels, 1)
+premarketHighLine := nextPremarketHighLine
+premarketHighLabel := nextPremarketHighLabel
+[nextPremarketLowLine, nextPremarketLowLabel] = f_upsert_level(premarketLowLine, premarketLowLabel, premarketLow, "PMKT-L", color.new(color.gray, 0), showIntradayLevels, 1)
+premarketLowLine := nextPremarketLowLine
+premarketLowLabel := nextPremarketLowLabel
+[nextOpeningRangeHighLine, nextOpeningRangeHighLabel] = f_upsert_level(openingRangeHighLine, openingRangeHighLabel, openingRangeHigh, "OR-H", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
+openingRangeHighLine := nextOpeningRangeHighLine
+openingRangeHighLabel := nextOpeningRangeHighLabel
+[nextOpeningRangeLowLine, nextOpeningRangeLowLabel] = f_upsert_level(openingRangeLowLine, openingRangeLowLabel, openingRangeLow, "OR-L", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
+openingRangeLowLine := nextOpeningRangeLowLine
+openingRangeLowLabel := nextOpeningRangeLowLabel
+
+// Price-scale markers for Pine-generated levels. These plots provide right-axis
+// price labels; line objects provide the chart-visible drawing geometry.
+plot(showPriorDayLevels ? priorDayHigh : na, title="PDH price scale", color=color.new(color.blue, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorDayLevels ? priorDayLow : na, title="PDL price scale", color=color.new(color.blue, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorWeekLevels ? priorWeekHigh : na, title="PWH price scale", color=color.new(color.purple, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorWeekLevels ? priorWeekLow : na, title="PWL price scale", color=color.new(color.purple, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorMonthLevels ? priorMonthHigh : na, title="PMH price scale", color=color.new(color.orange, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorMonthLevels ? priorMonthLow : na, title="PML price scale", color=color.new(color.orange, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels and not isWeeklyChart ? breakout20High : na, title="20D-H price scale", color=color.new(color.teal, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels and not isWeeklyChart ? breakout20Low : na, title="20D-L price scale", color=color.new(color.teal, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels ? breakout50High : na, title="50D-H price scale", color=color.new(color.green, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels ? breakout50Low : na, title="50D-L price scale", color=color.new(color.green, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showSwingLevels ? lastSwingHigh : na, title="SW-H price scale", color=color.new(color.red, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showSwingLevels ? lastSwingLow : na, title="SW-L price scale", color=color.new(color.lime, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? premarketHigh : na, title="PMKT-H price scale", color=color.new(color.gray, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? premarketLow : na, title="PMKT-L price scale", color=color.new(color.gray, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? openingRangeHigh : na, title="OR-H price scale", color=color.new(color.aqua, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? openingRangeLow : na, title="OR-L price scale", color=color.new(color.aqua, 0), linewidth=1, trackprice=true, display=display.price_scale)
+
+// Anchored VWAP from a major gap or confirmed pivot.
+majorGapCondition = not na(atr14) and math.abs(open - close[1]) >= atr14 * gapAtrMultiplier
+confirmedPivotCondition = not na(confirmedSwingHigh) or not na(confirmedSwingLow)
+anchorEvent = showAnchoredVwap and (majorGapCondition or confirmedPivotCondition)
+anchoredVwap = ta.vwap(hlc3, anchorEvent)
+plot(showAnchoredVwap ? anchoredVwap : na, title="Anchored VWAP from major gap or confirmed pivot", color=color.new(color.white, 0), linewidth=2)
+
+// Full-debug markers show deterministic source events used by extraction review.
+plotshape(isFullDebug and gapUp, title="Debug gap up", style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny, text="Gap")
+plotshape(isFullDebug and gapDown, title="Debug gap down", style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny, text="Gap")
+plotshape(isFullDebug and anchorEvent, title="Debug VWAP anchor", style=shape.circle, location=location.belowbar, color=color.new(color.white, 0), size=size.tiny, text="AVWAP")

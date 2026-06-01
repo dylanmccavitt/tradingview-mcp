@@ -27,12 +27,25 @@ npm run build
 npm run typecheck
 npm run lint
 npm test
+npm run test:pine
 npm run tv:launch -- --port 9222
 npm run tv:health -- --port 9222
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 npm run tv:universe -- list
 npm run tv:universe -- resolve --group semis --tier core
 ```
+
+## Pine Drawing Overlay
+
+The first objective drawing overlay source is tracked at [`pine/objective-drawing-overlay.pine`](./pine/objective-drawing-overlay.pine). Install it manually in TradingView Desktop and keep the visible study name exactly:
+
+```text
+TVMCP Objective Drawing Overlay
+```
+
+The overlay draws deterministic objects from chart OHLCV: prior day/week/month levels, 20D/50D high-low levels, confirmed swings, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It has `clean`, `levels`, and `full-debug` style presets and is tuned for the v1 weekly, daily, and 65-minute review flow.
+
+Manual install and visual inspection guidance lives in [docs/pine/objective-drawing-overlay.md](./docs/pine/objective-drawing-overlay.md). Static repo tests validate the source and docs, but a human still needs to inspect TradingView rendering before downstream extraction work treats the overlay as visually accepted.
 
 ## Local Universe Config
 

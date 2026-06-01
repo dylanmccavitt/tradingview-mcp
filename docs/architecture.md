@@ -10,12 +10,13 @@ The current repo is a local TypeScript/Node MCP server scaffold with the first T
 - a TradingView Desktop CDP launch and health CLI
 - a narrow one-symbol chart capture CLI for weekly, daily, and 65-minute screenshots
 - a local universe config parser and CLI selection workflow
+- a manually installed objective Pine drawing overlay source for deterministic chart objects
 - typed internal health-result shaping for later MCP tools
-- tests that pin the manual-only boundary and universe parsing behavior
+- tests that pin the manual-only boundary, universe parsing behavior, and Pine overlay source contract
 - tests for CDP target discovery, health failures, chart planning, output naming, and chart-runner failures without requiring a live TradingView session
 - repo docs for issue-driven development
 
-No chartbook generation, Pine extraction, scanner, or broker behavior exists yet.
+No chartbook generation, Pine drawing extraction, scanner, or broker behavior exists yet.
 
 ## Major Components
 
@@ -57,6 +58,14 @@ No chartbook generation, Pine extraction, scanner, or broker behavior exists yet
 
 `src/cli.ts` exposes `universe list` and `universe resolve` commands. These commands read local config only and do not depend on TradingView watchlists.
 
+### Objective Pine Drawing Overlay
+
+`pine/objective-drawing-overlay.pine` is the first tracked Pine source for user-installed chart drawings. Its required visible TradingView study name is `TVMCP Objective Drawing Overlay`.
+
+The overlay is self-contained from chart OHLCV and TradingView time/session context. It creates line, label, box, plot, and plotshape output for prior day/week/month levels, 20D/50D high-low levels, confirmed swing highs/lows, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It exposes `clean`, `levels`, and `full-debug` style presets and uses timeframe checks to emphasize weekly, daily, and 65-minute review contexts.
+
+The repo does not inject Pine into TradingView. Manual install and visual inspection instructions live in `docs/pine/objective-drawing-overlay.md`.
+
 ### Tests
 
 `test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary.
@@ -66,6 +75,8 @@ No chartbook generation, Pine extraction, scanner, or broker behavior exists yet
 `test/chart-plan.test.ts` and `test/chart-runner.test.ts` cover command planning, deterministic output naming, and per-timeframe error handling with fake clients.
 
 `test/universe-config.test.ts` and `test/cli-universe.test.ts` cover local universe parsing, duplicate handling, invalid symbols, group selection, and CLI formatting.
+
+`test/pine-overlay.test.ts` statically validates the tracked Pine source and manual install docs without requiring a live TradingView session.
 
 ### Project Docs
 
@@ -109,6 +120,14 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 4. Use `--tier all` or comma-separated group ids for broader manual charting selections.
 5. The resolver de-duplicates repeated symbols in first-seen order and reports source groups and tiers without ranking or scoring them.
 
+### Pine Overlay Installation
+
+1. Open TradingView Desktop and a chart tab.
+2. Paste `pine/objective-drawing-overlay.pine` into the Pine Editor.
+3. Save and add it with the exact visible name `TVMCP Objective Drawing Overlay`.
+4. Inspect weekly, daily, and 65-minute charts with the `levels` preset.
+5. Use `full-debug` only when reviewing source events for extraction readiness.
+
 ### MCP Startup
 
 1. Build with `npm run build`.
@@ -123,5 +142,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - One-symbol chart capture must stay user-directed and must report per-timeframe failures without converting them into scanner/ranking output.
 - Local universe config is the v1 source of truth for chart symbol lists; TradingView watchlists are not required or read for universe resolution.
 - Universe selection preserves configured order and de-duplicates symbols without scoring, ranking, or generating candidates.
+- Pine overlay source must be manually installed, deterministic from chart OHLCV, and free of subjective pattern labels or scanner/ranking/trade-action text.
+- Downstream Pine drawing extraction must target the visible study name `TVMCP Objective Drawing Overlay`.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.
