@@ -21,6 +21,14 @@ trade execution system. It must not place orders, connect to Robinhood, connect
 to Alpaca, automate broker actions, recommend trades, run unattended scans, or
 bypass TradingView access controls.
 
+Chart-analysis profiles are user-selected review modes. The stable profile
+names are `focus`, `breakout`, `squeeze`, and `momentum`. A profile may
+emphasize objective chart facts, extracted levels, setup checklist fields,
+chartbook notes, and prompts for user review. A profile must not rank symbols,
+score a watchlist, provide financial advice, trigger order actions, call
+brokers, create unattended alerts, or generate candidates outside the user's
+selected chart or configured universe selection.
+
 Short version: no scanner, no broker actions, no order placement, no Robinhood
 automation, and no Alpaca automation.
 

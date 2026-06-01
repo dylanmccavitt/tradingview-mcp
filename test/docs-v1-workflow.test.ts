@@ -69,6 +69,26 @@ void test("v1 workflow restates guardrails", () => {
   assert.match(workflow, /bypass TradingView access controls/i);
 });
 
+void test("v1 workflow documents chart-analysis profile boundaries", () => {
+  assert.match(workflow, /Chart-analysis profiles are user-selected review modes/);
+  assert.match(workflow, /`focus`/);
+  assert.match(workflow, /`breakout`/);
+  assert.match(workflow, /`squeeze`/);
+  assert.match(workflow, /`momentum`/);
+  assert.match(workflow, /objective chart facts/);
+  assert.match(workflow, /extracted levels/);
+  assert.match(workflow, /setup checklist fields/);
+  assert.match(workflow, /chartbook notes/);
+  assert.match(workflow, /prompts for user review/);
+  assert.match(workflow, /must not rank symbols/);
+  assert.match(workflow, /score a watchlist/);
+  assert.match(workflow, /financial advice/);
+  assert.match(workflow, /order actions/);
+  assert.match(workflow, /call\s+brokers/);
+  assert.match(workflow, /unattended alerts/);
+  assert.match(workflow, /generate candidates/);
+});
+
 void test("README links the v1 workflow", () => {
   assert.match(readme, /\[docs\/v1-workflow\.md\]\(\.\/docs\/v1-workflow\.md\)/);
 });

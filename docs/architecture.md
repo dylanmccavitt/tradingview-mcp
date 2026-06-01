@@ -17,6 +17,8 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, and an index
 - a v1 MCP tool surface made only of high-level charting workflows
 - typed internal health-result shaping for CLI and MCP tools
+- a shared chart-analysis profile boundary for user-selected `focus`,
+  `breakout`, `squeeze`, and `momentum` review modes
 - tests that pin the manual-only boundary, universe parsing behavior, and Pine overlay source contract
 - tests for CDP target discovery, health failures, chart planning, output naming, chart-runner failures, chartbook artifact creation, and Pine drawing extraction normalization without requiring a live TradingView session
 - MCP protocol tests for tool registration, server instructions, guardrail descriptions, and request validation without requiring a live TradingView session
@@ -44,7 +46,10 @@ The server instructions and every tool description state the charting-only guard
 
 ### Domain Contract
 
-`src/domain.ts` records the project purpose and guardrails. This gives tests and future tools a shared place to reference the charting-only boundary.
+`src/domain.ts` records the project purpose and guardrails. It also defines the
+stable chart-analysis profile names and the allowed/forbidden profile output
+categories. This gives tests and future tools a shared place to reference the
+charting-only boundary.
 
 ### TradingView Desktop CDP
 
@@ -113,7 +118,7 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 
 ### Tests
 
-`test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary.
+`test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary and that chart-analysis profiles stay user-selected review modes without ranking, advice, broker, order, or alert output.
 
 `test/tradingview-targets.test.ts` and `test/tradingview-health.test.ts` cover CDP target filtering and health-result shaping with fake CDP responses.
 
@@ -135,7 +140,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 
 ## Boundaries
 
-- In scope: local MCP server, user-directed TradingView Desktop chart workflows, chartbook artifacts, objective chart/drawing data extraction in later issues.
+- In scope: local MCP server, user-directed TradingView Desktop chart workflows, chartbook artifacts, objective chart/drawing data extraction, and user-selected chart-analysis profile vocabulary.
 - Out of scope: broker integrations, order placement, portfolio actions, scanners, rankings, unattended alerts, and financial advice.
 
 ## Main Flows
@@ -227,6 +232,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Current-chart capture must preserve the active chart context and avoid navigating the chart to a different symbol.
 - Chartbook output is a local review/prep artifact only and must keep generated files under ignored artifact directories by default.
 - Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.
+- Chart-analysis profiles are review modes over user-selected charts or configured universe selections; they may produce objective facts, levels, checklist fields, notes, and prompts, but not rankings, watchlist scoring, financial advice, broker calls, order actions, unattended alerts, or generated candidates.
 - The MCP tool surface must stay high-level and must not expose raw browser micromanagement tools.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.
