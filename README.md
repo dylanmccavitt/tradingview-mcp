@@ -61,7 +61,7 @@ After TradingView Desktop is running with CDP enabled, a chart tab is open, and 
 npm run tv:drawings -- --port 9222 --json
 ```
 
-The extractor targets the configured study name, `TVMCP Objective Drawing Overlay`, and does not scrape every visible indicator by default. It returns deduplicated horizontal levels, high/low zones from boxes, compact labels, and compact tables for chartbook artifacts and Codex review. Use `--study-name <name>` only when intentionally validating a differently named local copy of the overlay.
+The extractor targets the configured study name, `TVMCP Objective Drawing Overlay`, and does not scrape every visible indicator by default. It returns deduplicated horizontal levels, high/low zones from boxes, compact labels, and compact tables for chartbook artifacts and Codex review. When TradingView exposes only the visible indicator legend, the extractor falls back to the objective overlay's known Pine plot order and recovers plotted levels such as `PDH`, `PWH`, `20D-H`, `OR-H`, and `AVWAP` from the compact legend text. Use `--study-name <name>` only when intentionally validating a differently named local copy of the overlay.
 
 Use `--debug` with `--json` only when diagnosing a TradingView payload shape. Normal output avoids dumping large raw TradingView internals.
 

@@ -87,10 +87,30 @@ class FakeChartPageClient implements TradingViewChartPageClient {
 
 class FakePineDrawingPageClient implements TradingViewPineDrawingPageClient {
   closed = false;
+  readCount = 0;
 
-  constructor(readonly chartClient: FakeChartPageClient) {}
+  constructor(
+    readonly chartClient: FakeChartPageClient,
+    readonly emptyReadsBeforeData = 0
+  ) {}
 
   readDrawingPayload(): Promise<unknown> {
+    this.readCount += 1;
+
+    if (this.readCount <= this.emptyReadsBeforeData) {
+      return Promise.resolve({
+        chart: {
+          url: `https://www.tradingview.com/chart/chartid/?symbol=NASDAQ%3ANVDA&interval=${this.chartClient.lastTimeframe}`
+        },
+        studies: [
+          {
+            studyName: DEFAULT_PINE_DRAWING_STUDY_NAME,
+            legendText: DEFAULT_PINE_DRAWING_STUDY_NAME
+          }
+        ]
+      });
+    }
+
     return Promise.resolve({
       chart: {
         url: `https://www.tradingview.com/chart/chartid/?symbol=NASDAQ%3ANVDA&interval=${this.chartClient.lastTimeframe}`
@@ -250,6 +270,55 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.match(index, /# TradingView Chartbook session-a/);
     assert.match(index, /\[NVDA\]\(\.\/NASDAQ-NVDA\/notes\.md\)/);
     assert.match(index, /not a scanner, ranking, recommendation, broker action, or order workflow/);
+  } finally {
+    await rm(outputRoot, {
+      recursive: true,
+      force: true
+    });
+  }
+});
+
+void test("chartbook retries drawing extraction until the overlay payload has levels", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "tvmcp-chartbook-"));
+  const fakeChartClient = new FakeChartPageClient();
+  const fakeDrawingClient = new FakePineDrawingPageClient(fakeChartClient, 1);
+
+  try {
+    const result = await runChartbook({
+      symbols: [nvdaSymbol],
+      outputRoot,
+      sessionId: "session-retry",
+      preset: "levels",
+      selection: {
+        configPath: "/tmp/universe.json",
+        groups: ["semis"],
+        tier: "core"
+      },
+      checkHealth: () => Promise.resolve(healthyResult),
+      chartClientFactory: () => Promise.resolve(fakeChartClient),
+      drawingClientFactory: () => Promise.resolve(fakeDrawingClient),
+      drawingRetryAttempts: 2,
+      drawingRetryDelayMs: 0,
+      now: () => new Date("2026-06-01T17:30:00.000Z")
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(fakeDrawingClient.readCount, 4);
+
+    const weekly = parseLevelsArtifact(
+      await readFile(
+        join(
+          outputRoot,
+          "session-retry",
+          "NASDAQ-NVDA",
+          "NASDAQ-NVDA-weekly-levels.json"
+        ),
+        "utf8"
+      )
+    );
+
+    assert.equal(weekly.ok, true);
+    assert.equal(weekly.extraction.drawings.levels[0]?.name, "weekly-level");
   } finally {
     await rm(outputRoot, {
       recursive: true,

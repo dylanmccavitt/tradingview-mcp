@@ -23,7 +23,7 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.
-- Pine drawing extraction targets that configured study name and returns compact levels, zones, labels, and tables for chartbook review.
+- Pine drawing extraction targets that configured study name and returns compact levels, zones, labels, and tables for chartbook review. If TradingView only exposes the overlay legend, extraction may recover plotted objective levels from the known Pine plot order while leaving unavailable box/label/table internals empty.
 - Current-chart capture writes a local screenshot and matching objective drawing
   JSON for the visible chart without navigating the chart to another symbol.
 - Chartbook output writes ignored local review artifacts with screenshots, per-timeframe drawing JSON, notes, and an index.

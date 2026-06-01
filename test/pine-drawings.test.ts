@@ -153,6 +153,79 @@ void test("normalizer can match the installed Pine short title from TradingView 
   assert.equal(result.drawings.levels[0]?.price, 427.6);
 });
 
+void test("normalizer parses live compact overlay legend text as plot levels", () => {
+  const result = normalizePineDrawingPayload({
+    studies: [
+      {
+        name: "TVMCP Objective Overlay",
+        legendText: "TVMCP Objective Overlay",
+        legendFullText:
+          "SSuper Micro Computer, Inc.65NASDAQO47.30H47.37L47.20C47.2247.22∅−0.09 (−0.20%)Vol39.35 K+1.13 (+2.44%)47.21Sell0.02147.23Buy4EMA9close46.39∅∅∅EMA21close43.89∅∅∅52WHighs/Lows62.3619.48TVMCP Objective Overlaylevels330930-10000400-0929201000.758048.3444.1748.3435.43∅∅48.3426.8848.3419.4848.3445.16∅∅47.7445.6647.300.00000.00000.0000",
+        source: "legend-dom"
+      }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.study?.source, "payload.studies");
+  assert.equal(result.counts.levels, 13);
+  assert.equal(result.counts.zones, 0);
+
+  const pdh = result.drawings.levels.find((level) => level.name === "PDH");
+  assert.ok(pdh);
+  assert.equal(pdh.price, 48.34);
+  assert.deepEqual(pdh.sources, ["plot"]);
+
+  const pdl = result.drawings.levels.find((level) => level.name === "PDL");
+  assert.ok(pdl);
+  assert.equal(pdl.price, 44.17);
+
+  const pml = result.drawings.levels.find((level) => level.name === "PML");
+  assert.equal(pml, undefined);
+
+  const openingRangeHigh = result.drawings.levels.find(
+    (level) => level.name === "OR-H"
+  );
+  assert.ok(openingRangeHigh);
+  assert.equal(openingRangeHigh.price, 47.74);
+
+  const avwap = result.drawings.levels.find((level) => level.name === "AVWAP");
+  assert.ok(avwap);
+  assert.equal(avwap.price, 47.3);
+});
+
+void test("normalizer keeps comma thousands inside compact legend prices", () => {
+  const result = normalizePineDrawingPayload({
+    studies: [
+      {
+        name: "TVMCP Objective Overlay",
+        legendText: "TVMCP Objective Overlay",
+        legendFullText:
+          "AASML Holding N.V.65NASDAQO1,645.90H1,646.46L1,636.64C1,638.98EMA9close1,625.21TVMCP Objective Overlaylevels330930-10000400-0929201000.75801,654.201,604.861,654.201,580.00∅∅1,654.201,366.791,654.201,248.111,654.201,586.00∅∅1,619.701,586.001,638.660.00000.00000.0000"
+      }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.counts.levels, 13);
+
+  const priorDayHigh = result.drawings.levels.find(
+    (level) => level.name === "PDH"
+  );
+  assert.ok(priorDayHigh);
+  assert.equal(priorDayHigh.price, 1654.2);
+
+  const priorDayLow = result.drawings.levels.find(
+    (level) => level.name === "PDL"
+  );
+  assert.ok(priorDayLow);
+  assert.equal(priorDayLow.price, 1604.86);
+
+  const avwap = result.drawings.levels.find((level) => level.name === "AVWAP");
+  assert.ok(avwap);
+  assert.equal(avwap.price, 1638.66);
+});
+
 void test("normalizer reports a missing configured study without scraping other indicators", () => {
   const result = normalizePineDrawingPayload({
     studies: [

@@ -44,6 +44,10 @@ function drawingPayloadExpression(studyName: string, debug: boolean): string {
   const maxLegendTexts = debug ? 80 : 25;
 
   const normalize = (value) => String(value || "").trim().replace(/\\s+/g, " ").toLowerCase();
+  const containsStudy = (value) => {
+    const normalized = normalize(value);
+    return aliases.some((alias) => normalized.includes(normalize(alias)));
+  };
   const matchesStudy = (value) => {
     const normalized = normalize(value);
     return aliases.some((alias) => {
@@ -177,10 +181,12 @@ function drawingPayloadExpression(studyName: string, debug: boolean): string {
   ].join(",")));
   const legendTexts = uniqueTexts(legendNodes);
   const matchingLegendText = legendTexts.find(matchesStudy);
-  if (matchingLegendText) {
+  const containingLegendText = legendTexts.find((text) => !matchesStudy(text) && containsStudy(text));
+  if (matchingLegendText || containingLegendText) {
     studies.push({
-      name: matchingLegendText,
+      name: matchingLegendText || studyName,
       legendText: matchingLegendText,
+      legendFullText: containingLegendText,
       source: "legend-dom"
     });
   }
@@ -193,7 +199,7 @@ function drawingPayloadExpression(studyName: string, debug: boolean): string {
       studyName,
       aliases,
       matchedStudyCount: studies.length,
-      legendTexts: debug ? legendTexts : legendTexts.filter(matchesStudy)
+      legendTexts: debug ? legendTexts : legendTexts.filter((text) => matchesStudy(text) || containsStudy(text))
     }
   };
 })()`;
