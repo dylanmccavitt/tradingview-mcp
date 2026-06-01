@@ -2,17 +2,25 @@
 
 ## Status
 
-Implementation complete in branch `feat/issue-5-objective-pine-drawing-overlay`.
+Implementation and human visual validation complete in branch `feat/issue-5-objective-pine-drawing-overlay`.
 
 ## Next
 
-Review the PR and manually install `pine/objective-drawing-overlay.pine` in TradingView Desktop. Confirm weekly, daily, and 65-minute charts remain readable with the visible study name `TVMCP Objective Drawing Overlay` before downstream extraction work proceeds.
+Merge PR #15, sync canonical `main`, and start issue #6 from the merged baseline.
+
+Manual TradingView validation was confirmed by the user on 2026-06-01 after iterative fixes for:
+
+- Pine compile error from dynamic `plot()` linewidth.
+- Noisy unsupported intraday behavior on 5-minute charts.
+- Missing right-axis price markers for level values.
+- Horizontal level lines starting too close to the latest candles instead of spanning the chart.
 
 ## Risks
 
 - Static tests validate the repo source and docs only; they do not prove TradingView compiles or renders the Pine overlay readably.
 - The overlay is intentionally Pine-generated output, not native editable TradingView drawings.
 - The overlay is deterministic from chart OHLCV and session/timeframe context only; later work must not add external metadata, generated Pine injection, scanner/ranking behavior, or broker actions.
+- The user confirmed visual validation looked acceptable, but future TradingView UI/Pine rendering changes can still require overlay tuning.
 
 ## Files
 
