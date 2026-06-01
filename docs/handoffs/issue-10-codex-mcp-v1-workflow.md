@@ -3,6 +3,7 @@
 ## Status
 
 Implementation complete in branch `feat/issue-10-document-codex-mcp-v1-workflow`.
+PR #20 was opened and reviewed locally with the checks below.
 
 Added a durable v1 operator guide at `docs/v1-workflow.md` that documents the
 end-to-end Codex MCP and TradingView Desktop workflow: dependency install,
@@ -19,8 +20,7 @@ workflow guide.
 
 ## Next
 
-Open the PR for human review. There are no later seeded issues to start from
-this thread.
+Merge PR #20. There are no later seeded issues to start from this thread.
 
 After merge, configure or update `~/.codex/config.toml` with the documented
 `[mcp_servers.tradingview]` block, restart Codex or reload MCP settings, launch
