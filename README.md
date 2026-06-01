@@ -49,7 +49,7 @@ The first objective drawing overlay source is tracked at [`pine/objective-drawin
 TVMCP Objective Drawing Overlay
 ```
 
-The overlay draws deterministic objects from chart OHLCV: prior day/week/month levels, 20D/50D high-low levels, confirmed swings, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It has `clean`, `levels`, and `full-debug` style presets and is tuned for the v1 weekly, daily, and 65-minute review flow.
+The overlay draws deterministic objects from chart OHLCV: prior day/week/month levels, 20D/50D high-low levels, confirmed swings, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It defaults to the quieter `focus` style preset, keeps `clean`, `levels`, and `full-debug` available, and is tuned for the v1 weekly, daily, and 65-minute review flow.
 
 Manual install and visual inspection guidance lives in [docs/pine/objective-drawing-overlay.md](./docs/pine/objective-drawing-overlay.md). Static repo tests validate the source and docs; live TradingView rendering remains a human validation boundary for overlay changes.
 

@@ -45,7 +45,9 @@ void test("v1 workflow documents Pine install requirements", () => {
   assert.match(workflow, /TVMCP Objective Drawing Overlay/);
   assert.match(workflow, /visible study name/i);
   assert.match(workflow, /Style preset/);
-  assert.match(workflow, /weekly, daily, and 65-minute/i);
+  assert.match(workflow, /default `focus`/);
+  assert.match(workflow, /Use `levels` for deeper level\/zone review/);
+  assert.match(workflow, /weekly, daily, and\s+65-minute/i);
 });
 
 void test("v1 workflow explains chartbook artifacts", () => {
@@ -91,4 +93,6 @@ void test("v1 workflow documents chart-analysis profile boundaries", () => {
 
 void test("README links the v1 workflow", () => {
   assert.match(readme, /\[docs\/v1-workflow\.md\]\(\.\/docs\/v1-workflow\.md\)/);
+  assert.match(readme, /defaults to the quieter `focus` style preset/);
+  assert.match(readme, /keeps `clean`, `levels`, and `full-debug` available/);
 });

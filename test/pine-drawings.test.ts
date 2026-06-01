@@ -194,6 +194,45 @@ void test("normalizer parses live compact overlay legend text as plot levels", (
   assert.equal(avwap.price, 47.3);
 });
 
+void test("normalizer parses compact overlay legend text with the focus preset", () => {
+  const result = normalizePineDrawingPayload({
+    studies: [
+      {
+        name: "TVMCP Objective Overlay",
+        legendText: "TVMCP Objective Overlay",
+        legendFullText:
+          "SSuper Micro Computer, Inc.65NASDAQO47.30H47.37L47.20C47.2247.22∅−0.09 (−0.20%)Vol39.35 K+1.13 (+2.44%)47.21Sell0.02147.23Buy4EMA9close46.39∅∅∅EMA21close43.89∅∅∅52WHighs/Lows62.3619.48TVMCP Objective Overlayfocus330930-10000400-0929201000.758048.3444.1748.3435.43∅∅48.3426.8848.3419.4848.3445.16∅∅47.7445.6647.300.00000.00000.0000",
+        source: "legend-dom"
+      }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.counts.levels, 13);
+
+  const priorDayHigh = result.drawings.levels.find(
+    (level) => level.name === "PDH"
+  );
+  assert.ok(priorDayHigh);
+  assert.equal(priorDayHigh.price, 48.34);
+
+  const breakoutHigh = result.drawings.levels.find(
+    (level) => level.name === "20D-H"
+  );
+  assert.ok(breakoutHigh);
+  assert.equal(breakoutHigh.price, 48.34);
+
+  const openingRangeHigh = result.drawings.levels.find(
+    (level) => level.name === "OR-H"
+  );
+  assert.ok(openingRangeHigh);
+  assert.equal(openingRangeHigh.price, 47.74);
+
+  const avwap = result.drawings.levels.find((level) => level.name === "AVWAP");
+  assert.ok(avwap);
+  assert.equal(avwap.price, 47.3);
+});
+
 void test("normalizer keeps comma thousands inside compact legend prices", () => {
   const result = normalizePineDrawingPayload({
     studies: [

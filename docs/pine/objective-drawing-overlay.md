@@ -39,23 +39,25 @@ The labels use objective abbreviations such as `PDH`, `PWH`, `20D-H`, `SW-H`, an
 5. Save the script with the exact name `TVMCP Objective Drawing Overlay`.
 6. Add the script to the chart.
 7. Confirm the indicator is visible in the chart's indicator list with the exact study name.
-8. Use the input `Style preset` to switch between `clean`, `levels`, and `full-debug`.
+8. Use the input `Style preset` to switch between `focus`, `clean`, `levels`, and `full-debug`.
 
 This repo does not inject Pine into TradingView in v1. Installation is manual so the user controls what runs in TradingView.
 
 ## Style Presets
 
+- `focus`: default quieter review mode. Hides most inline labels, keeps price markers on the right axis, and shows a compact top-right context table.
 - `clean`: minimal context. Keeps the anchored VWAP and a reduced set of higher-timeframe levels.
-- `levels`: default review mode. Shows levels, gap zones, and compression range boxes without debug event markers.
+- `levels`: deeper review mode. Shows levels, gap zones, and compression range boxes without debug event markers.
 - `full-debug`: shows every supported object class plus debug markers for gap and VWAP anchor events.
 
 ## Timeframe Guidance
 
 Use the same installed study across the current v1 chart capture timeframes:
 
-- Weekly: inspect prior week/month levels, 50D high/low levels, confirmed swings, and anchored VWAP readability.
-- Daily: inspect prior day/week/month levels, 20D/50D levels, gap zones, compression boxes, confirmed swings, and anchored VWAP readability.
-- 65-minute: inspect prior day/week levels, opening range levels, premarket levels, gap zones, and anchored VWAP readability.
+- Weekly `focus`: inspect major context only: prior month levels, 50D high/low levels, anchored VWAP, and the compact context table.
+- Daily `focus`: inspect breakout context only: prior week levels, 20D/50D high levels, anchored VWAP, and the active compression range box when present.
+- 65-minute `focus`: inspect timing context only: prior day levels, opening range levels, anchored VWAP, and the compact context table.
+- `levels`: inspect the deeper prior day/week/month, 20D/50D, gap-zone, compression, confirmed-swing, premarket, opening-range, and anchored VWAP context across weekly, daily, and 65-minute charts.
 
 The Pine source uses `timeframe.isweekly`, `timeframe.isdaily`, and a 65-minute intraday check to emphasize different object classes on those charts.
 
@@ -68,7 +70,9 @@ Static repo tests only verify the source and docs contain the required determini
 Before changing extraction assumptions or overlay source, a human should inspect the overlay in TradingView Desktop and confirm:
 
 - the study is visible as `TVMCP Objective Drawing Overlay`
-- weekly, daily, and 65-minute charts remain readable in the `levels` preset
+- weekly, daily, and 65-minute charts remain readable in the default `focus` preset
+- `focus` hides most inline labels while keeping price markers and the compact table usable
+- `levels` and `full-debug` remain available for deeper review and extraction debugging
 - key level values appear on the right price axis, not only inside small chart tags
 - horizontal reference levels extend across the chart rather than starting only near the latest candle
 - unsupported intraday charts such as 5-minute do not become noisy in the `levels` preset
@@ -95,8 +99,9 @@ The extractor targets `TVMCP Objective Drawing Overlay` by default and returns c
 
 Normal output omits large raw TradingView internals. Use `--debug` only when diagnosing the live payload shape.
 
-For reliable chartbook extraction, keep the overlay visible with the `levels`
-style preset during weekly, daily, and 65-minute runs. If TradingView exposes
+For reliable chartbook extraction, keep the overlay visible with either the
+default `focus` style preset or the deeper `levels` style preset during weekly,
+daily, and 65-minute runs. If TradingView exposes
 only the compact indicator legend instead of structured line, box, label, or
 table internals, the extractor can recover the plotted objective level values
 from the overlay's known Pine plot order. In that fallback mode, unavailable
