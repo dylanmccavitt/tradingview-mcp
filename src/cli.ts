@@ -16,6 +16,11 @@ import {
   type ChartOneSymbolOptions,
   type ChartOneSymbolResult
 } from "./tradingview/chart-runner.js";
+import {
+  chartUniverse,
+  type ChartUniverseOptions,
+  type ChartUniverseResult
+} from "./tradingview/chart-universe-runner.js";
 import { ChartPlanError } from "./tradingview/chart-plan.js";
 import { formatCdpEndpoint } from "./tradingview/cdp.js";
 import {
@@ -58,6 +63,18 @@ export interface CliStreams {
   stderr: Writable;
 }
 
+export interface CliHandlers {
+  checkTradingViewHealth: typeof checkTradingViewHealth;
+  chartOneSymbol: typeof chartOneSymbol;
+  chartUniverse: typeof chartUniverse;
+  launchTradingViewDesktop: typeof launchTradingViewDesktop;
+  resolveTradingViewApp: typeof resolveTradingViewApp;
+}
+
+export interface RunCliOptions {
+  handlers?: Partial<CliHandlers>;
+}
+
 interface CommonCliOptions {
   host: string;
   port: number;
@@ -71,6 +88,7 @@ const USAGE = `Usage:
   tradingview-mcp-cli launch [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
+  tradingview-mcp-cli chart-universe [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-charts] [--port 9222] [--json]
   tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--port 9222] [--json]
   tradingview-mcp-cli drawings [--study-name "TVMCP Objective Drawing Overlay"] [--port 9222] [--timeout-ms 2500] [--json] [--debug]
   tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
@@ -81,11 +99,26 @@ npm scripts:
   npm run tv:launch -- --port 9222
   npm run tv:launch-command -- --port 9222
   npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+  npm run tv:chart-universe -- --group semis --tier core --port 9222
   npm run tv:chartbook -- --group semis --tier core --port 9222
   npm run tv:drawings -- --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
 `;
+
+function handlersWithDefaults(
+  handlers: Partial<CliHandlers> | undefined
+): CliHandlers {
+  return {
+    checkTradingViewHealth:
+      handlers?.checkTradingViewHealth ?? checkTradingViewHealth,
+    chartOneSymbol: handlers?.chartOneSymbol ?? chartOneSymbol,
+    chartUniverse: handlers?.chartUniverse ?? chartUniverse,
+    launchTradingViewDesktop:
+      handlers?.launchTradingViewDesktop ?? launchTradingViewDesktop,
+    resolveTradingViewApp: handlers?.resolveTradingViewApp ?? resolveTradingViewApp
+  };
+}
 
 function parsePositiveInteger(value: string | undefined, label: string): number {
   if (!value) {
@@ -333,6 +366,39 @@ function formatChartResult(result: ChartOneSymbolResult): string {
   return `${lines.join("\n")}\n`;
 }
 
+function formatChartUniverseResult(result: ChartUniverseResult): string {
+  const groups =
+    result.selection.groups === "all"
+      ? "all"
+      : result.selection.groups.join(", ");
+  const lines = [
+    `Status: ${result.ok ? "success" : "failed"}`,
+    `Config: ${resolvePath(result.configPath)}`,
+    `Selection: groups ${groups}, tier ${result.selection.tier}`,
+    "Symbols:"
+  ];
+
+  for (const item of result.symbols) {
+    lines.push(
+      `- ${item.symbol.symbol} (${item.symbol.alias}): ${item.chart.ok ? "OK" : "FAILED"} ${item.chart.outputDirectory}`
+    );
+
+    for (const timeframe of item.chart.results) {
+      if (timeframe.ok) {
+        lines.push(
+          `  ${timeframe.timeframe}: OK ${timeframe.outputPath}`
+        );
+      } else {
+        lines.push(
+          `  ${timeframe.timeframe}: FAILED ${timeframe.error ?? "Unknown error"}`
+        );
+      }
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function formatPineDrawingExtractionResult(
   result: ExtractPineDrawingsResult
 ): string {
@@ -429,8 +495,10 @@ export async function runCli(
   streams: CliStreams = {
     stdout: process.stdout,
     stderr: process.stderr
-  }
+  },
+  runOptions: RunCliOptions = {}
 ): Promise<number> {
+  const handlers = handlersWithDefaults(runOptions.handlers);
   let parsed;
 
   try {
@@ -523,7 +591,9 @@ export async function runCli(
   }
 
   if (command === "health") {
-    const result = await checkTradingViewHealth(healthOptionsFromCli(options));
+    const result = await handlers.checkTradingViewHealth(
+      healthOptionsFromCli(options)
+    );
 
     if (options.json) {
       writeJson(streams.stdout, result);
@@ -552,7 +622,7 @@ export async function runCli(
     let result: ChartOneSymbolResult;
 
     try {
-      result = await chartOneSymbol(chartOptions);
+      result = await handlers.chartOneSymbol(chartOptions);
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       streams.stderr.write(`${detail}\n`);
@@ -563,6 +633,77 @@ export async function runCli(
       writeJson(streams.stdout, result);
     } else {
       streams.stdout.write(formatChartResult(result));
+    }
+
+    return result.ok ? 0 : 1;
+  }
+
+  if (command === "chart-universe") {
+    const configPath =
+      getStringOption(parsed.values, "config") ?? DEFAULT_UNIVERSE_CONFIG_PATH;
+    const chartUniverseOptions: ChartUniverseOptions = {
+      configPath,
+      host: options.host,
+      port: options.port,
+      timeoutMs: options.timeoutMs
+    };
+
+    if (options.appPath) {
+      chartUniverseOptions.appPath = options.appPath;
+    }
+
+    try {
+      const groupIds = parseGroupSelection(getStringOption(parsed.values, "group"));
+      if (groupIds) {
+        chartUniverseOptions.groupIds = groupIds;
+      }
+
+      chartUniverseOptions.tier = parseUniverseTier(
+        getStringOption(parsed.values, "tier")
+      );
+
+      const outputRoot = getStringOption(parsed.values, "output-dir");
+      if (outputRoot) {
+        chartUniverseOptions.outputRoot = outputRoot;
+      }
+
+      const renderTimeoutMs = getStringOption(parsed.values, "render-timeout-ms");
+      if (renderTimeoutMs) {
+        chartUniverseOptions.renderTimeoutMs = parsePositiveInteger(
+          renderTimeoutMs,
+          "--render-timeout-ms"
+        );
+      }
+
+      const renderSettleMs = getStringOption(parsed.values, "render-settle-ms");
+      if (renderSettleMs) {
+        chartUniverseOptions.renderSettleMs = parsePositiveInteger(
+          renderSettleMs,
+          "--render-settle-ms"
+        );
+      }
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n\n${USAGE}`);
+      return 2;
+    }
+
+    let result: ChartUniverseResult;
+
+    try {
+      result = await handlers.chartUniverse(chartUniverseOptions);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n`);
+      return error instanceof UniverseConfigError || error instanceof ChartPlanError
+        ? 2
+        : 1;
+    }
+
+    if (options.json) {
+      writeJson(streams.stdout, result);
+    } else {
+      streams.stdout.write(formatChartUniverseResult(result));
     }
 
     return result.ok ? 0 : 1;
@@ -792,7 +933,7 @@ export async function runCli(
       port: options.port
     };
 
-    const result = await launchTradingViewDesktop(
+    const result = await handlers.launchTradingViewDesktop(
       options.appPath
         ? {
             ...launchOptions,
@@ -817,7 +958,7 @@ export async function runCli(
   }
 
   if (command === "launch-command") {
-    const app = await resolveTradingViewApp(
+    const app = await handlers.resolveTradingViewApp(
       options.appPath
         ? {
             appPath: options.appPath
