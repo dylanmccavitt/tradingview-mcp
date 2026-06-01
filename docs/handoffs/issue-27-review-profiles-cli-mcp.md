@@ -18,8 +18,9 @@ a profile.
 
 ## Next
 
-Push the stale-handoff follow-up fix, get follow-up subagent review, then
-merge PR #33 and sync canonical `main` if review stays clean.
+If resuming before PR #33 is merged, check the latest PR/review state, then
+merge PR #33 and sync canonical `main` when the branch is clean. If PR #33 is
+already merged, no issue #27 implementation work remains.
 
 ## Risks
 
