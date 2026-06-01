@@ -64,12 +64,16 @@ void test("Pine overlay avoids dynamic plot linewidths", () => {
   );
 });
 
-void test("Pine overlay level labels include prices in visible presets", () => {
+void test("Pine overlay publishes level prices to the price scale", () => {
   assert.match(
     overlaySource,
-    /f_level_text\(string name, float price\) =>\n\s+str\.format\("\{0\} \{1\}", name, str\.tostring\(price, format\.mintick\)\)/
+    /title="PDH price scale"[^\n]*trackprice=true[^\n]*display=display\.price_scale/
   );
-  assert.match(overlayDocs, /labels use objective abbreviations plus price/i);
+  assert.match(
+    overlaySource,
+    /title="OR-H price scale"[^\n]*trackprice=true[^\n]*display=display\.price_scale/
+  );
+  assert.match(overlayDocs, /price markers on the right price axis/i);
 });
 
 void test("Pine overlay restrains unsupported intraday timeframes", () => {

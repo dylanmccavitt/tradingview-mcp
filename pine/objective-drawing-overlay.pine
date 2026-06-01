@@ -64,7 +64,7 @@ lastSwingHighBar = ta.valuewhen(not na(confirmedSwingHigh), bar_index - pivotRig
 lastSwingLowBar = ta.valuewhen(not na(confirmedSwingLow), bar_index - pivotRight, 0)
 
 f_level_text(string name, float price) =>
-    str.format("{0} {1}", name, str.tostring(price, format.mintick))
+    showDebugText ? str.format("{0} {1}", name, str.tostring(price, format.mintick)) : name
 
 f_upsert_level(line currentLine, label currentLabel, float price, string name, color levelColor, bool visible, int width) =>
     line nextLine = currentLine
@@ -276,6 +276,25 @@ openingRangeHighLabel := nextOpeningRangeHighLabel
 [nextOpeningRangeLowLine, nextOpeningRangeLowLabel] = f_upsert_level(openingRangeLowLine, openingRangeLowLabel, openingRangeLow, "OR-L", color.new(color.aqua, 0), showIntradayLevels, is65MinuteChart ? 2 : 1)
 openingRangeLowLine := nextOpeningRangeLowLine
 openingRangeLowLabel := nextOpeningRangeLowLabel
+
+// Price-scale markers for Pine-generated levels. These plots provide right-axis
+// price labels; line objects provide the chart-visible drawing geometry.
+plot(showPriorDayLevels ? priorDayHigh : na, title="PDH price scale", color=color.new(color.blue, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorDayLevels ? priorDayLow : na, title="PDL price scale", color=color.new(color.blue, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorWeekLevels ? priorWeekHigh : na, title="PWH price scale", color=color.new(color.purple, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorWeekLevels ? priorWeekLow : na, title="PWL price scale", color=color.new(color.purple, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorMonthLevels ? priorMonthHigh : na, title="PMH price scale", color=color.new(color.orange, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showPriorMonthLevels ? priorMonthLow : na, title="PML price scale", color=color.new(color.orange, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels and not isWeeklyChart ? breakout20High : na, title="20D-H price scale", color=color.new(color.teal, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels and not isWeeklyChart ? breakout20Low : na, title="20D-L price scale", color=color.new(color.teal, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels ? breakout50High : na, title="50D-H price scale", color=color.new(color.green, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showBreakoutLevels ? breakout50Low : na, title="50D-L price scale", color=color.new(color.green, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showSwingLevels ? lastSwingHigh : na, title="SW-H price scale", color=color.new(color.red, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showSwingLevels ? lastSwingLow : na, title="SW-L price scale", color=color.new(color.lime, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? premarketHigh : na, title="PMKT-H price scale", color=color.new(color.gray, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? premarketLow : na, title="PMKT-L price scale", color=color.new(color.gray, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? openingRangeHigh : na, title="OR-H price scale", color=color.new(color.aqua, 0), linewidth=1, trackprice=true, display=display.price_scale)
+plot(showIntradayLevels ? openingRangeLow : na, title="OR-L price scale", color=color.new(color.aqua, 0), linewidth=1, trackprice=true, display=display.price_scale)
 
 // Anchored VWAP from a major gap or confirmed pivot.
 majorGapCondition = not na(atr14) and math.abs(open - close[1]) >= atr14 * gapAtrMultiplier

@@ -28,7 +28,7 @@ It creates deterministic chart objects for:
 - premarket and opening-range levels on intraday charts
 - anchored VWAP reset from a major gap or confirmed pivot
 
-The labels use objective abbreviations plus price, such as `PDH 161.49`, `PWH 161.49`, `20D-H 161.49`, `SW-H 161.49`, and `OR-H 161.49`. The overlay must not add subjective pattern labels.
+The labels use objective abbreviations such as `PDH`, `PWH`, `20D-H`, `SW-H`, and `OR-H`. The same level values are also published through scale-only Pine plots with `trackprice=true` so TradingView can show price markers on the right price axis. The overlay must not add subjective pattern labels.
 
 ## Manual Install
 
@@ -69,6 +69,7 @@ Before downstream extraction work proceeds, a human should inspect the overlay i
 
 - the study is visible as `TVMCP Objective Drawing Overlay`
 - weekly, daily, and 65-minute charts remain readable in the `levels` preset
+- key level values appear on the right price axis, not only inside small chart tags
 - unsupported intraday charts such as 5-minute do not become noisy in the `levels` preset
 - `full-debug` exposes event markers without hiding price bars
 - labels and zones do not overlap so heavily that screenshots become unusable
