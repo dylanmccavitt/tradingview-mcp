@@ -64,7 +64,7 @@ lastSwingHighBar = ta.valuewhen(not na(confirmedSwingHigh), bar_index - pivotRig
 lastSwingLowBar = ta.valuewhen(not na(confirmedSwingLow), bar_index - pivotRight, 0)
 
 f_level_text(string name, float price) =>
-    showDebugText ? str.format("{0} {1}", name, str.tostring(price, format.mintick)) : name
+    str.format("{0} {1}", name, str.tostring(price, format.mintick))
 
 f_upsert_level(line currentLine, label currentLabel, float price, string name, color levelColor, bool visible, int width) =>
     line nextLine = currentLine

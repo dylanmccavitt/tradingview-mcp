@@ -28,7 +28,7 @@ It creates deterministic chart objects for:
 - premarket and opening-range levels on intraday charts
 - anchored VWAP reset from a major gap or confirmed pivot
 
-The labels use objective abbreviations such as `PDH`, `PWH`, `20D-H`, `SW-H`, `OR-H`, and `AVWAP`. The overlay must not add subjective pattern labels.
+The labels use objective abbreviations plus price, such as `PDH 161.49`, `PWH 161.49`, `20D-H 161.49`, `SW-H 161.49`, and `OR-H 161.49`. The overlay must not add subjective pattern labels.
 
 ## Manual Install
 

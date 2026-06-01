@@ -64,6 +64,14 @@ void test("Pine overlay avoids dynamic plot linewidths", () => {
   );
 });
 
+void test("Pine overlay level labels include prices in visible presets", () => {
+  assert.match(
+    overlaySource,
+    /f_level_text\(string name, float price\) =>\n\s+str\.format\("\{0\} \{1\}", name, str\.tostring\(price, format\.mintick\)\)/
+  );
+  assert.match(overlayDocs, /labels use objective abbreviations plus price/i);
+});
+
 void test("Pine overlay restrains unsupported intraday timeframes", () => {
   assert.match(overlaySource, /isSupportedReviewChart = isWeeklyChart or isDailyChart or is65MinuteChart/);
   assert.match(overlaySource, /isUnsupportedIntradayChart = isIntradayChart and not is65MinuteChart/);
