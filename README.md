@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, and local chartbook artifact output.
+This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, current-chart capture, and local chartbook artifact output.
 
 ## Requirements
 
@@ -182,6 +182,18 @@ args = ["/absolute/path/to/tradingview-mcp/dist/src/index.js"]
 startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```
+
+The v1 MCP server advertises only high-level charting tools:
+
+- `tradingview_connect`
+- `tradingview_status`
+- `tradingview_list_universe`
+- `tradingview_chart_symbol`
+- `tradingview_chart_universe`
+- `tradingview_capture_current_chart`
+- `tradingview_build_chartbook`
+
+Each tool description repeats the v1 guardrail: charting-only, no scanner or ranking behavior, no financial-advice claims, and no broker or order actions. The MCP surface does not expose raw click, type, or page-evaluate browser controls.
 
 ## V1 Boundary
 

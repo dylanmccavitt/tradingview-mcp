@@ -71,6 +71,12 @@ startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```
 
+The v1 MCP server advertises only high-level charting tools for connecting to
+TradingView, checking status, listing the local universe, charting one symbol,
+charting a configured universe selection, capturing the current chart, and
+building a chartbook. It must not expose raw click, type, or evaluate browser
+control tools.
+
 ## Test, Lint, And Typecheck
 
 ```bash
@@ -91,6 +97,8 @@ npm run test:pine
 - Use TypeScript with strict compiler settings.
 - Keep runtime code local-first and deterministic.
 - Keep MCP tool schemas small, explicit, and documented near the tool implementation.
+- Keep MCP tool descriptions concise and guardrailed so Codex chooses charting
+  workflows without scanner/ranking or broker/order behavior.
 - Prefer small modules with domain names over generic utility files.
 - Keep screenshot output paths deterministic and under ignored local artifact directories unless a later issue documents an export format.
 - Treat local universe config files as the v1 source of truth for chart symbol lists; do not depend on TradingView watchlists for universe resolution.

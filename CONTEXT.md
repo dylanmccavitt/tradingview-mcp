@@ -15,10 +15,15 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 ## Operating Model
 
 - Local TypeScript/Node MCP server over stdio.
+- MCP exposes high-level v1 charting tools only: connect/status, universe
+  listing, one-symbol charting, universe charting, current-chart capture, and
+  chartbook creation.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.
 - Pine drawing extraction targets that configured study name and returns compact levels, zones, labels, and tables for chartbook review.
+- Current-chart capture writes a local screenshot and matching objective drawing
+  JSON for the visible chart without navigating the chart to another symbol.
 - Chartbook output writes ignored local review artifacts with screenshots, per-timeframe drawing JSON, notes, and an index.
 - Configuration should stay repo-local or user-local; secrets and paid-service credentials must not be committed.
 - GitHub Issues are the source of task scope.
