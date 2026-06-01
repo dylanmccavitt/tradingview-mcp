@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, and a local universe config workflow. Chartbooks and Pine extraction are intentionally deferred.
+This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, and compact extraction for the installed objective Pine drawing overlay. Chartbooks are intentionally deferred.
 
 ## Requirements
 
@@ -31,6 +31,7 @@ npm run test:pine
 npm run tv:launch -- --port 9222
 npm run tv:health -- --port 9222
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+npm run tv:drawings -- --port 9222 --json
 npm run tv:universe -- list
 npm run tv:universe -- resolve --group semis --tier core
 ```
@@ -45,7 +46,19 @@ TVMCP Objective Drawing Overlay
 
 The overlay draws deterministic objects from chart OHLCV: prior day/week/month levels, 20D/50D high-low levels, confirmed swings, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It has `clean`, `levels`, and `full-debug` style presets and is tuned for the v1 weekly, daily, and 65-minute review flow.
 
-Manual install and visual inspection guidance lives in [docs/pine/objective-drawing-overlay.md](./docs/pine/objective-drawing-overlay.md). Static repo tests validate the source and docs, but a human still needs to inspect TradingView rendering before downstream extraction work treats the overlay as visually accepted.
+Manual install and visual inspection guidance lives in [docs/pine/objective-drawing-overlay.md](./docs/pine/objective-drawing-overlay.md). Static repo tests validate the source and docs; live TradingView rendering remains a human validation boundary for overlay changes.
+
+## Pine Drawing Extraction
+
+After TradingView Desktop is running with CDP enabled, a chart tab is open, and the objective overlay is installed, extract compact structured drawing data from the visible chart:
+
+```bash
+npm run tv:drawings -- --port 9222 --json
+```
+
+The extractor targets the configured study name, `TVMCP Objective Drawing Overlay`, and does not scrape every visible indicator by default. It returns deduplicated horizontal levels, high/low zones from boxes, compact labels, and compact tables for chartbook artifacts and Codex review. Use `--study-name <name>` only when intentionally validating a differently named local copy of the overlay.
+
+Use `--debug` with `--json` only when diagnosing a TradingView payload shape. Normal output avoids dumping large raw TradingView internals.
 
 ## Local Universe Config
 

@@ -39,6 +39,13 @@ Chart one exchange-qualified symbol across the default weekly, daily, and
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 ```
 
+Extract compact structured data from the installed objective Pine overlay on
+the visible chart:
+
+```bash
+npm run tv:drawings -- --port 9222 --json
+```
+
 List local universe groups and resolve chart symbols from the sample config:
 
 ```bash
