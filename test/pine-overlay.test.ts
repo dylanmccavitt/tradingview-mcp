@@ -56,6 +56,14 @@ void test("Pine overlay avoids tuple reassignment syntax", () => {
   );
 });
 
+void test("Pine overlay avoids dynamic plot linewidths", () => {
+  assert.doesNotMatch(
+    overlaySource,
+    /plot\([^\n]*linewidth\s*=\s*[^,\n]*\?/,
+    "Pine plot linewidth must be a fixed/input int, not a timeframe-conditional expression."
+  );
+});
+
 void test("Pine overlay avoids subjective patterns, scanner terms, and trade actions", () => {
   const forbidden = [
     /bull\s*flag/i,

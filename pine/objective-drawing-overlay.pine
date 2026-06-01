@@ -275,7 +275,7 @@ majorGapAnchor = not na(atr14) and math.abs(open - close[1]) >= atr14 * gapAtrMu
 confirmedPivotAnchor = not na(confirmedSwingHigh) or not na(confirmedSwingLow)
 anchorEvent = majorGapAnchor or confirmedPivotAnchor
 anchoredVwap = ta.vwap(hlc3, anchorEvent)
-plot(anchoredVwap, title="Anchored VWAP from major gap or confirmed pivot", color=color.new(color.white, 0), linewidth=is65MinuteChart ? 2 : 1)
+plot(anchoredVwap, title="Anchored VWAP from major gap or confirmed pivot", color=color.new(color.white, 0), linewidth=2)
 
 // Full-debug markers show deterministic source events used by extraction review.
 plotshape(isFullDebug and gapUp, title="Debug gap up", style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny, text="Gap")
