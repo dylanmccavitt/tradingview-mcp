@@ -2,7 +2,7 @@ export const PROJECT_INFO = {
   name: "tradingview-mcp",
   version: "0.1.0",
   purpose:
-    "Local MCP server for manual TradingView Desktop charting workflows over a software, semiconductor, and AI stock universe."
+    "Local MCP server for manual TradingView Desktop charting workflows over software, semiconductor, AI, infrastructure, and cybersecurity stock universes."
 } as const;
 
 export const PROJECT_GUARDRAILS = {

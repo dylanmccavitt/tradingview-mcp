@@ -75,7 +75,7 @@ order and reports per-symbol chart results without scoring or ranking.
 
 ### Local Universe Config
 
-`config/universe.sample.json` is the tracked v1 sample universe. It defines core and extended lists for semiconductors, AI software, AI infrastructure, and enterprise software using exchange-qualified TradingView symbols, display aliases, optional company names, and tags.
+`config/universe.sample.json` is the tracked v1 sample universe. It defines core and extended lists for semiconductors, AI software, AI infrastructure, enterprise software, and cybersecurity using exchange-qualified TradingView symbols, display aliases, optional company names, and tags.
 
 `src/universe/config.ts` validates the local JSON format, normalizes TradingView symbols, lists group summaries, and resolves selected groups/tiers into an ordered, de-duplicated symbol list for charting.
 

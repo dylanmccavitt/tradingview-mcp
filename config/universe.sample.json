@@ -35,9 +35,7 @@
           "alias": "ASML",
           "name": "ASML",
           "tags": ["equipment", "lithography"]
-        }
-      ],
-      "extended": [
+        },
         {
           "symbol": "NASDAQ:ARM",
           "alias": "ARM",
@@ -45,11 +43,19 @@
           "tags": ["ip", "cpu"]
         },
         {
+          "symbol": "NASDAQ:QCOM",
+          "alias": "QCOM",
+          "name": "Qualcomm",
+          "tags": ["mobile", "edge-ai"]
+        },
+        {
           "symbol": "NASDAQ:MU",
           "alias": "MU",
           "name": "Micron",
           "tags": ["memory"]
-        },
+        }
+      ],
+      "extended": [
         {
           "symbol": "NASDAQ:MRVL",
           "alias": "MRVL",
@@ -67,6 +73,60 @@
           "alias": "AMAT",
           "name": "Applied Materials",
           "tags": ["equipment"]
+        },
+        {
+          "symbol": "NASDAQ:KLAC",
+          "alias": "KLAC",
+          "name": "KLA",
+          "tags": ["equipment", "process-control"]
+        },
+        {
+          "symbol": "NASDAQ:INTC",
+          "alias": "INTC",
+          "name": "Intel",
+          "tags": ["cpu", "foundry"]
+        },
+        {
+          "symbol": "NASDAQ:TXN",
+          "alias": "TXN",
+          "name": "Texas Instruments",
+          "tags": ["analog", "industrial"]
+        },
+        {
+          "symbol": "NASDAQ:ADI",
+          "alias": "ADI",
+          "name": "Analog Devices",
+          "tags": ["analog", "industrial"]
+        },
+        {
+          "symbol": "NASDAQ:NXPI",
+          "alias": "NXPI",
+          "name": "NXP Semiconductors",
+          "tags": ["automotive", "industrial"]
+        },
+        {
+          "symbol": "NASDAQ:ON",
+          "alias": "ON",
+          "name": "ON Semiconductor",
+          "tags": ["power", "automotive"]
+        },
+        {
+          "symbol": "NASDAQ:MPWR",
+          "alias": "MPWR",
+          "name": "Monolithic Power Systems",
+          "tags": ["power", "industrial"]
+        },
+        {
+          "symbol": "NASDAQ:SNPS",
+          "alias": "SNPS",
+          "name": "Synopsys",
+          "tags": ["eda", "design-software"]
+        },
+        {
+          "symbol": "NASDAQ:CDNS",
+          "alias": "CDNS",
+          "name": "Cadence Design Systems",
+          "tags": ["eda", "design-software"]
         }
       ]
     },
@@ -76,7 +136,7 @@
       "tags": ["ai", "software"],
       "core": [
         {
-          "symbol": "NYSE:PLTR",
+          "symbol": "NASDAQ:PLTR",
           "alias": "PLTR",
           "name": "Palantir",
           "tags": ["analytics", "government"]
@@ -104,6 +164,24 @@
           "alias": "MDB",
           "name": "MongoDB",
           "tags": ["database"]
+        },
+        {
+          "symbol": "NYSE:AI",
+          "alias": "AI",
+          "name": "C3.ai",
+          "tags": ["enterprise-ai"]
+        },
+        {
+          "symbol": "NASDAQ:APP",
+          "alias": "APP",
+          "name": "AppLovin",
+          "tags": ["ai-adtech"]
+        },
+        {
+          "symbol": "NYSE:IOT",
+          "alias": "IOT",
+          "name": "Samsara",
+          "tags": ["iot", "industrial-ai"]
         }
       ],
       "extended": [
@@ -114,28 +192,10 @@
           "tags": ["developer-tools"]
         },
         {
-          "symbol": "NASDAQ:CRWD",
-          "alias": "CRWD",
-          "name": "CrowdStrike",
-          "tags": ["security"]
-        },
-        {
-          "symbol": "NASDAQ:PANW",
-          "alias": "PANW",
-          "name": "Palo Alto Networks",
-          "tags": ["security"]
-        },
-        {
           "symbol": "NYSE:PATH",
           "alias": "PATH",
           "name": "UiPath",
           "tags": ["automation"]
-        },
-        {
-          "symbol": "NYSE:AI",
-          "alias": "AI",
-          "name": "C3.ai",
-          "tags": ["enterprise-ai"]
         },
         {
           "symbol": "NYSE:ESTC",
@@ -144,10 +204,46 @@
           "tags": ["search", "observability"]
         },
         {
-          "symbol": "NASDAQ:S",
-          "alias": "S",
-          "name": "SentinelOne",
-          "tags": ["security"]
+          "symbol": "NASDAQ:SOUN",
+          "alias": "SOUN",
+          "name": "SoundHound AI",
+          "tags": ["voice-ai", "ai-applications"]
+        },
+        {
+          "symbol": "NYSE:BBAI",
+          "alias": "BBAI",
+          "name": "BigBear.ai",
+          "tags": ["analytics", "defense-ai"]
+        },
+        {
+          "symbol": "NASDAQ:CFLT",
+          "alias": "CFLT",
+          "name": "Confluent",
+          "tags": ["streaming-data"]
+        },
+        {
+          "symbol": "NYSE:U",
+          "alias": "U",
+          "name": "Unity Software",
+          "tags": ["simulation", "real-time-3d"]
+        },
+        {
+          "symbol": "NASDAQ:MNDY",
+          "alias": "MNDY",
+          "name": "monday.com",
+          "tags": ["workflow", "collaboration"]
+        },
+        {
+          "symbol": "NYSE:HUBS",
+          "alias": "HUBS",
+          "name": "HubSpot",
+          "tags": ["crm", "marketing"]
+        },
+        {
+          "symbol": "NYSE:RBLX",
+          "alias": "RBLX",
+          "name": "Roblox",
+          "tags": ["platform", "generative-content"]
         }
       ]
     },
@@ -181,6 +277,24 @@
           "tags": ["ai-labs", "platform"]
         },
         {
+          "symbol": "NYSE:ORCL",
+          "alias": "ORCL",
+          "name": "Oracle",
+          "tags": ["cloud", "database"]
+        },
+        {
+          "symbol": "NYSE:ANET",
+          "alias": "ANET",
+          "name": "Arista Networks",
+          "tags": ["networking", "datacenter"]
+        },
+        {
+          "symbol": "NYSE:VRT",
+          "alias": "VRT",
+          "name": "Vertiv",
+          "tags": ["datacenter", "power-cooling"]
+        },
+        {
           "symbol": "NASDAQ:NBIS",
           "alias": "NBIS",
           "name": "Nebius",
@@ -188,12 +302,6 @@
         }
       ],
       "extended": [
-        {
-          "symbol": "NYSE:ORCL",
-          "alias": "ORCL",
-          "name": "Oracle",
-          "tags": ["cloud", "database"]
-        },
         {
           "symbol": "NYSE:DELL",
           "alias": "DELL",
@@ -211,6 +319,60 @@
           "alias": "SMCI",
           "name": "Super Micro Computer",
           "tags": ["servers"]
+        },
+        {
+          "symbol": "NYSE:VST",
+          "alias": "VST",
+          "name": "Vistra",
+          "tags": ["power", "datacenter-energy"]
+        },
+        {
+          "symbol": "NYSE:ETN",
+          "alias": "ETN",
+          "name": "Eaton",
+          "tags": ["power", "electrical"]
+        },
+        {
+          "symbol": "NYSE:GEV",
+          "alias": "GEV",
+          "name": "GE Vernova",
+          "tags": ["power", "grid"]
+        },
+        {
+          "symbol": "NASDAQ:CSCO",
+          "alias": "CSCO",
+          "name": "Cisco",
+          "tags": ["networking"]
+        },
+        {
+          "symbol": "NYSE:IBM",
+          "alias": "IBM",
+          "name": "IBM",
+          "tags": ["hybrid-cloud", "enterprise-ai"]
+        },
+        {
+          "symbol": "NASDAQ:NTAP",
+          "alias": "NTAP",
+          "name": "NetApp",
+          "tags": ["storage"]
+        },
+        {
+          "symbol": "NYSE:PSTG",
+          "alias": "PSTG",
+          "name": "Pure Storage",
+          "tags": ["storage"]
+        },
+        {
+          "symbol": "NYSE:CLS",
+          "alias": "CLS",
+          "name": "Celestica",
+          "tags": ["electronics-manufacturing", "datacenter"]
+        },
+        {
+          "symbol": "NYSE:COHR",
+          "alias": "COHR",
+          "name": "Coherent",
+          "tags": ["optical-networking", "datacenter"]
         }
       ]
     },
@@ -248,15 +410,33 @@
           "alias": "ADBE",
           "name": "Adobe",
           "tags": ["creative", "marketing"]
-        }
-      ],
-      "extended": [
+        },
+        {
+          "symbol": "NYSE:SAP",
+          "alias": "SAP",
+          "name": "SAP",
+          "tags": ["erp"]
+        },
         {
           "symbol": "NASDAQ:INTU",
           "alias": "INTU",
           "name": "Intuit",
           "tags": ["finance-software"]
         },
+        {
+          "symbol": "NASDAQ:WDAY",
+          "alias": "WDAY",
+          "name": "Workday",
+          "tags": ["hr", "finance-software"]
+        },
+        {
+          "symbol": "NASDAQ:SHOP",
+          "alias": "SHOP",
+          "name": "Shopify",
+          "tags": ["commerce"]
+        }
+      ],
+      "extended": [
         {
           "symbol": "NASDAQ:ADSK",
           "alias": "ADSK",
@@ -270,10 +450,187 @@
           "tags": ["collaboration"]
         },
         {
-          "symbol": "NASDAQ:WDAY",
-          "alias": "WDAY",
-          "name": "Workday",
-          "tags": ["hr", "finance-software"]
+          "symbol": "NYSE:HUBS",
+          "alias": "HUBS",
+          "name": "HubSpot",
+          "tags": ["crm", "marketing"]
+        },
+        {
+          "symbol": "NASDAQ:MNDY",
+          "alias": "MNDY",
+          "name": "monday.com",
+          "tags": ["workflow", "collaboration"]
+        },
+        {
+          "symbol": "NYSE:VEEV",
+          "alias": "VEEV",
+          "name": "Veeva Systems",
+          "tags": ["life-sciences", "crm"]
+        },
+        {
+          "symbol": "NASDAQ:ZM",
+          "alias": "ZM",
+          "name": "Zoom",
+          "tags": ["communications"]
+        },
+        {
+          "symbol": "NASDAQ:DOCU",
+          "alias": "DOCU",
+          "name": "DocuSign",
+          "tags": ["workflow", "documents"]
+        },
+        {
+          "symbol": "NASDAQ:ADP",
+          "alias": "ADP",
+          "name": "ADP",
+          "tags": ["payroll", "hr"]
+        },
+        {
+          "symbol": "NASDAQ:PAYX",
+          "alias": "PAYX",
+          "name": "Paychex",
+          "tags": ["payroll", "hr"]
+        },
+        {
+          "symbol": "NYSE:BILL",
+          "alias": "BILL",
+          "name": "BILL Holdings",
+          "tags": ["finance-software"]
+        },
+        {
+          "symbol": "NASDAQ:DBX",
+          "alias": "DBX",
+          "name": "Dropbox",
+          "tags": ["collaboration", "storage"]
+        }
+      ]
+    },
+    {
+      "id": "cybersecurity",
+      "label": "Cybersecurity",
+      "tags": ["cybersecurity", "security", "software"],
+      "core": [
+        {
+          "symbol": "NASDAQ:CRWD",
+          "alias": "CRWD",
+          "name": "CrowdStrike",
+          "tags": ["endpoint", "cloud-security"]
+        },
+        {
+          "symbol": "NASDAQ:PANW",
+          "alias": "PANW",
+          "name": "Palo Alto Networks",
+          "tags": ["platform", "network-security"]
+        },
+        {
+          "symbol": "NASDAQ:FTNT",
+          "alias": "FTNT",
+          "name": "Fortinet",
+          "tags": ["network-security"]
+        },
+        {
+          "symbol": "NASDAQ:ZS",
+          "alias": "ZS",
+          "name": "Zscaler",
+          "tags": ["zero-trust", "cloud-security"]
+        },
+        {
+          "symbol": "NYSE:NET",
+          "alias": "NET",
+          "name": "Cloudflare",
+          "tags": ["edge", "application-security"]
+        },
+        {
+          "symbol": "NASDAQ:OKTA",
+          "alias": "OKTA",
+          "name": "Okta",
+          "tags": ["identity"]
+        },
+        {
+          "symbol": "NYSE:S",
+          "alias": "S",
+          "name": "SentinelOne",
+          "tags": ["endpoint", "ai-security"]
+        },
+        {
+          "symbol": "NASDAQ:CHKP",
+          "alias": "CHKP",
+          "name": "Check Point Software",
+          "tags": ["network-security"]
+        }
+      ],
+      "extended": [
+        {
+          "symbol": "NASDAQ:CYBR",
+          "alias": "CYBR",
+          "name": "CyberArk",
+          "tags": ["identity", "privileged-access"]
+        },
+        {
+          "symbol": "NASDAQ:TENB",
+          "alias": "TENB",
+          "name": "Tenable",
+          "tags": ["vulnerability-management"]
+        },
+        {
+          "symbol": "NASDAQ:QLYS",
+          "alias": "QLYS",
+          "name": "Qualys",
+          "tags": ["vulnerability-management"]
+        },
+        {
+          "symbol": "NASDAQ:VRNS",
+          "alias": "VRNS",
+          "name": "Varonis",
+          "tags": ["data-security"]
+        },
+        {
+          "symbol": "NASDAQ:RPD",
+          "alias": "RPD",
+          "name": "Rapid7",
+          "tags": ["threat-detection", "vulnerability-management"]
+        },
+        {
+          "symbol": "NYSE:RBRK",
+          "alias": "RBRK",
+          "name": "Rubrik",
+          "tags": ["data-security", "cyber-resilience"]
+        },
+        {
+          "symbol": "NASDAQ:GEN",
+          "alias": "GEN",
+          "name": "Gen Digital",
+          "tags": ["consumer-security"]
+        },
+        {
+          "symbol": "NASDAQ:AKAM",
+          "alias": "AKAM",
+          "name": "Akamai",
+          "tags": ["edge", "application-security"]
+        },
+        {
+          "symbol": "NASDAQ:RDWR",
+          "alias": "RDWR",
+          "name": "Radware",
+          "tags": ["application-security", "ddos"]
+        },
+        {
+          "symbol": "NASDAQ:OSPN",
+          "alias": "OSPN",
+          "name": "OneSpan",
+          "tags": ["identity", "digital-security"]
+        },
+        {
+          "symbol": "NASDAQ:FFIV",
+          "alias": "FFIV",
+          "name": "F5",
+          "tags": ["application-delivery", "application-security"]
+        },
+        {
+          "symbol": "NYSE:BOX",
+          "alias": "BOX",
+          "name": "Box",
+          "tags": ["content-security", "collaboration"]
         }
       ]
     }

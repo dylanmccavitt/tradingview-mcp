@@ -65,7 +65,13 @@ void test("sample universe config parses and lists expected groups", () => {
 
   assert.deepEqual(
     groups.map((group) => group.id),
-    ["semis", "ai-software", "ai-infrastructure", "enterprise-software"]
+    [
+      "semis",
+      "ai-software",
+      "ai-infrastructure",
+      "enterprise-software",
+      "cybersecurity"
+    ]
   );
   assert.equal(groups.every((group) => group.coreCount > 0), true);
   assert.equal(groups.every((group) => group.extendedCount > 0), true);

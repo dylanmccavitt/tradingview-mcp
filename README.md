@@ -1,6 +1,6 @@
 # tradingview-mcp
 
-Local Codex MCP project for charting a software, semiconductor, and AI stock universe in TradingView Desktop.
+Local Codex MCP project for charting software, semiconductor, AI, infrastructure, and cybersecurity stock universes in TradingView Desktop.
 
 V1 is a charting assistant, not a scanner, broker integration, or trade execution system.
 
@@ -67,7 +67,7 @@ Use `--debug` with `--json` only when diagnosing a TradingView payload shape. No
 
 ## Local Universe Config
 
-The v1 universe source of truth is a local JSON file, not TradingView watchlists. The tracked sample lives at [`config/universe.sample.json`](./config/universe.sample.json) and includes core and extended groups for semiconductors, AI software, AI infrastructure, and enterprise software.
+The v1 universe source of truth is a local JSON file, not TradingView watchlists. The tracked sample lives at [`config/universe.sample.json`](./config/universe.sample.json) and includes core and extended groups for semiconductors, AI software, AI infrastructure, enterprise software, and cybersecurity.
 
 List the configured groups:
 

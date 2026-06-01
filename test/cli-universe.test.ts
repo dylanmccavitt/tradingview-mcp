@@ -30,6 +30,7 @@ void test("CLI lists universe groups from the sample config", async () => {
   assert.equal(stderr.join(""), "");
   assert.match(stdout.join(""), /semis: Semiconductors/);
   assert.match(stdout.join(""), /enterprise-software: Enterprise Software/);
+  assert.match(stdout.join(""), /cybersecurity: Cybersecurity/);
 });
 
 void test("CLI resolves a selected universe group and tier", async () => {
@@ -49,7 +50,7 @@ void test("CLI resolves a selected universe group and tier", async () => {
   assert.equal(exitCode, 0);
   assert.equal(stderr.join(""), "");
   assert.match(output, /NASDAQ:NVDA \(NVDA\)/);
-  assert.doesNotMatch(output, /NASDAQ:ARM/);
+  assert.doesNotMatch(output, /NASDAQ:MRVL/);
 });
 
 void test("CLI reports invalid universe selection as usage error", async () => {
