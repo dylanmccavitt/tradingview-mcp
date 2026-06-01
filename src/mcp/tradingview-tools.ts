@@ -19,6 +19,10 @@ import {
   type ChartOneSymbolResult
 } from "../tradingview/chart-runner.js";
 import {
+  chartUniverse,
+  type ChartUniverseOptions
+} from "../tradingview/chart-universe-runner.js";
+import {
   DEFAULT_CDP_HOST,
   DEFAULT_CDP_PORT,
   DEFAULT_CDP_TIMEOUT_MS,
@@ -455,32 +459,30 @@ export function registerTradingViewMcpTools(
       }
     },
     async (args) => {
-      const { configPath, symbols } = await resolveUniverse(handlers, args);
-      const results = [];
+      const chartUniverseOptions: ChartUniverseOptions = {
+        ...endpointOptions(args),
+        ...chartOutputOptions(args),
+        loadUniverseConfig: handlers.loadUniverseConfig,
+        chartOneSymbol: handlers.chartOneSymbol
+      };
 
-      for (const symbol of symbols) {
-        const chartOptions: ChartOneSymbolOptions = {
-          symbol: symbol.symbol,
-          ...endpointOptions(args),
-          ...chartOutputOptions(args)
-        };
-        const result = await handlers.chartOneSymbol(chartOptions);
-        results.push({
-          symbol,
-          chart: result
-        });
+      if (args.configPath) {
+        chartUniverseOptions.configPath = args.configPath;
       }
 
-      const ok = results.every((item) => item.chart.ok);
+      if (args.groups) {
+        chartUniverseOptions.groupIds = args.groups;
+      }
+
+      if (args.tier) {
+        chartUniverseOptions.tier = args.tier;
+      }
+
+      const result = await chartUniverse(chartUniverseOptions);
 
       return textToolResult(
-        `Charted ${results.length} configured symbols: ${ok ? "success" : "failed"}.`,
-        {
-          ok,
-          configPath,
-          selection: chartbookSelectionSummary(configPath, args),
-          symbols: results
-        }
+        `Charted ${result.symbols.length} configured symbols: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
       );
     }
   );

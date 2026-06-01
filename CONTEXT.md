@@ -15,6 +15,8 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 ## Operating Model
 
 - Local TypeScript/Node MCP server over stdio.
+- Minimal local CLI commands expose the same setup, status, one-symbol charting,
+  and universe charting workflows for repeatable smoke/debug runs outside Codex.
 - MCP exposes high-level v1 charting tools only: connect/status, universe
   listing, one-symbol charting, universe charting, current-chart capture, and
   chartbook creation.

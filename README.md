@@ -31,6 +31,7 @@ npm run test:pine
 npm run tv:launch -- --port 9222
 npm run tv:health -- --port 9222
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+npm run tv:chart-universe -- --group semis --tier core --port 9222
 npm run tv:chartbook -- --group semis --tier core --port 9222
 npm run tv:drawings -- --port 9222 --json
 npm run tv:universe -- list
@@ -131,6 +132,26 @@ artifacts/tradingview-charts/NASDAQ-NVDA/
 ```
 
 Use `--output-dir <path>` to choose a different artifact root. The command reports each timeframe as `OK` or `FAILED`; it does not scan, rank, place orders, or bypass TradingView access controls.
+
+## Chart Universe
+
+For a repeatable smoke run across a selected local universe, use the direct
+chart-universe CLI command:
+
+```bash
+npm run tv:chart-universe -- --group semis --tier core --port 9222
+```
+
+The command resolves symbols from the same local universe config used by the
+MCP `tradingview_chart_universe` tool, then charts each symbol across the
+default weekly, daily, and 65-minute timeframes. It preserves configured order,
+de-duplicates through the universe resolver, and reports per-symbol/per-timeframe
+success or failure.
+
+Use the same `--group`, `--tier`, and `--config` options as universe resolution.
+Use `--json` for structured output suitable for smoke checks. This is still a
+charting workflow only; it does not scan, score, rank, recommend trades, place
+orders, use broker APIs, or bypass TradingView access controls.
 
 ## Chartbook Output
 

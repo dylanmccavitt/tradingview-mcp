@@ -39,6 +39,13 @@ Chart one exchange-qualified symbol across the default weekly, daily, and
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 ```
 
+Chart a selected local universe across the default weekly, daily, and 65-minute
+timeframes for smoke verification:
+
+```bash
+npm run tv:chart-universe -- --group semis --tier core --port 9222
+```
+
 Extract compact structured data from the installed objective Pine overlay on
 the visible chart:
 

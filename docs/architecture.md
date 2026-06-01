@@ -9,6 +9,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a small domain module that records project identity and guardrails
 - a TradingView Desktop CDP launch and health CLI
 - a narrow one-symbol chart capture CLI for weekly, daily, and 65-minute screenshots
+- a direct chart-universe CLI/MCP runner for smoke charting selected local universe symbols
 - a local universe config parser and CLI selection workflow
 - a manually installed objective Pine drawing overlay source for deterministic chart objects
 - a compact Pine drawing extraction path for the visible objective overlay study
@@ -67,6 +68,11 @@ The server instructions and every tool description state the charting-only guard
 
 `src/tradingview/chart-runner.ts` combines health checks, page control, output directory creation, and per-timeframe success/failure reporting for one symbol.
 
+`src/tradingview/chart-universe-runner.ts` resolves a local universe selection,
+then charts each resolved symbol through the same one-symbol chart runner used
+by the CLI and MCP `tradingview_chart_universe` tool. It preserves configured
+order and reports per-symbol chart results without scoring or ranking.
+
 ### Local Universe Config
 
 `config/universe.sample.json` is the tracked v1 sample universe. It defines core and extended lists for semiconductors, AI software, AI infrastructure, and enterprise software using exchange-qualified TradingView symbols, display aliases, optional company names, and tags.
@@ -111,7 +117,7 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 
 `test/tradingview-targets.test.ts` and `test/tradingview-health.test.ts` cover CDP target filtering and health-result shaping with fake CDP responses.
 
-`test/chart-plan.test.ts` and `test/chart-runner.test.ts` cover command planning, deterministic output naming, and per-timeframe error handling with fake clients.
+`test/chart-plan.test.ts`, `test/chart-runner.test.ts`, `test/cli-core.test.ts`, and `test/cli-chart-universe.test.ts` cover command planning, deterministic output naming, core CLI parsing/formatting, chart-universe CLI parsing/formatting, and per-timeframe error handling with fake clients.
 
 `test/universe-config.test.ts` and `test/cli-universe.test.ts` cover local universe parsing, duplicate handling, invalid symbols, group selection, and CLI formatting.
 
@@ -156,6 +162,14 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 3. The CLI navigates the active chart target through weekly, daily, and 65-minute URLs.
 4. For each timeframe, it waits for a rendered chart canvas and writes a PNG under `artifacts/tradingview-charts/<SYMBOL-SLUG>/`.
 5. The CLI prints per-timeframe success or failure.
+
+### Universe Chart Smoke Run
+
+1. Complete the TradingView CDP health flow until a chart target is healthy.
+2. Run `npm run tv:chart-universe -- --group semis --tier core --port 9222`.
+3. The CLI resolves symbols from the local universe config in configured order.
+4. The shared chart-universe runner charts each symbol through the one-symbol weekly, daily, and 65-minute capture workflow.
+5. The CLI prints per-symbol and per-timeframe success or failure, or returns structured JSON with `--json`.
 
 ### Pine Drawing Extraction
 
@@ -205,6 +219,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - One-symbol chart capture must stay user-directed and must report per-timeframe failures without converting them into scanner/ranking output.
 - Local universe config is the v1 source of truth for chart symbol lists; TradingView watchlists are not required or read for universe resolution.
 - Universe selection preserves configured order and de-duplicates symbols without scoring, ranking, or generating candidates.
+- Chart-universe CLI/MCP runs are smoke charting workflows over configured symbols, not scans or candidate-generation workflows.
 - Pine overlay source must be manually installed, deterministic from chart OHLCV, and free of subjective pattern labels or scanner/ranking/trade-action text.
 - Downstream Pine drawing extraction must target the visible study name `TVMCP Objective Drawing Overlay`.
 - Pine drawing extraction must keep payloads compact by default and avoid raw TradingView internals unless debug mode is explicit.
