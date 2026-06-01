@@ -3,6 +3,7 @@
 ## Status
 
 Implementation complete in branch `feat/issue-9-add-minimal-cli`.
+PR #19 was opened and reviewed locally with the checks below.
 
 The repo already had a broader CLI from earlier issues, so this issue reconciled
 the explicit acceptance criteria by adding the missing direct `chart-universe`
@@ -24,8 +25,10 @@ argument parsing and output formatting without requiring live TradingView.
 
 ## Next
 
-Open PR against `main`, then request human review. If live chart navigation is
-desired, launch TradingView Desktop with CDP enabled and run:
+Merge PR #19, then start issue #10 from updated `main`.
+
+If live chart navigation is desired, launch TradingView Desktop with CDP enabled
+and run:
 
 ```bash
 npm run tv:chart-universe -- --group semis --tier core --port 9222
@@ -40,8 +43,7 @@ and timeframe.
   probe on `127.0.0.1:9222` returned `cdp-unreachable`.
 - Running live `chart-universe` will navigate the active TradingView chart tab,
   so it should be done only when the user is ready for chart navigation.
-- `npm run test:pine` was not run because this issue did not change Pine source,
-  Pine extraction, or overlay behavior.
+- `npm run test:pine` was run during PR review and passed.
 
 ## Files
 
@@ -65,6 +67,7 @@ and timeframe.
 - `npm test -- --test-name-pattern=CLI`
 - `npm run lint`
 - `npm test`
+- `npm run test:pine`
 - `npm run build`
 - `node dist/src/cli.js --help`
 - `node dist/src/cli.js chart-universe --group missing --tier core --json`
