@@ -3,6 +3,7 @@
 ## Status
 
 Implemented on `feat/issue-27-review-profiles-cli-mcp`.
+PR #33 is open.
 
 The CLI chartbook path now routes through injectable handlers so tests can pin
 `--profile` parsing without a live TradingView session. Human chartbook output
@@ -17,9 +18,8 @@ a profile.
 
 ## Next
 
-Run the remaining required checks, push the branch, open the PR with
-`Closes #27`, run the requested subagent review, and merge/sync if review stays
-clean.
+Push the stale-handoff follow-up fix, get follow-up subagent review, then
+merge PR #33 and sync canonical `main` if review stays clean.
 
 ## Risks
 
@@ -29,6 +29,8 @@ clean.
   this issue.
 - Profile wording must remain review/prep only and must not imply scanning,
   ranking, recommendations, alerts, broker calls, or order actions.
+- Initial subagent review found only this stale handoff next-step text; no
+  runtime, schema, guardrail, or test findings were reported.
 
 ## Files
 
