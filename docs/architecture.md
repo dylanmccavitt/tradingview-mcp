@@ -13,6 +13,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a local universe config parser and CLI selection workflow
 - a manually installed objective Pine drawing overlay source for deterministic chart objects
 - a compact Pine drawing extraction path for the visible objective overlay study
+- a structured chart-facts layer for objective breakout, squeeze, and momentum review fields
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, and an index
 - a v1 MCP tool surface made only of high-level charting workflows
@@ -102,19 +103,23 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 
 `src/tradingview/pine-drawing-runner.ts` combines the existing CDP health check, chart target WebSocket connection, page payload read, and normalizer into a single extraction result. `src/cli.ts` exposes this as `drawings`.
 
+### Structured Chart Facts
+
+`src/chart-analysis/chart-facts.ts` derives compact objective facts from normalized overlay extraction for user-selected `focus`, `breakout`, `squeeze`, and `momentum` review profiles. Facts include extracted breakout reference levels, nearest support/resistance when TradingView exposes a current chart price, compression range state from extracted boxes or focus tables, AVWAP presence/value, intraday timing levels, and warnings for unavailable fields. The facts layer does not score, rank, recommend, alert, or infer hidden zones from screenshots.
+
 ### Current Chart Capture
 
-`src/tradingview/current-chart-capture.ts` captures the currently visible TradingView chart without navigating it to a different symbol. It checks CDP health, captures a PNG screenshot from the active chart target, reads the configured objective overlay payload, writes `current-chart.png` plus `current-chart-levels.json` under an ignored local artifact directory, and reports partial failures in the structured result.
+`src/tradingview/current-chart-capture.ts` captures the currently visible TradingView chart without navigating it to a different symbol. It checks CDP health, captures a PNG screenshot from the active chart target, reads the configured objective overlay payload, writes `current-chart.png` plus `current-chart-levels.json` under an ignored local artifact directory, includes structured chart facts in the JSON/result, and reports partial failures in the structured result.
 
 ### Chartbook Output
 
 `src/chartbook/chartbook.ts` builds deterministic local chartbook session plans under `artifacts/tradingview-chartbooks/<session-id>/`. It resolves one directory per selected universe symbol and plans weekly, daily, and 65-minute screenshot plus `*-levels.json` artifact paths.
 
-The chartbook runner uses the existing TradingView Desktop health check, chart page client, and Pine drawing page client. For each symbol/timeframe, it navigates the active chart target, waits for render, captures a screenshot, reads the objective overlay payload, writes compact structured drawing JSON, and writes a per-symbol `notes.md` page. It writes a session `index.md` after the run.
+The chartbook runner uses the existing TradingView Desktop health check, chart page client, and Pine drawing page client. For each symbol/timeframe, it navigates the active chart target, waits for render, captures a screenshot, reads the objective overlay payload, writes compact structured drawing JSON with chart facts, and writes a per-symbol `notes.md` page. It writes a session `index.md` after the run.
 
 Partial failures are recorded in-place. A failed timeframe still gets a matching `*-levels.json` with the screenshot/extraction error when the symbol directory can be written, and later timeframes/symbols continue. Existing successful captures are not deleted.
 
-`src/cli.ts` exposes this as `chartbook`, with universe selection options plus `--session`, `--output-dir`, `--preset`, `--study-name`, and CDP/render timing options.
+`src/cli.ts` exposes this as `chartbook`, with universe selection options plus `--session`, `--output-dir`, `--preset`, `--profile`, `--study-name`, and CDP/render timing options.
 
 ### Tests
 
@@ -130,7 +135,9 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 
 `test/pine-drawings.test.ts` and `test/pine-drawing-runner.test.ts` cover configured-study targeting, level de-duplication, zone/label/table normalization, debug raw-output gating, and health failure handling with fixture-like payloads.
 
-`test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, notes/index Markdown output, and partial failure recording with fake clients.
+`test/chart-facts.test.ts` covers fixture-like breakout, squeeze, and momentum facts without scoring, ranking, or recommendation fields.
+
+`test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, chart-facts artifact output, notes/index Markdown output, and partial failure recording with fake clients.
 
 `test/mcp-tools.test.ts` uses in-memory MCP transports to verify the advertised v1 tool list, guardrail descriptions, server instructions, structured status output, request validation, and ordered universe charting without a live TradingView session.
 
@@ -190,7 +197,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 2. Confirm the manually installed overlay is visible as `TVMCP Objective Drawing Overlay`.
 3. Run `npm run tv:chartbook -- --group semis --tier core --port 9222`.
 4. The CLI resolves the local universe selection without ranking or scoring symbols.
-5. The runner writes a deterministic local session directory under `artifacts/tradingview-chartbooks/<session-id>/` with `index.md`, one directory per symbol, weekly/daily/65-minute screenshots, matching `*-levels.json` files, and per-symbol `notes.md`.
+5. The runner writes a deterministic local session directory under `artifacts/tradingview-chartbooks/<session-id>/` with `index.md`, one directory per symbol, weekly/daily/65-minute screenshots, matching `*-levels.json` files with drawing extraction plus chart facts, and per-symbol `notes.md`.
 6. Review failures from the index and notes. Partial failures do not remove successful captures.
 
 ### Universe Selection
@@ -232,6 +239,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Current-chart capture must preserve the active chart context and avoid navigating the chart to a different symbol.
 - Chartbook output is a local review/prep artifact only and must keep generated files under ignored artifact directories by default.
 - Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.
+- Structured chart facts must stay objective and extraction-derived; unavailable fields should be represented with warnings instead of inferred from screenshots or pixels.
 - Chart-analysis profiles are review modes over user-selected charts or configured universe selections; they may produce objective facts, levels, checklist fields, notes, and prompts, but not rankings, watchlist scoring, financial advice, broker calls, order actions, unattended alerts, or generated candidates.
 - The MCP tool surface must stay high-level and must not expose raw browser micromanagement tools.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.

@@ -3,6 +3,12 @@ import { basename, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
+  DEFAULT_CHART_ANALYSIS_PROFILE,
+  buildChartFacts,
+  type ChartFacts
+} from "../chart-analysis/chart-facts.js";
+import type { ChartAnalysisProfileName } from "../domain.js";
+import {
   buildTradingViewChartUrl,
   DEFAULT_CHART_TIMEFRAMES,
   DEFAULT_RENDER_SETTLE_MS,
@@ -54,7 +60,7 @@ export const DEFAULT_CHARTBOOK_OUTPUT_ROOT =
 export const DEFAULT_CHARTBOOK_PRESET = "levels";
 export const DEFAULT_CHARTBOOK_DRAWING_RETRY_ATTEMPTS = 8;
 export const DEFAULT_CHARTBOOK_DRAWING_RETRY_DELAY_MS = 500;
-export const CHARTBOOK_SCHEMA_VERSION = 1;
+export const CHARTBOOK_SCHEMA_VERSION = 2;
 
 interface ChartbookFileSystem {
   mkdir: (
@@ -107,6 +113,7 @@ export interface ChartbookPlan {
   sessionDirectory: string;
   indexPath: string;
   preset: string;
+  profile: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
   symbols: ChartbookSymbolPlan[];
 }
@@ -117,6 +124,7 @@ export interface BuildChartbookPlanOptions {
   sessionId?: string;
   capturedAt?: Date;
   preset?: string;
+  profile?: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
   targetUrl?: string;
 }
@@ -125,6 +133,7 @@ export interface ChartbookExtractionArtifact {
   ok: boolean;
   studyName: string;
   extractedAt: string;
+  facts: ChartFacts;
   drawings: {
     levels: PineDrawingLevel[];
     zones: PineDrawingZone[];
@@ -150,6 +159,7 @@ export interface ChartbookLevelsArtifact {
     url: string;
   };
   preset: string;
+  profile: ChartAnalysisProfileName;
   capturedAt: string;
   paths: {
     screenshot: string;
@@ -174,6 +184,7 @@ export interface ChartbookTimeframeResult {
   screenshotOk: boolean;
   extractionOk: boolean;
   levelsJsonOk: boolean;
+  facts: ChartFacts;
   warnings: string[];
   error?: string;
 }
@@ -192,6 +203,7 @@ export interface ChartbookResult {
   sessionId: string;
   capturedAt: string;
   preset: string;
+  profile: ChartAnalysisProfileName;
   sessionDirectory: string;
   indexPath: string;
   endpoint: string;
@@ -206,6 +218,7 @@ export interface RunChartbookOptions {
   outputRoot?: string;
   sessionId?: string;
   preset?: string;
+  profile?: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
   studyName?: string;
   host?: string;
@@ -316,6 +329,7 @@ export function buildChartbookPlan(
   );
   const sessionDirectory = join(outputRoot, sessionId);
   const preset = options.preset?.trim() || DEFAULT_CHARTBOOK_PRESET;
+  const profile = options.profile ?? DEFAULT_CHART_ANALYSIS_PROFILE;
   const symbols = options.symbols.map((symbol) => {
     const metadata = symbolMetadata(symbol);
     const symbolSlug = slugifyTradingViewSymbol(metadata.symbol);
@@ -358,6 +372,7 @@ export function buildChartbookPlan(
     sessionDirectory,
     indexPath: join(sessionDirectory, "index.md"),
     preset,
+    profile,
     symbols
   };
 
@@ -394,6 +409,7 @@ function skippedExtraction(
   studyName: string,
   extractedAt: string,
   message: string,
+  profile: ChartAnalysisProfileName,
   endpoint?: string
 ): ChartbookExtractionArtifact {
   const empty = emptyDrawings();
@@ -401,6 +417,7 @@ function skippedExtraction(
     ok: false,
     studyName,
     extractedAt,
+    facts: buildChartFacts(empty, profile),
     drawings: empty.drawings,
     counts: empty.counts,
     warnings: empty.warnings,
@@ -418,12 +435,14 @@ function extractionArtifactFromData(
   data: PineDrawingExtractionData,
   extractedAt: string,
   endpoint: string | undefined,
-  error: string | undefined
+  error: string | undefined,
+  profile: ChartAnalysisProfileName
 ): ChartbookExtractionArtifact {
   const extraction: ChartbookExtractionArtifact = {
     ok: data.ok,
     studyName: data.studyName,
     extractedAt,
+    facts: buildChartFacts(data, profile),
     drawings: data.drawings,
     counts: data.counts,
     warnings: [...data.warnings]
@@ -448,10 +467,16 @@ function extractionArtifactFromData(
   return extraction;
 }
 
+function combinedExtractionWarnings(
+  extraction: ChartbookExtractionArtifact
+): string[] {
+  return [...new Set([...extraction.warnings, ...extraction.facts.warnings])];
+}
+
 function buildLevelsArtifact(
   symbol: ChartbookSymbolPlan,
   timeframe: ChartbookTimeframeArtifactPlan,
-  plan: Pick<ChartbookPlan, "capturedAt" | "preset">,
+  plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile">,
   screenshotOk: boolean,
   screenshotError: string | undefined,
   extraction: ChartbookExtractionArtifact
@@ -488,6 +513,7 @@ function buildLevelsArtifact(
       url: timeframe.url
     },
     preset: plan.preset,
+    profile: plan.profile,
     capturedAt: plan.capturedAt,
     paths: {
       screenshot: timeframe.screenshotFile,
@@ -509,7 +535,7 @@ function displayName(symbol: ChartbookSymbolMetadata): string {
 export function renderSymbolNotesMarkdown(
   symbol: ChartbookSymbolPlan,
   result: ChartbookSymbolResult,
-  plan: Pick<ChartbookPlan, "capturedAt" | "preset">
+  plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile">
 ): string {
   const lines = [
     `# ${displayName(symbol)}`,
@@ -527,6 +553,7 @@ export function renderSymbolNotesMarkdown(
     `- Groups: ${markdownList(symbol.groups)}`,
     `- Tiers: ${markdownList(symbol.tiers)}`,
     `- Preset: \`${plan.preset}\``,
+    `- Profile: \`${plan.profile}\``,
     `- Captured at: \`${plan.capturedAt}\``,
     "",
     "## Screenshots"
@@ -582,6 +609,7 @@ export function renderChartbookIndexMarkdown(
     `- Status: ${result.ok ? "OK" : "FAILED"}`,
     `- Captured at: \`${plan.capturedAt}\``,
     `- Preset: \`${plan.preset}\``,
+    `- Profile: \`${plan.profile}\``,
     `- Symbols: ${result.symbols.length}`
   ];
 
@@ -634,6 +662,7 @@ async function readDrawingExtractionWithRetry(options: {
   drawingClient: TradingViewPineDrawingPageClient;
   studyName: string;
   debug: boolean;
+  profile: ChartAnalysisProfileName;
   capturedAt: string;
   endpoint: string | undefined;
   retryAttempts: number;
@@ -656,7 +685,8 @@ async function readDrawingExtractionWithRetry(options: {
         normalized,
         options.capturedAt,
         options.endpoint,
-        undefined
+        undefined,
+        options.profile
       );
 
       if (lastExtraction.ok || attempt === options.retryAttempts) {
@@ -670,6 +700,7 @@ async function readDrawingExtractionWithRetry(options: {
           options.studyName,
           options.capturedAt,
           lastError,
+          options.profile,
           options.endpoint
         );
       }
@@ -686,6 +717,7 @@ async function readDrawingExtractionWithRetry(options: {
       options.studyName,
       options.capturedAt,
       lastError ?? "TradingView drawing extraction did not return a payload.",
+      options.profile,
       options.endpoint
     )
   );
@@ -698,7 +730,7 @@ async function captureTimeframe(
     drawingSetupError: string | undefined;
     endpoint: string | undefined;
     fileSystem: ChartbookFileSystem;
-    plan: Pick<ChartbookPlan, "capturedAt" | "preset">;
+    plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile">;
     setupError: string | undefined;
     studyName: string;
     debug: boolean;
@@ -743,6 +775,7 @@ async function captureTimeframe(
       options.studyName,
       options.plan.capturedAt,
       "Skipped drawing extraction because screenshot capture failed.",
+      options.plan.profile,
       options.endpoint
     );
   } else if (!options.drawingClient) {
@@ -751,6 +784,7 @@ async function captureTimeframe(
       options.plan.capturedAt,
       options.drawingSetupError ??
         "TradingView drawing extraction client is unavailable.",
+      options.plan.profile,
       options.endpoint
     );
   } else {
@@ -758,6 +792,7 @@ async function captureTimeframe(
       drawingClient: options.drawingClient,
       studyName: options.studyName,
       debug: options.debug,
+      profile: options.plan.profile,
       capturedAt: options.plan.capturedAt,
       endpoint: options.endpoint,
       retryAttempts: options.drawingRetryAttempts,
@@ -781,7 +816,7 @@ async function captureTimeframe(
     extraction
   );
   let levelsJsonOk = false;
-  const warnings = [...extraction.warnings];
+  const warnings = combinedExtractionWarnings(extraction);
   const errors: string[] = [];
 
   if (screenshotError) {
@@ -815,6 +850,7 @@ async function captureTimeframe(
     screenshotOk,
     extractionOk: extraction.ok,
     levelsJsonOk,
+    facts: extraction.facts,
     warnings,
     ...(errors.length > 0 ? { error: errors.join("; ") } : {})
   };
@@ -917,10 +953,12 @@ export async function runChartbook(
     writeFile
   };
   const studyName = options.studyName ?? DEFAULT_PINE_DRAWING_STUDY_NAME;
+  const profile = options.profile ?? DEFAULT_CHART_ANALYSIS_PROFILE;
   const debug = options.debug ?? false;
   const planOptions: BuildChartbookPlanOptions = {
     symbols: options.symbols,
-    capturedAt
+    capturedAt,
+    profile
   };
 
   if (options.preset) {
@@ -1085,6 +1123,7 @@ export async function runChartbook(
     sessionId: plan.sessionId,
     capturedAt: plan.capturedAt,
     preset: plan.preset,
+    profile: plan.profile,
     sessionDirectory: plan.sessionDirectory,
     indexPath: plan.indexPath,
     endpoint: health?.endpoint ?? `http://${endpoint.host}:${endpoint.port}`,

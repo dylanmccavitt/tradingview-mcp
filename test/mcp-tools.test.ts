@@ -4,6 +4,7 @@ import test from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
+import { buildChartFacts } from "../src/chart-analysis/chart-facts.js";
 import { createServer, type CreateServerOptions } from "../src/server.js";
 import {
   MCP_SERVER_INSTRUCTIONS,
@@ -124,7 +125,7 @@ function chartResult(symbol: string): ChartOneSymbolResult {
 function currentCaptureResult(captureId: string): CurrentChartCaptureResult {
   return {
     ok: true,
-    schemaVersion: 1,
+    schemaVersion: 2,
     captureId,
     capturedAt: "2026-06-01T17:30:00.000Z",
     outputDirectory: `/tmp/${captureId}`,
@@ -134,6 +135,21 @@ function currentCaptureResult(captureId: string): CurrentChartCaptureResult {
     screenshotOk: true,
     extractionOk: true,
     levelsJsonOk: true,
+    facts: buildChartFacts({
+      drawings: {
+        levels: [],
+        zones: [],
+        labels: [],
+        tables: []
+      },
+      counts: {
+        levels: 0,
+        zones: 0,
+        labels: 0,
+        tables: 0
+      },
+      warnings: []
+    }),
     warnings: []
   };
 }
@@ -195,6 +211,7 @@ void test("status tool returns structured health from the injected checker", asy
 void test("tool input validation rejects invalid chart requests before handlers run", async () => {
   let chartCalled = false;
   let configLoaded = false;
+  let captureCalled = false;
   const { client, close } = await connectClient({
     handlers: {
       chartOneSymbol: () => {
@@ -204,6 +221,10 @@ void test("tool input validation rejects invalid chart requests before handlers 
       loadUniverseConfig: () => {
         configLoaded = true;
         return Promise.resolve(universeConfig);
+      },
+      captureCurrentChart: () => {
+        captureCalled = true;
+        return Promise.resolve(currentCaptureResult("bad-profile"));
       }
     }
   });
@@ -221,13 +242,22 @@ void test("tool input validation rejects invalid chart requests before handlers 
         tier: "fast"
       }
     });
+    const badProfile = await client.callTool({
+      name: "tradingview_capture_current_chart",
+      arguments: {
+        profile: "scanner"
+      }
+    });
 
     assert.equal(chartCalled, false);
     assert.equal(configLoaded, false);
+    assert.equal(captureCalled, false);
     assert.equal(callResult(badSymbol).isError, true);
     assert.match(contentText(badSymbol), /Input validation error/i);
     assert.equal(callResult(badTier).isError, true);
     assert.match(contentText(badTier), /Input validation error/i);
+    assert.equal(callResult(badProfile).isError, true);
+    assert.match(contentText(badProfile), /Input validation error/i);
   } finally {
     await close();
   }
@@ -277,11 +307,13 @@ void test("universe charting resolves local config order without ranking", async
 void test("current-chart capture tool uses the injected capture workflow", async () => {
   let requestedCaptureId = "";
   let requestedOutputRoot = "";
+  let requestedProfile = "";
   const { client, close } = await connectClient({
     handlers: {
       captureCurrentChart: (options) => {
         requestedCaptureId = options.captureId ?? "";
         requestedOutputRoot = options.outputRoot ?? "";
+        requestedProfile = options.profile ?? "";
         return Promise.resolve(currentCaptureResult(requestedCaptureId));
       }
     }
@@ -293,6 +325,7 @@ void test("current-chart capture tool uses the injected capture workflow", async
       arguments: {
         captureId: "manual-review",
         outputDir: "/tmp/current-chart",
+        profile: "momentum",
         port: 9223
       }
     });
@@ -301,8 +334,51 @@ void test("current-chart capture tool uses the injected capture workflow", async
     assert.equal(typedResult.isError, undefined);
     assert.equal(requestedCaptureId, "manual-review");
     assert.equal(requestedOutputRoot, "/tmp/current-chart");
+    assert.equal(requestedProfile, "momentum");
     assert.equal(typedResult.structuredContent?.ok, true);
     assert.equal(typedResult.structuredContent?.screenshotOk, true);
+  } finally {
+    await close();
+  }
+});
+
+void test("chartbook tool passes chart-analysis profile to the runner", async () => {
+  let requestedProfile = "";
+  const { client, close } = await connectClient({
+    handlers: {
+      loadUniverseConfig: () => Promise.resolve(universeConfig),
+      runChartbook: (options) => {
+        requestedProfile = options.profile ?? "";
+        return Promise.resolve({
+          ok: true,
+          schemaVersion: 2,
+          sessionId: options.sessionId ?? "session-a",
+          capturedAt: "2026-06-01T17:30:00.000Z",
+          preset: options.preset ?? "levels",
+          profile: options.profile ?? "focus",
+          sessionDirectory: "/tmp/chartbook/session-a",
+          indexPath: "/tmp/chartbook/session-a/index.md",
+          endpoint: "http://127.0.0.1:9223",
+          symbols: []
+        });
+      }
+    }
+  });
+
+  try {
+    const result = await client.callTool({
+      name: "tradingview_build_chartbook",
+      arguments: {
+        groups: ["semis"],
+        profile: "squeeze",
+        port: 9223
+      }
+    });
+    const typedResult = callResult(result);
+
+    assert.equal(typedResult.isError, undefined);
+    assert.equal(requestedProfile, "squeeze");
+    assert.equal(typedResult.structuredContent?.profile, "squeeze");
   } finally {
     await close();
   }

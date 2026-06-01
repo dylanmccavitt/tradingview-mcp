@@ -2,6 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
+  DEFAULT_CHART_ANALYSIS_PROFILE,
+  buildChartFacts,
+  type ChartFacts
+} from "../chart-analysis/chart-facts.js";
+import type { ChartAnalysisProfileName } from "../domain.js";
+import {
   DEFAULT_RENDER_SETTLE_MS,
   DEFAULT_RENDER_TIMEOUT_MS
 } from "./chart-plan.js";
@@ -36,7 +42,7 @@ import {
 } from "./pine-drawings.js";
 import type { CdpTarget } from "./targets.js";
 
-export const CURRENT_CHART_CAPTURE_SCHEMA_VERSION = 1;
+export const CURRENT_CHART_CAPTURE_SCHEMA_VERSION = 2;
 export const DEFAULT_CURRENT_CHART_CAPTURE_OUTPUT_ROOT =
   "artifacts/tradingview-current-chart";
 
@@ -69,6 +75,7 @@ export interface CurrentChartCaptureExtraction {
   ok: boolean;
   studyName: string;
   extractedAt: string;
+  facts: ChartFacts;
   drawings: {
     levels: PineDrawingLevel[];
     zones: PineDrawingZone[];
@@ -88,6 +95,7 @@ export interface CurrentChartCaptureArtifact {
   ok: boolean;
   captureId: string;
   capturedAt: string;
+  profile: ChartAnalysisProfileName;
   target?: CdpTarget;
   paths: {
     screenshot: string;
@@ -112,6 +120,7 @@ export interface CurrentChartCaptureResult {
   screenshotOk: boolean;
   extractionOk: boolean;
   levelsJsonOk: boolean;
+  facts: ChartFacts;
   target?: CdpTarget;
   error?: string;
   warnings: string[];
@@ -120,6 +129,7 @@ export interface CurrentChartCaptureResult {
 export interface CaptureCurrentChartOptions {
   outputRoot?: string;
   captureId?: string;
+  profile?: ChartAnalysisProfileName;
   studyName?: string;
   host?: string;
   port?: number;
@@ -225,6 +235,7 @@ function skippedExtraction(
   studyName: string,
   extractedAt: string,
   message: string,
+  profile: ChartAnalysisProfileName,
   endpoint?: string
 ): CurrentChartCaptureExtraction {
   const empty = emptyDrawings();
@@ -232,6 +243,7 @@ function skippedExtraction(
     ok: false,
     studyName,
     extractedAt,
+    facts: buildChartFacts(empty, profile),
     drawings: empty.drawings,
     counts: empty.counts,
     warnings: empty.warnings,
@@ -248,12 +260,14 @@ function skippedExtraction(
 function extractionFromData(
   data: PineDrawingExtractionData,
   extractedAt: string,
-  endpoint: string | undefined
+  endpoint: string | undefined,
+  profile: ChartAnalysisProfileName
 ): CurrentChartCaptureExtraction {
   const extraction: CurrentChartCaptureExtraction = {
     ok: data.ok,
     studyName: data.studyName,
     extractedAt,
+    facts: buildChartFacts(data, profile),
     drawings: data.drawings,
     counts: data.counts,
     warnings: [...data.warnings]
@@ -272,6 +286,12 @@ function extractionFromData(
   }
 
   return extraction;
+}
+
+function combinedExtractionWarnings(
+  extraction: CurrentChartCaptureExtraction
+): string[] {
+  return [...new Set([...extraction.warnings, ...extraction.facts.warnings])];
 }
 
 function buildArtifact(options: {
@@ -294,6 +314,7 @@ function buildArtifact(options: {
     ok: screenshot.ok && options.extraction.ok,
     captureId: options.plan.captureId,
     capturedAt: options.plan.capturedAt,
+    profile: options.extraction.facts.profile,
     paths: {
       screenshot: "current-chart.png",
       levelsJson: "current-chart-levels.json"
@@ -343,7 +364,8 @@ function resultFromArtifact(options: {
     screenshotOk: options.artifact.screenshot.ok,
     extractionOk: options.artifact.extraction.ok,
     levelsJsonOk: options.levelsJsonOk,
-    warnings: [...options.artifact.extraction.warnings]
+    facts: options.artifact.extraction.facts,
+    warnings: combinedExtractionWarnings(options.artifact.extraction)
   };
 
   if (options.target) {
@@ -393,6 +415,7 @@ export async function captureCurrentChart(
   };
   const timeoutMs = options.timeoutMs ?? DEFAULT_CDP_TIMEOUT_MS;
   const studyName = options.studyName ?? DEFAULT_PINE_DRAWING_STUDY_NAME;
+  const profile = options.profile ?? DEFAULT_CHART_ANALYSIS_PROFILE;
   const debug = options.debug ?? false;
   const fileSystem = options.fileSystem ?? {
     mkdir,
@@ -441,6 +464,7 @@ export async function captureCurrentChart(
     studyName,
     plan.capturedAt,
     setupError ?? "TradingView chart client is unavailable.",
+    profile,
     health?.endpoint
   );
 
@@ -468,6 +492,7 @@ export async function captureCurrentChart(
           studyName,
           plan.capturedAt,
           "Skipped drawing extraction because screenshot capture failed.",
+          profile,
           health?.endpoint
         );
       }
@@ -495,13 +520,15 @@ export async function captureCurrentChart(
               debug
             }),
             plan.capturedAt,
-            health?.endpoint
+            health?.endpoint,
+            profile
           );
         } catch (error: unknown) {
           extraction = skippedExtraction(
             studyName,
             plan.capturedAt,
             errorMessage(error),
+            profile,
             health?.endpoint
           );
         }
