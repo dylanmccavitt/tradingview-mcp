@@ -26,6 +26,11 @@ import {
   type TradingViewHealthResult
 } from "./tradingview/health.js";
 import {
+  extractPineDrawings,
+  type ExtractPineDrawingsResult
+} from "./tradingview/pine-drawing-runner.js";
+import { DEFAULT_PINE_DRAWING_STUDY_NAME } from "./tradingview/pine-drawings.js";
+import {
   DEFAULT_UNIVERSE_CONFIG_PATH,
   listUniverseGroups,
   loadUniverseConfig,
@@ -59,6 +64,7 @@ const USAGE = `Usage:
   tradingview-mcp-cli launch [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
+  tradingview-mcp-cli drawings [--study-name "TVMCP Objective Drawing Overlay"] [--port 9222] [--timeout-ms 2500] [--json] [--debug]
   tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
   tradingview-mcp-cli universe resolve [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--json]
 
@@ -67,6 +73,7 @@ npm scripts:
   npm run tv:launch -- --port 9222
   npm run tv:launch-command -- --port 9222
   npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+  npm run tv:drawings -- --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
 `;
@@ -317,6 +324,41 @@ function formatChartResult(result: ChartOneSymbolResult): string {
   return `${lines.join("\n")}\n`;
 }
 
+function formatPineDrawingExtractionResult(
+  result: ExtractPineDrawingsResult
+): string {
+  const lines = [
+    `Status: ${result.ok ? "success" : "failed"}`,
+    `Study: ${result.studyName}`,
+    `Endpoint: ${result.endpoint}`,
+    `Extracted at: ${result.extractedAt}`,
+    `Counts: levels ${result.counts.levels}, zones ${result.counts.zones}, labels ${result.counts.labels}, tables ${result.counts.tables}`
+  ];
+
+  if (result.chart) {
+    lines.push(
+      `Chart: ${result.chart.title ?? "untitled"} <${result.chart.url ?? "unknown URL"}>`
+    );
+  }
+
+  if (result.target) {
+    lines.push(`Chart target: ${result.target.title} <${result.target.url}>`);
+  }
+
+  if (result.error) {
+    lines.push(`Error: ${result.error}`);
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push("Warnings:");
+    for (const warning of result.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 export async function runCli(
   argv = process.argv.slice(2),
   streams: CliStreams = {
@@ -350,6 +392,9 @@ export async function runCli(
         json: {
           type: "boolean"
         },
+        debug: {
+          type: "boolean"
+        },
         "output-dir": {
           type: "string"
         },
@@ -366,6 +411,9 @@ export async function runCli(
         symbol: {
           type: "string",
           short: "s"
+        },
+        "study-name": {
+          type: "string"
         },
         tier: {
           type: "string"
@@ -444,6 +492,33 @@ export async function runCli(
       writeJson(streams.stdout, result);
     } else {
       streams.stdout.write(formatChartResult(result));
+    }
+
+    return result.ok ? 0 : 1;
+  }
+
+  if (command === "drawings") {
+    const studyName =
+      getStringOption(parsed.values, "study-name") ??
+      DEFAULT_PINE_DRAWING_STUDY_NAME;
+    const extractionOptions: Parameters<typeof extractPineDrawings>[0] = {
+      studyName,
+      host: options.host,
+      port: options.port,
+      timeoutMs: options.timeoutMs,
+      debug: getBooleanOption(parsed.values, "debug")
+    };
+
+    if (options.appPath) {
+      extractionOptions.appPath = options.appPath;
+    }
+
+    const result = await extractPineDrawings(extractionOptions);
+
+    if (options.json) {
+      writeJson(streams.stdout, result);
+    } else {
+      streams.stdout.write(formatPineDrawingExtractionResult(result));
     }
 
     return result.ok ? 0 : 1;

@@ -65,7 +65,7 @@ Other intraday timeframes, such as 5-minute charts, intentionally use a restrain
 
 Static repo tests only verify the source and docs contain the required deterministic contract. They do not prove that TradingView renders the overlay readably.
 
-Before downstream extraction work proceeds, a human should inspect the overlay in TradingView Desktop and confirm:
+Before changing extraction assumptions or overlay source, a human should inspect the overlay in TradingView Desktop and confirm:
 
 - the study is visible as `TVMCP Objective Drawing Overlay`
 - weekly, daily, and 65-minute charts remain readable in the `levels` preset
@@ -76,4 +76,21 @@ Before downstream extraction work proceeds, a human should inspect the overlay i
 - labels and zones do not overlap so heavily that screenshots become unusable
 - no subjective pattern names, scanner terms, ranking terms, or trade-action text appears on chart
 
-Record that manual result in the next issue or handoff. Do not mark live visual validation complete from local static tests alone.
+Record that manual result in the related issue or handoff. Do not mark live visual validation complete from local static tests alone.
+
+## Structured Extraction
+
+With TradingView Desktop launched through CDP and a chart tab open, run:
+
+```bash
+npm run tv:drawings -- --port 9222 --json
+```
+
+The extractor targets `TVMCP Objective Drawing Overlay` by default and returns compact JSON for:
+
+- deduplicated horizontal levels from line/plot output
+- high/low zones from boxes
+- compact label text and price context when available
+- compact table rows when available
+
+Normal output omits large raw TradingView internals. Use `--debug` only when diagnosing the live payload shape.

@@ -11,12 +11,13 @@ The current repo is a local TypeScript/Node MCP server scaffold with the first T
 - a narrow one-symbol chart capture CLI for weekly, daily, and 65-minute screenshots
 - a local universe config parser and CLI selection workflow
 - a manually installed objective Pine drawing overlay source for deterministic chart objects
+- a compact Pine drawing extraction path for the visible objective overlay study
 - typed internal health-result shaping for later MCP tools
 - tests that pin the manual-only boundary, universe parsing behavior, and Pine overlay source contract
-- tests for CDP target discovery, health failures, chart planning, output naming, and chart-runner failures without requiring a live TradingView session
+- tests for CDP target discovery, health failures, chart planning, output naming, chart-runner failures, and Pine drawing extraction normalization without requiring a live TradingView session
 - repo docs for issue-driven development
 
-No chartbook generation, Pine drawing extraction, scanner, or broker behavior exists yet.
+No chartbook generation, scanner, or broker behavior exists yet.
 
 ## Major Components
 
@@ -66,6 +67,14 @@ The overlay is self-contained from chart OHLCV and TradingView time/session cont
 
 The repo does not inject Pine into TradingView. Manual install and visual inspection instructions live in `docs/pine/objective-drawing-overlay.md`.
 
+### Pine Drawing Extraction
+
+`src/tradingview/pine-drawings.ts` normalizes compact TradingView/CDP payloads for the configured study name `TVMCP Objective Drawing Overlay`. It returns deduplicated horizontal levels, box-derived high/low zones, compact labels, compact tables, chart context, and warnings. Raw TradingView internals are omitted unless debug mode is explicitly requested.
+
+`src/tradingview/pine-drawing-page.ts` evaluates a bounded page probe against the active TradingView chart target. The probe targets the configured overlay study by name or the known Pine short title and collects compact study payload candidates from supported page/widget surfaces.
+
+`src/tradingview/pine-drawing-runner.ts` combines the existing CDP health check, chart target WebSocket connection, page payload read, and normalizer into a single extraction result. `src/cli.ts` exposes this as `drawings`.
+
 ### Tests
 
 `test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary.
@@ -77,6 +86,8 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 `test/universe-config.test.ts` and `test/cli-universe.test.ts` cover local universe parsing, duplicate handling, invalid symbols, group selection, and CLI formatting.
 
 `test/pine-overlay.test.ts` statically validates the tracked Pine source and manual install docs without requiring a live TradingView session.
+
+`test/pine-drawings.test.ts` and `test/pine-drawing-runner.test.ts` cover configured-study targeting, level de-duplication, zone/label/table normalization, debug raw-output gating, and health failure handling with fixture-like payloads.
 
 ### Project Docs
 
@@ -112,6 +123,14 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 4. For each timeframe, it waits for a rendered chart canvas and writes a PNG under `artifacts/tradingview-charts/<SYMBOL-SLUG>/`.
 5. The CLI prints per-timeframe success or failure.
 
+### Pine Drawing Extraction
+
+1. Complete the TradingView CDP health flow until a chart target is healthy.
+2. Confirm the manually installed overlay is visible as `TVMCP Objective Drawing Overlay`.
+3. Run `npm run tv:drawings -- --port 9222 --json`.
+4. The CLI targets the configured overlay study and returns compact JSON for levels, zones, labels, and tables.
+5. Use `--debug` only when diagnosing payload shape; normal output avoids large raw TradingView internals.
+
 ### Universe Selection
 
 1. Keep the chart universe in a local JSON file such as `config/universe.sample.json` or ignored `config/universe.local.json`.
@@ -144,5 +163,6 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Universe selection preserves configured order and de-duplicates symbols without scoring, ranking, or generating candidates.
 - Pine overlay source must be manually installed, deterministic from chart OHLCV, and free of subjective pattern labels or scanner/ranking/trade-action text.
 - Downstream Pine drawing extraction must target the visible study name `TVMCP Objective Drawing Overlay`.
+- Pine drawing extraction must keep payloads compact by default and avoid raw TradingView internals unless debug mode is explicit.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.

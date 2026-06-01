@@ -17,6 +17,7 @@
     "tv:chart": "tsx src/cli.ts chart",
     "test:pine": "npm run build && node --test \"dist/test/pine-overlay.test.js\"",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
+    "tv:drawings": "tsx src/cli.ts drawings",
     "tv:universe": "tsx src/cli.ts universe",
     "tv:health": "tsx src/cli.ts health",
     "tv:launch": "tsx src/cli.ts launch",
