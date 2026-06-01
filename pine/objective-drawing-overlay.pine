@@ -21,20 +21,23 @@ isWeeklyChart = timeframe.isweekly
 isDailyChart = timeframe.isdaily
 isIntradayChart = timeframe.isintraday
 is65MinuteChart = isIntradayChart and timeframe.multiplier == 65
+isSupportedReviewChart = isWeeklyChart or isDailyChart or is65MinuteChart
+isUnsupportedIntradayChart = isIntradayChart and not is65MinuteChart
 
 levelWidth = isWeeklyChart ? 2 : 1
 breakoutWidth = isDailyChart ? 2 : 1
 swingWidth = isWeeklyChart or isDailyChart ? 2 : 1
-showLevelText = not isClean
+showLevelText = (not isClean and not isUnsupportedIntradayChart) or isFullDebug
 showDebugText = isFullDebug
-showPriorDayLevels = not isWeeklyChart or isFullDebug
-showPriorWeekLevels = not isClean or isWeeklyChart
+showPriorDayLevels = (not isClean and (isDailyChart or is65MinuteChart)) or isFullDebug
+showPriorWeekLevels = (isWeeklyChart or isDailyChart or is65MinuteChart) or isFullDebug
 showPriorMonthLevels = isWeeklyChart or isDailyChart or isFullDebug
-showBreakoutLevels = not isClean
-showSwingLevels = not isClean or isWeeklyChart
-showGapZones = not isClean
-showRangeBoxes = isLevels or isFullDebug
-showIntradayLevels = isIntradayChart and (is65MinuteChart or isFullDebug)
+showBreakoutLevels = (not isClean and (isDailyChart or is65MinuteChart)) or isFullDebug
+showSwingLevels = (not isClean and isSupportedReviewChart) or isFullDebug
+showGapZones = (not isClean and (isDailyChart or is65MinuteChart)) or isFullDebug
+showRangeBoxes = ((isLevels or isFullDebug) and (isDailyChart or is65MinuteChart)) or isFullDebug
+showIntradayLevels = is65MinuteChart or (isIntradayChart and isFullDebug)
+showAnchoredVwap = isSupportedReviewChart or isFullDebug
 
 atr14 = ta.atr(14)
 
@@ -208,6 +211,10 @@ if gapUp
 if gapDown
     gapBox = box.new(left=bar_index - 1, top=low[1], right=bar_index + zoneExtendBars, bottom=high, border_color=color.new(color.red, 10), bgcolor=color.new(color.red, 88))
     array.push(gapBoxes, gapBox)
+if not showGapZones and array.size(gapBoxes) > 0
+    while array.size(gapBoxes) > 0
+        hiddenGapBox = array.shift(gapBoxes)
+        box.delete(hiddenGapBox)
 while array.size(gapBoxes) > 12
     oldGapBox = array.shift(gapBoxes)
     box.delete(oldGapBox)
@@ -271,11 +278,11 @@ openingRangeLowLine := nextOpeningRangeLowLine
 openingRangeLowLabel := nextOpeningRangeLowLabel
 
 // Anchored VWAP from a major gap or confirmed pivot.
-majorGapAnchor = not na(atr14) and math.abs(open - close[1]) >= atr14 * gapAtrMultiplier
-confirmedPivotAnchor = not na(confirmedSwingHigh) or not na(confirmedSwingLow)
-anchorEvent = majorGapAnchor or confirmedPivotAnchor
+majorGapCondition = not na(atr14) and math.abs(open - close[1]) >= atr14 * gapAtrMultiplier
+confirmedPivotCondition = not na(confirmedSwingHigh) or not na(confirmedSwingLow)
+anchorEvent = showAnchoredVwap and (majorGapCondition or confirmedPivotCondition)
 anchoredVwap = ta.vwap(hlc3, anchorEvent)
-plot(anchoredVwap, title="Anchored VWAP from major gap or confirmed pivot", color=color.new(color.white, 0), linewidth=2)
+plot(showAnchoredVwap ? anchoredVwap : na, title="Anchored VWAP from major gap or confirmed pivot", color=color.new(color.white, 0), linewidth=2)
 
 // Full-debug markers show deterministic source events used by extraction review.
 plotshape(isFullDebug and gapUp, title="Debug gap up", style=shape.triangleup, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny, text="Gap")

@@ -64,6 +64,13 @@ void test("Pine overlay avoids dynamic plot linewidths", () => {
   );
 });
 
+void test("Pine overlay restrains unsupported intraday timeframes", () => {
+  assert.match(overlaySource, /isSupportedReviewChart = isWeeklyChart or isDailyChart or is65MinuteChart/);
+  assert.match(overlaySource, /isUnsupportedIntradayChart = isIntradayChart and not is65MinuteChart/);
+  assert.match(overlaySource, /showAnchoredVwap = isSupportedReviewChart or isFullDebug/);
+  assert.match(overlayDocs, /Other intraday timeframes, such as 5-minute charts/i);
+});
+
 void test("Pine overlay avoids subjective patterns, scanner terms, and trade actions", () => {
   const forbidden = [
     /bull\s*flag/i,

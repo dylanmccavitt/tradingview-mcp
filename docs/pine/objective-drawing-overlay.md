@@ -59,6 +59,8 @@ Use the same installed study across the current v1 chart capture timeframes:
 
 The Pine source uses `timeframe.isweekly`, `timeframe.isdaily`, and a 65-minute intraday check to emphasize different object classes on those charts.
 
+Other intraday timeframes, such as 5-minute charts, intentionally use a restrained safe view in the `levels` preset. They do not show the full daily/65-minute object set unless `full-debug` is selected.
+
 ## Visual Inspection Boundary
 
 Static repo tests only verify the source and docs contain the required deterministic contract. They do not prove that TradingView renders the overlay readably.
@@ -67,6 +69,7 @@ Before downstream extraction work proceeds, a human should inspect the overlay i
 
 - the study is visible as `TVMCP Objective Drawing Overlay`
 - weekly, daily, and 65-minute charts remain readable in the `levels` preset
+- unsupported intraday charts such as 5-minute do not become noisy in the `levels` preset
 - `full-debug` exposes event markers without hiding price bars
 - labels and zones do not overlap so heavily that screenshots become unusable
 - no subjective pattern names, scanner terms, ranking terms, or trade-action text appears on chart
