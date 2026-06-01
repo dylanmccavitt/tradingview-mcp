@@ -2,11 +2,12 @@
 
 ## Status
 
-Implemented on `feat/issue-23-chart-analysis-profile-boundary`.
+Implemented on `feat/issue-23-chart-analysis-profile-boundary`; PR #29 is open.
 
 ## Next
 
-Open a PR for review and merge after review passes.
+Complete PR review follow-through and merge after the subagent review findings
+are resolved and checks pass.
 
 ## Risks
 

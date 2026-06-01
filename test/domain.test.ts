@@ -67,7 +67,8 @@ void test("chart-analysis profile outputs forbid scanner and execution behavior"
     "financial_advice",
     "order_actions",
     "broker_calls",
-    "unattended_alerts"
+    "unattended_alerts",
+    "generated_candidates"
   ]);
 
   const allowedText = CHART_ANALYSIS_PROFILE_OUTPUT.allowed.join(" ");
@@ -75,7 +76,7 @@ void test("chart-analysis profile outputs forbid scanner and execution behavior"
 
   assert.doesNotMatch(
     allowedText,
-    /ranking|scoring|financial_advice|order|broker|alert/i
+    /ranking|scoring|financial_advice|order|broker|alert|candidate/i
   );
   assert.match(forbiddenText, /rankings/);
   assert.match(forbiddenText, /watchlist_scoring/);
@@ -83,4 +84,5 @@ void test("chart-analysis profile outputs forbid scanner and execution behavior"
   assert.match(forbiddenText, /order_actions/);
   assert.match(forbiddenText, /broker_calls/);
   assert.match(forbiddenText, /unattended_alerts/);
+  assert.match(forbiddenText, /generated_candidates/);
 });

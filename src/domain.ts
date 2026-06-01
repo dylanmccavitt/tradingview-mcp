@@ -57,7 +57,8 @@ export const CHART_ANALYSIS_PROFILE_OUTPUT = {
     "financial_advice",
     "order_actions",
     "broker_calls",
-    "unattended_alerts"
+    "unattended_alerts",
+    "generated_candidates"
   ]
 } as const;
 

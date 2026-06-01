@@ -86,6 +86,7 @@ void test("v1 workflow documents chart-analysis profile boundaries", () => {
   assert.match(workflow, /order actions/);
   assert.match(workflow, /call\s+brokers/);
   assert.match(workflow, /unattended alerts/);
+  assert.match(workflow, /generate candidates/);
 });
 
 void test("README links the v1 workflow", () => {

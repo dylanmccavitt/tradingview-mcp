@@ -13,7 +13,7 @@ generation. The stable profile names are `focus`, `breakout`, `squeeze`, and
 `momentum`. Profile output may emphasize objective chart facts, extracted
 levels, setup checklist fields, chartbook notes, and user-review prompts. It
 must not include rankings, watchlist scoring, financial advice, order actions,
-broker calls, or unattended alerts.
+broker calls, unattended alerts, or generated candidates.
 
 ## Users
 
@@ -44,6 +44,6 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 - No scanner or ranking engine.
 - No unattended trading workflow.
 - No profile-based rankings, watchlist scoring, financial advice, order
-  actions, broker calls, or unattended alerts.
+  actions, broker calls, unattended alerts, or generated candidates.
 - No bypassing TradingView subscriptions or access controls.
 - No generated Pine injection or subjective chart-pattern labels in v1 overlays.
