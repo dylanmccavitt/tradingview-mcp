@@ -8,6 +8,13 @@
 
 V1 is charting-only. It can become a local assistant for opening charts, applying chart context, organizing chartbooks, and extracting user-visible drawing data from TradingView Desktop. It is not a scanner, broker integration, signal service, or trade execution system.
 
+Chart-analysis profiles are user-selected review modes, not candidate
+generation. The stable profile names are `focus`, `breakout`, `squeeze`, and
+`momentum`. Profile output may emphasize objective chart facts, extracted
+levels, setup checklist fields, chartbook notes, and user-review prompts. It
+must not include rankings, watchlist scoring, financial advice, order actions,
+broker calls, or unattended alerts.
+
 ## Users
 
 The primary user is a local operator using Codex and TradingView Desktop on their own machine. The repo should optimize for inspectable local workflows, repeatable setup, and clear guardrails.
@@ -36,5 +43,7 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 - No order placement.
 - No scanner or ranking engine.
 - No unattended trading workflow.
+- No profile-based rankings, watchlist scoring, financial advice, order
+  actions, broker calls, or unattended alerts.
 - No bypassing TradingView subscriptions or access controls.
 - No generated Pine injection or subjective chart-pattern labels in v1 overlays.
