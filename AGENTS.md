@@ -73,7 +73,8 @@ For Codex, configure the built server as a local stdio MCP command:
 ```toml
 [mcp_servers.tradingview]
 command = "node"
-args = ["/absolute/path/to/tradingview-mcp/dist/src/index.js"]
+args = ["/Users/dylanmccavitt/projects/tradingview-mcp/dist/src/index.js"]
+cwd = "/Users/dylanmccavitt/projects/tradingview-mcp"
 startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```
