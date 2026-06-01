@@ -526,6 +526,40 @@ void test("squeeze notes render compression range and risk review sections", () 
   assert.doesNotMatch(notes, /buy|sell|broker|order|recommendation/i);
 });
 
+void test("squeeze notes use a non-daily compression range when daily has none", () => {
+  const plan = buildChartbookPlan({
+    symbols: [nvdaSymbol],
+    outputRoot: "/tmp/chartbooks",
+    sessionId: "squeeze-weekly-range-notes",
+    capturedAt: new Date("2026-06-01T17:30:00.000Z"),
+    profile: "squeeze"
+  });
+  const symbol = plan.symbols[0] as ChartbookSymbolPlan;
+  const result = resultFromPlan(symbol, {
+    weekly: testFacts("squeeze", {
+      compression: {
+        state: "active",
+        range: {
+          high: 151,
+          low: 137,
+          source: "zone"
+        }
+      }
+    }),
+    daily: testFacts("squeeze", {
+      compression: {
+        state: "unknown"
+      }
+    })
+  });
+
+  const notes = renderSymbolNotesMarkdown(symbol, result, plan);
+
+  assert.match(notes, /Daily compression: unknown/);
+  assert.match(notes, /Review range: active; range high 151, range low 137/);
+  assert.match(notes, /Level for human review: range high 151/);
+});
+
 void test("momentum notes render level position, AVWAP, and retest sections", () => {
   const plan = buildChartbookPlan({
     symbols: [nvdaSymbol],

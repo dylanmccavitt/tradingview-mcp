@@ -672,6 +672,15 @@ function expansionWatchLevel(facts: ChartFacts | undefined): string {
   return formatLevel(facts.nearest.resistance);
 }
 
+function factsWithCompressionRange(
+  facts: Array<ChartFacts | undefined>
+): ChartFacts | undefined {
+  return (
+    facts.find((candidate) => candidate?.compression.range) ??
+    facts.find((candidate) => candidate)
+  );
+}
+
 function warningsSection(result: ChartbookSymbolResult): string[] {
   const warningLines = result.timeframes
     .filter((timeframe) => timeframe.warnings.length > 0)
@@ -735,7 +744,7 @@ function renderSqueezeReviewTemplate(result: ChartbookSymbolResult): string[] {
   const weekly = timeframeFacts(result, "weekly");
   const daily = timeframeFacts(result, "daily");
   const intraday = timeframeFacts(result, "65-minute");
-  const rangeFacts = daily ?? weekly ?? intraday;
+  const rangeFacts = factsWithCompressionRange([daily, weekly, intraday]);
 
   return [
     "",
