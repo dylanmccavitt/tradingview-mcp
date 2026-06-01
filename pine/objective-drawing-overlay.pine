@@ -71,11 +71,11 @@ f_upsert_level(line currentLine, label currentLabel, float price, string name, c
     label nextLabel = currentLabel
     if visible and not na(price)
         if na(nextLine)
-            nextLine := line.new(bar_index - 1, price, bar_index, price, extend=extend.right, color=levelColor, width=width, style=line.style_dashed)
+            nextLine := line.new(bar_index - 1, price, bar_index, price, extend=extend.both, color=levelColor, width=width, style=line.style_dashed)
         else
             line.set_xy1(nextLine, bar_index - 1, price)
             line.set_xy2(nextLine, bar_index, price)
-            line.set_extend(nextLine, extend.right)
+            line.set_extend(nextLine, extend.both)
             line.set_color(nextLine, levelColor)
             line.set_width(nextLine, width)
             line.set_style(nextLine, line.style_dashed)

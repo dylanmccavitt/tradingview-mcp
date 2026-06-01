@@ -76,6 +76,12 @@ void test("Pine overlay publishes level prices to the price scale", () => {
   assert.match(overlayDocs, /price markers on the right price axis/i);
 });
 
+void test("Pine overlay extends horizontal reference levels across the chart", () => {
+  assert.match(overlaySource, /line\.new\(bar_index - 1, price, bar_index, price, extend=extend\.both/);
+  assert.match(overlaySource, /line\.set_extend\(nextLine, extend\.both\)/);
+  assert.match(overlayDocs, /Horizontal level lines extend across the chart/i);
+});
+
 void test("Pine overlay restrains unsupported intraday timeframes", () => {
   assert.match(overlaySource, /isSupportedReviewChart = isWeeklyChart or isDailyChart or is65MinuteChart/);
   assert.match(overlaySource, /isUnsupportedIntradayChart = isIntradayChart and not is65MinuteChart/);
