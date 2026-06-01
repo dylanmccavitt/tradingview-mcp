@@ -3,12 +3,15 @@
 ## Status
 
 Implementation complete in branch `feat/issue-7-build-chartbook-output`.
+PR #17 was opened and reviewed locally with the checks below.
 
 The chartbook workflow now builds deterministic local sessions under `artifacts/tradingview-chartbooks/<session-id>/`, resolves local universe selections, writes per-symbol notes, writes weekly/daily/65-minute screenshots when CDP capture succeeds, writes matching `*-levels.json` artifacts for every timeframe, and records partial failures without deleting successful captures.
 
 ## Next
 
-Open a PR for issue #7 and request human review. For live validation, launch TradingView Desktop with CDP, open a chart with the manually installed `TVMCP Objective Drawing Overlay`, then run:
+Merge PR #17, then start issue #8 from updated `main`.
+
+For live validation, launch TradingView Desktop with CDP, open a chart with the manually installed `TVMCP Objective Drawing Overlay`, then run:
 
 ```bash
 npm run tv:chartbook -- --group semis --tier core --session manual-smoke --port 9222
@@ -40,9 +43,8 @@ npm run tv:chartbook -- --group semis --tier core --session manual-smoke --port 
 - `npm run typecheck`
 - `npm run lint`
 - `npm test`
+- `npm run test:pine`
 - `npm run build`
 - `node dist/src/cli.js --help`
 - `node dist/src/cli.js chartbook --group missing --tier core --json` (expected exit 2)
 - `npm run tv:health -- --port 9222 --timeout-ms 2500` (expected exit 1 because CDP was unreachable)
-
-`npm run test:pine` was not run because the Pine source and Pine-facing extraction behavior were not changed.
