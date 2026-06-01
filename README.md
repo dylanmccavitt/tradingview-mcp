@@ -184,6 +184,26 @@ Use `--session <id>` for a deterministic session name, `--output-dir <path>` for
 
 Chartbooks are local review/prep artifacts only. They do not rank symbols, recommend trades, place orders, use broker APIs, or bypass TradingView access controls.
 
+## Review Profiles
+
+The stable chart-analysis review profiles are `focus`, `breakout`, `squeeze`,
+and `momentum`. Profiles change objective chart-facts emphasis and chartbook
+review checklists only; they do not scan, score, rank, recommend, alert, or
+trade.
+
+The CLI exposes review profiles on chartbooks:
+
+```bash
+npm run tv:chartbook -- --group semis --tier core --profile momentum --port 9222
+```
+
+The MCP surface exposes the same profile enum only on
+`tradingview_capture_current_chart` and `tradingview_build_chartbook`, because
+those tools produce review artifacts with objective facts and notes.
+`tradingview_chart_universe` remains ordered smoke charting over configured
+symbols and does not accept a profile. Universe selections preserve local config
+order and do not emit score or rank fields.
+
 ## Run the MCP Server
 
 Build the project first:

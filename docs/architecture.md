@@ -45,6 +45,13 @@ No scanner or broker behavior exists.
 
 The server instructions and every tool description state the charting-only guardrails. V1 does not expose raw click, type, page evaluate, or generic browser-control tools.
 
+`tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
+stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
+review-artifact fields. `tradingview_chart_universe` does not expose a profile;
+it remains ordered smoke charting over configured symbols. Tool descriptions
+frame profiles as selected-chart or chartbook review emphasis, not scans,
+recommendations, alerts, broker calls, or order actions.
+
 ### Domain Contract
 
 `src/domain.ts` records the project purpose and guardrails. It also defines the
@@ -139,7 +146,7 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 
 `test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, chart-facts artifact output, notes/index Markdown output, and partial failure recording with fake clients.
 
-`test/mcp-tools.test.ts` uses in-memory MCP transports to verify the advertised v1 tool list, guardrail descriptions, server instructions, structured status output, request validation, and ordered universe charting without a live TradingView session.
+`test/mcp-tools.test.ts` uses in-memory MCP transports to verify the advertised v1 tool list, guardrail descriptions, server instructions, review-profile schema fields, structured status output, request validation, ordered universe charting, ordered chartbook symbol handoff, and absence of score/rank fields without a live TradingView session.
 
 ### Project Docs
 
@@ -195,7 +202,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 
 1. Complete the TradingView CDP health flow until a chart target is healthy.
 2. Confirm the manually installed overlay is visible as `TVMCP Objective Drawing Overlay`.
-3. Run `npm run tv:chartbook -- --group semis --tier core --port 9222`.
+3. Run `npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222` or omit `--profile` to use `focus`.
 4. The CLI resolves the local universe selection without ranking or scoring symbols.
 5. The runner writes a deterministic local session directory under `artifacts/tradingview-chartbooks/<session-id>/` with `index.md`, one directory per symbol, weekly/daily/65-minute screenshots, matching `*-levels.json` files with drawing extraction plus chart facts, and per-symbol `notes.md` pages with profile-aware review checklists.
 6. Review failures from the index and notes. Partial failures do not remove successful captures.

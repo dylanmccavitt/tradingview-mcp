@@ -68,6 +68,8 @@ export interface CliHandlers {
   checkTradingViewHealth: typeof checkTradingViewHealth;
   chartOneSymbol: typeof chartOneSymbol;
   chartUniverse: typeof chartUniverse;
+  loadUniverseConfig: typeof loadUniverseConfig;
+  runChartbook: typeof runChartbook;
   launchTradingViewDesktop: typeof launchTradingViewDesktop;
   resolveTradingViewApp: typeof resolveTradingViewApp;
 }
@@ -102,6 +104,7 @@ npm scripts:
   npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
   npm run tv:chart-universe -- --group semis --tier core --port 9222
   npm run tv:chartbook -- --group semis --tier core --port 9222
+  npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222
   npm run tv:drawings -- --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
@@ -115,6 +118,8 @@ function handlersWithDefaults(
       handlers?.checkTradingViewHealth ?? checkTradingViewHealth,
     chartOneSymbol: handlers?.chartOneSymbol ?? chartOneSymbol,
     chartUniverse: handlers?.chartUniverse ?? chartUniverse,
+    loadUniverseConfig: handlers?.loadUniverseConfig ?? loadUniverseConfig,
+    runChartbook: handlers?.runChartbook ?? runChartbook,
     launchTradingViewDesktop:
       handlers?.launchTradingViewDesktop ?? launchTradingViewDesktop,
     resolveTradingViewApp: handlers?.resolveTradingViewApp ?? resolveTradingViewApp
@@ -455,6 +460,7 @@ function formatChartbookResult(result: ChartbookResult): string {
   const lines = [
     `Status: ${result.ok ? "success" : "failed"}`,
     `Session: ${result.sessionId}`,
+    `Profile: ${result.profile}`,
     `Endpoint: ${result.endpoint}`,
     `Output directory: ${result.sessionDirectory}`,
     `Index: ${result.indexPath}`
@@ -719,10 +725,14 @@ export async function runCli(
 
     let groupIds: string[] | undefined;
     let tier: UniverseSelectionTier;
+    let profile: ReturnType<typeof parseChartAnalysisProfile>;
 
     try {
       groupIds = parseGroupSelection(getStringOption(parsed.values, "group"));
       tier = parseUniverseTier(getStringOption(parsed.values, "tier"));
+      profile = parseChartAnalysisProfile(
+        getStringOption(parsed.values, "profile")
+      );
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       streams.stderr.write(`${detail}\n\n${USAGE}`);
@@ -732,7 +742,7 @@ export async function runCli(
     let config: UniverseConfig;
 
     try {
-      config = await loadUniverseConfig(configPath);
+      config = await handlers.loadUniverseConfig(configPath);
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       streams.stderr.write(`${detail}\n`);
@@ -766,9 +776,7 @@ export async function runCli(
         port: options.port,
         timeoutMs: options.timeoutMs,
         preset: getStringOption(parsed.values, "preset") ?? DEFAULT_CHARTBOOK_PRESET,
-        profile: parseChartAnalysisProfile(
-          getStringOption(parsed.values, "profile")
-        ),
+        profile,
         selection: chartbookSelectionSummary(configPath, groupIds, tier),
         debug: getBooleanOption(parsed.values, "debug")
       };
@@ -816,7 +824,7 @@ export async function runCli(
     let result: ChartbookResult;
 
     try {
-      result = await runChartbook(chartbookOptions);
+      result = await handlers.runChartbook(chartbookOptions);
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       streams.stderr.write(`${detail}\n`);

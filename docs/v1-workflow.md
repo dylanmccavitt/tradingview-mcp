@@ -88,6 +88,17 @@ The v1 MCP server exposes only high-level charting tools:
 It does not expose raw click, type, page-evaluate, or generic browser-control
 tools.
 
+The review-producing MCP tools expose the accepted profile enum
+`focus|breakout|squeeze|momentum`:
+
+- `tradingview_capture_current_chart` for the currently selected chart
+- `tradingview_build_chartbook` for ordered configured-universe chartbooks
+
+These profile fields select objective review emphasis only. They do not turn
+the workflow into a scan, ranking, recommendation, alert, broker call, or order
+action. `tradingview_chart_universe` remains ordered smoke charting and does not
+accept a profile.
+
 ## Launch TradingView Desktop With CDP
 
 If TradingView Desktop is already open without CDP, quit it first. Then launch
@@ -214,6 +225,7 @@ visible, run:
 
 ```bash
 npm run tv:chartbook -- --group semis --tier core --session manual-smoke --port 9222
+npm run tv:chartbook -- --group semis --tier core --profile breakout --session manual-breakout --port 9222
 ```
 
 The command navigates the active chart target through the selected symbols and
