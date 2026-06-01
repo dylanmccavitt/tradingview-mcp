@@ -20,6 +20,9 @@ This repo has a TypeScript MCP server with high-level charting tools, a local Tr
 npm install
 ```
 
+For the full v1 Codex MCP setup and operating path, use
+[docs/v1-workflow.md](./docs/v1-workflow.md).
+
 ## Commands
 
 ```bash
@@ -199,7 +202,8 @@ For local Codex MCP configuration, point Codex at the built server:
 ```toml
 [mcp_servers.tradingview]
 command = "node"
-args = ["/absolute/path/to/tradingview-mcp/dist/src/index.js"]
+args = ["/Users/dylanmccavitt/projects/tradingview-mcp/dist/src/index.js"]
+cwd = "/Users/dylanmccavitt/projects/tradingview-mcp"
 startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```

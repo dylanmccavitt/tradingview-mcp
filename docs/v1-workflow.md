@@ -1,0 +1,267 @@
+# V1 Codex MCP Workflow
+
+This is the end-to-end local setup and operating path for the v1
+TradingView MCP workflow. It assumes the canonical checkout is:
+
+```text
+/Users/dylanmccavitt/projects/tradingview-mcp
+```
+
+If the repo is cloned somewhere else, replace that path in the examples below.
+
+## Boundary
+
+V1 is a manual TradingView Desktop charting assistant. It can launch and check
+the local TradingView Desktop CDP connection, chart user-selected symbols or
+configured universe groups, capture screenshots, extract objective overlay
+levels, and write local chartbooks.
+
+V1 is not a scanner, ranking engine, broker integration, signal service, or
+trade execution system. It must not place orders, connect to Robinhood, connect
+to Alpaca, automate broker actions, recommend trades, run unattended scans, or
+bypass TradingView access controls.
+
+Short version: no scanner, no broker actions, no order placement, no Robinhood
+automation, and no Alpaca automation.
+
+## Install And Build
+
+From the repo root:
+
+```bash
+cd /Users/dylanmccavitt/projects/tradingview-mcp
+npm install
+npm run build
+```
+
+Run the local verification checks after setup or after pulling updates:
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+```
+
+Run the Pine static check when the tracked Pine source or Pine docs change:
+
+```bash
+npm run test:pine
+```
+
+## Configure Codex MCP
+
+Codex reads MCP servers from `~/.codex/config.toml` for global setup. Add this
+local stdio server block after `npm run build` succeeds:
+
+```toml
+[mcp_servers.tradingview]
+command = "node"
+args = ["/Users/dylanmccavitt/projects/tradingview-mcp/dist/src/index.js"]
+cwd = "/Users/dylanmccavitt/projects/tradingview-mcp"
+startup_timeout_sec = 20
+tool_timeout_sec = 45
+```
+
+The `cwd` setting keeps default universe config reads and artifact writes
+relative to the repo. Restart Codex, reload MCP settings, or start a new Codex
+thread after changing the config. OpenAI's Codex MCP docs are at
+<https://developers.openai.com/codex/mcp>.
+
+The v1 MCP server exposes only high-level charting tools:
+
+- `tradingview_connect`
+- `tradingview_status`
+- `tradingview_list_universe`
+- `tradingview_chart_symbol`
+- `tradingview_chart_universe`
+- `tradingview_capture_current_chart`
+- `tradingview_build_chartbook`
+
+It does not expose raw click, type, page-evaluate, or generic browser-control
+tools.
+
+## Launch TradingView Desktop With CDP
+
+If TradingView Desktop is already open without CDP, quit it first. Then launch
+it through the repo command:
+
+```bash
+npm run tv:launch -- --port 9222
+```
+
+If TradingView Desktop is installed outside `/Applications/TradingView.app` or
+`~/Applications/TradingView.app`, pass the app path explicitly:
+
+```bash
+npm run tv:launch -- --app /Applications/TradingView.app --port 9222
+```
+
+To inspect the exact macOS launch command without starting TradingView:
+
+```bash
+npm run tv:launch-command -- --port 9222
+```
+
+After launch, open or focus a TradingView chart tab manually. Log in manually
+if TradingView asks for it.
+
+Check CDP and chart-target health:
+
+```bash
+npm run tv:health -- --port 9222
+```
+
+Healthy output means the app was found, CDP answered, and an active
+`tradingview.com/chart` page target was discovered. Unhealthy output includes
+next steps for a missing app, wrong or unreachable port, unexpected CDP
+response, or no open chart tab.
+
+## Install Or Update The Pine Overlay
+
+The tracked Pine source lives at:
+
+```text
+pine/objective-drawing-overlay.pine
+```
+
+Manual install or update steps:
+
+1. Open TradingView Desktop.
+2. Open a chart tab for an exchange-qualified symbol such as `NASDAQ:NVDA`.
+3. Open the Pine Editor.
+4. Paste the full contents of `pine/objective-drawing-overlay.pine`.
+5. Save the script with the exact visible study name:
+
+```text
+TVMCP Objective Drawing Overlay
+```
+
+6. Add the saved script to the chart.
+7. Confirm the indicator list shows `TVMCP Objective Drawing Overlay`.
+8. Set `Style preset` to `levels` for normal weekly, daily, and 65-minute
+   review.
+
+Do not rename the study in TradingView. Drawing extraction and chartbooks target
+that visible study name by default.
+
+Use `clean` for a sparse view and `full-debug` only when reviewing source
+events or debugging extraction. The overlay is Pine-generated objective output
+from chart OHLCV and TradingView time/session context; it is not native editable
+TradingView drawing automation.
+
+To check the structured overlay extraction on the currently visible chart:
+
+```bash
+npm run tv:drawings -- --port 9222 --json
+```
+
+Use `--debug` only while diagnosing TradingView payload shape because normal
+output intentionally avoids large raw internals.
+
+## Chart Symbols And Universes
+
+The v1 universe source of truth is local JSON, not TradingView watchlists. The
+tracked sample is:
+
+```text
+config/universe.sample.json
+```
+
+List configured universe groups:
+
+```bash
+npm run tv:universe -- list
+```
+
+Resolve a group and tier without chart navigation:
+
+```bash
+npm run tv:universe -- resolve --group semis --tier core
+```
+
+Chart one exchange-qualified symbol across the default weekly, daily, and
+65-minute timeframes:
+
+```bash
+npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+```
+
+Chart a local universe selection in configured order:
+
+```bash
+npm run tv:chart-universe -- --group semis --tier core --port 9222
+```
+
+`chart-universe` is a smoke charting workflow over configured symbols. It
+preserves config order and de-duplicates repeated symbols. It does not score,
+rank, scan, recommend, or create candidates.
+
+Use `--config config/universe.local.json` for a user-local universe file.
+`*.local.json` files under `config/` are ignored by Git.
+
+## Build A Chartbook
+
+With TradingView Desktop healthy, a chart tab open, and the objective overlay
+visible, run:
+
+```bash
+npm run tv:chartbook -- --group semis --tier core --session manual-smoke --port 9222
+```
+
+The command navigates the active chart target through the selected symbols and
+default timeframes, then writes an ignored local chartbook session under:
+
+```text
+artifacts/tradingview-chartbooks/manual-smoke/
+  index.md
+  NASDAQ-NVDA/
+    notes.md
+    NASDAQ-NVDA-weekly.png
+    NASDAQ-NVDA-weekly-levels.json
+    NASDAQ-NVDA-daily.png
+    NASDAQ-NVDA-daily-levels.json
+    NASDAQ-NVDA-65-minute.png
+    NASDAQ-NVDA-65-minute-levels.json
+```
+
+Use `--json` for structured command output, `--output-dir <path>` for a
+different artifact root, and `--preset <name>` to record the manually selected
+overlay preset in the chartbook metadata.
+
+How to read chartbook artifacts:
+
+- `index.md` is the session summary with the selected groups, tier, output
+  paths, and per-symbol/timeframe status.
+- Each PNG is the captured TradingView chart screenshot for that symbol and
+  timeframe.
+- Each `*-levels.json` file contains compact objective overlay extraction for
+  the matching screenshot: horizontal levels, zones from boxes, labels, tables,
+  counts, warnings, chart context, and extraction or screenshot errors when a
+  partial failure happened.
+- Each `notes.md` file embeds that symbol's screenshots and leaves sections for
+  human or Codex chart notes.
+
+Partial failures are recorded in `index.md`, `notes.md`, and the matching
+`*-levels.json` files. Successful captures are kept.
+
+Chartbooks are local review/prep artifacts only. They do not rank symbols,
+recommend trades, place orders, use broker APIs, connect to Robinhood, connect
+to Alpaca, or bypass TradingView access controls.
+
+## Typical Codex Operating Loop
+
+1. Build the server with `npm run build`.
+2. Confirm the global `~/.codex/config.toml` MCP block points at the built
+   `dist/src/index.js` and repo `cwd`.
+3. Launch TradingView Desktop with `npm run tv:launch -- --port 9222`.
+4. Open a chart tab manually and confirm `npm run tv:health -- --port 9222`.
+5. Install or update the Pine overlay and confirm the visible study name is
+   `TVMCP Objective Drawing Overlay`.
+6. Ask Codex to use the high-level TradingView MCP tools for status, one-symbol
+   charting, universe charting, current-chart capture, or chartbook creation.
+7. Review local chartbook outputs under `artifacts/tradingview-chartbooks/`.
+
+If a Codex tool reports CDP unreachable, use the CLI health command first. If a
+chartbook has empty or warning-heavy level JSON, confirm the overlay is visible
+with the exact required study name and rerun `npm run tv:drawings -- --port
+9222 --json` on the current chart.
