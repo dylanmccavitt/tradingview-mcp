@@ -3,6 +3,7 @@
 ## Status
 
 Implementation complete in branch `feat/issue-8-expose-high-level-mcp-tools`.
+PR #18 was opened and reviewed locally with the checks below.
 
 The stdio MCP server now registers only high-level v1 charting tools:
 
@@ -20,7 +21,7 @@ Each tool description includes the v1 guardrails: charting-only, no scanner/rank
 
 ## Next
 
-Open PR review for issue #8. Stay on issue #8 until it is reviewed and merged; do not start issue #9 from this worktree.
+Merge PR #18, then start issue #9 from updated `main`.
 
 For live validation, configure Codex to run the built server over stdio, or launch a local MCP client against `node dist/src/index.js`, then verify the advertised tools match the list above.
 
