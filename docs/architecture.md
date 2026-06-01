@@ -90,7 +90,7 @@ order and reports per-symbol chart results without scoring or ranking.
 
 `pine/objective-drawing-overlay.pine` is the first tracked Pine source for user-installed chart drawings. Its required visible TradingView study name is `TVMCP Objective Drawing Overlay`.
 
-The overlay is self-contained from chart OHLCV and TradingView time/session context. It creates line, label, box, plot, and plotshape output for prior day/week/month levels, 20D/50D high-low levels, confirmed swing highs/lows, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It exposes `clean`, `levels`, and `full-debug` style presets and uses timeframe checks to emphasize weekly, daily, and 65-minute review contexts.
+The overlay is self-contained from chart OHLCV and TradingView time/session context. It creates line, label, box, table, plot, and plotshape output for prior day/week/month levels, 20D/50D high-low levels, confirmed swing highs/lows, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It exposes `focus`, `clean`, `levels`, and `full-debug` style presets and uses timeframe checks to emphasize weekly, daily, and 65-minute review contexts. `focus` is the default quieter preset: weekly charts show major context, daily charts show breakout context, and 65-minute charts show timing context while preserving price-scale plot output for extraction.
 
 The repo does not inject Pine into TradingView. Manual install and visual inspection instructions live in `docs/pine/objective-drawing-overlay.md`.
 
@@ -206,7 +206,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 1. Open TradingView Desktop and a chart tab.
 2. Paste `pine/objective-drawing-overlay.pine` into the Pine Editor.
 3. Save and add it with the exact visible name `TVMCP Objective Drawing Overlay`.
-4. Inspect weekly, daily, and 65-minute charts with the `levels` preset.
+4. Inspect weekly, daily, and 65-minute charts with the default `focus` preset.
 5. Use `full-debug` only when reviewing source events for extraction readiness.
 
 ### MCP Startup

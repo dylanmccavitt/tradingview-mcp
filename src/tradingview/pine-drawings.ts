@@ -169,7 +169,12 @@ const LEGEND_TEXT_KEYS = [
   "fullLegendText",
   "legendText"
 ] as const;
-const OBJECTIVE_OVERLAY_PRESETS = ["clean", "levels", "full-debug"] as const;
+const OBJECTIVE_OVERLAY_PRESETS = [
+  "focus",
+  "clean",
+  "levels",
+  "full-debug"
+] as const;
 const OBJECTIVE_OVERLAY_LEGEND_LEVEL_NAMES = [
   "PDH",
   "PDL",

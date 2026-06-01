@@ -14,7 +14,9 @@ void test("Pine overlay declares the required visible study name and presets", (
     overlaySource,
     /indicator\("TVMCP Objective Drawing Overlay"/
   );
-  assert.match(overlaySource, /options=\["clean", "levels", "full-debug"\]/);
+  assert.match(overlaySource, /input\.string\("focus", "Style preset"/);
+  assert.match(overlaySource, /options=\["focus", "clean", "levels", "full-debug"\]/);
+  assert.match(overlaySource, /stylePreset == "focus"/);
   assert.match(overlaySource, /stylePreset == "clean"/);
   assert.match(overlaySource, /stylePreset == "levels"/);
   assert.match(overlaySource, /stylePreset == "full-debug"/);
@@ -89,6 +91,39 @@ void test("Pine overlay restrains unsupported intraday timeframes", () => {
   assert.match(overlayDocs, /Other intraday timeframes, such as 5-minute charts/i);
 });
 
+void test("Pine overlay focus preset reduces visible chart objects by timeframe", () => {
+  assert.match(
+    overlaySource,
+    /showLevelText = \(not isFocus and not isClean and not isUnsupportedIntradayChart\) or isFullDebug/
+  );
+  assert.match(
+    overlaySource,
+    /showPriorMonthLevels = isFullDebug or \(isFocus \? isWeeklyChart : \(isWeeklyChart or isDailyChart\)\)/
+  );
+  assert.match(
+    overlaySource,
+    /showPriorWeekLevels = isFullDebug or \(isFocus \? isDailyChart : \(isWeeklyChart or isDailyChart or is65MinuteChart\)\)/
+  );
+  assert.match(
+    overlaySource,
+    /showPriorDayLevels = isFullDebug or \(isFocus \? is65MinuteChart : \(not isClean and \(isDailyChart or is65MinuteChart\)\)\)/
+  );
+  assert.match(
+    overlaySource,
+    /show20DayHighLevel = isFullDebug or \(isFocus \? isDailyChart : \(showBreakoutLevels and not isWeeklyChart\)\)/
+  );
+  assert.match(
+    overlaySource,
+    /show50DayLowLevel = isFullDebug or \(isFocus \? isWeeklyChart : showBreakoutLevels\)/
+  );
+  assert.match(
+    overlaySource,
+    /showOpeningRangeLevels = isFullDebug or \(isFocus \? is65MinuteChart : showIntradayLevels\)/
+  );
+  assert.match(overlaySource, /table\.new\(position\.top_right, 2, 4/);
+  assert.match(overlayDocs, /`focus`: default quieter review mode/i);
+});
+
 void test("Pine overlay avoids subjective patterns, scanner terms, and trade actions", () => {
   const forbidden = [
     /bull\s*flag/i,
@@ -113,6 +148,7 @@ void test("manual install docs pin the visual inspection boundary", () => {
   assert.match(overlayDocs, new RegExp(requiredStudyName));
   assert.match(overlayDocs, /Manual Install/);
   assert.match(overlayDocs, /Style preset/);
+  assert.match(overlayDocs, /switch between `focus`, `clean`, `levels`, and `full-debug`/);
   assert.match(overlayDocs, /weekly, daily, and 65-minute/i);
   assert.match(overlayDocs, /Static repo tests only verify/i);
   assert.match(overlayDocs, /Do not mark live visual validation complete/i);

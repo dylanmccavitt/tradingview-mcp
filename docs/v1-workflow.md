@@ -146,16 +146,16 @@ TVMCP Objective Drawing Overlay
 
 6. Add the saved script to the chart.
 7. Confirm the indicator list shows `TVMCP Objective Drawing Overlay`.
-8. Set `Style preset` to `levels` for normal weekly, daily, and 65-minute
-   review.
+8. Leave `Style preset` at the default `focus` for normal weekly, daily, and
+   65-minute review.
 
 Do not rename the study in TradingView. Drawing extraction and chartbooks target
 that visible study name by default.
 
-Use `clean` for a sparse view and `full-debug` only when reviewing source
-events or debugging extraction. The overlay is Pine-generated objective output
-from chart OHLCV and TradingView time/session context; it is not native editable
-TradingView drawing automation.
+Use `levels` for deeper level/zone review, `clean` for a sparse view, and
+`full-debug` only when reviewing source events or debugging extraction. The
+overlay is Pine-generated objective output from chart OHLCV and TradingView
+time/session context; it is not native editable TradingView drawing automation.
 
 To check the structured overlay extraction on the currently visible chart:
 
