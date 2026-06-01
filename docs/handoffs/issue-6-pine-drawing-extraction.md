@@ -3,10 +3,13 @@
 ## Status
 
 Implementation complete in branch `feat/issue-6-extract-pine-drawing-data`.
+PR #16 was reviewed locally with the automated checks below.
 
 ## Next
 
-Review PR for issue #6. For live validation, launch TradingView Desktop with CDP, open a chart with the manually validated `TVMCP Objective Drawing Overlay` installed, then run:
+Merge PR #16, then start issue #7 from updated `main`.
+
+For live validation, launch TradingView Desktop with CDP, open a chart with the manually validated `TVMCP Objective Drawing Overlay` installed, then run:
 
 ```bash
 npm run tv:drawings -- --port 9222 --json
@@ -15,6 +18,7 @@ npm run tv:drawings -- --port 9222 --json
 ## Risks
 
 - Automated tests use fixture-like CDP payloads by design; they do not prove the current live TradingView Desktop internals expose every Pine drawing object.
+- A review-time live probe on `127.0.0.1:9222` returned CDP unreachable because the current TradingView Desktop session was not launched with the remote debugging port.
 - The live page probe is bounded and compact. If TradingView changes or hides its chart/widget payloads, extraction may return the visible study with no supported drawing objects and a warning.
 - Normal extraction output omits raw TradingView internals. Use `--debug` only to diagnose payload shape.
 - The extractor remains charting-only. It does not scan, rank, advise, place orders, use broker APIs, or bypass TradingView access controls.
@@ -47,3 +51,4 @@ npm run tv:drawings -- --port 9222 --json
 - `node dist/src/cli.js --help`
 - `node dist/src/cli.js drawings --json --timeout-ms 1` (expected exit 1 with CDP-unreachable failure)
 - `npm start < /dev/null`
+- `npm run tv:health -- --port 9222 --timeout-ms 2500` (review-time live probe; expected exit 1 because CDP was unreachable)
