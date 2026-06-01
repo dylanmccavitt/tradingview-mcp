@@ -12,12 +12,13 @@ The current repo is a local TypeScript/Node MCP server scaffold with the first T
 - a local universe config parser and CLI selection workflow
 - a manually installed objective Pine drawing overlay source for deterministic chart objects
 - a compact Pine drawing extraction path for the visible objective overlay study
+- a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, and an index
 - typed internal health-result shaping for later MCP tools
 - tests that pin the manual-only boundary, universe parsing behavior, and Pine overlay source contract
-- tests for CDP target discovery, health failures, chart planning, output naming, chart-runner failures, and Pine drawing extraction normalization without requiring a live TradingView session
+- tests for CDP target discovery, health failures, chart planning, output naming, chart-runner failures, chartbook artifact creation, and Pine drawing extraction normalization without requiring a live TradingView session
 - repo docs for issue-driven development
 
-No chartbook generation, scanner, or broker behavior exists yet.
+No scanner or broker behavior exists.
 
 ## Major Components
 
@@ -75,6 +76,16 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 
 `src/tradingview/pine-drawing-runner.ts` combines the existing CDP health check, chart target WebSocket connection, page payload read, and normalizer into a single extraction result. `src/cli.ts` exposes this as `drawings`.
 
+### Chartbook Output
+
+`src/chartbook/chartbook.ts` builds deterministic local chartbook session plans under `artifacts/tradingview-chartbooks/<session-id>/`. It resolves one directory per selected universe symbol and plans weekly, daily, and 65-minute screenshot plus `*-levels.json` artifact paths.
+
+The chartbook runner uses the existing TradingView Desktop health check, chart page client, and Pine drawing page client. For each symbol/timeframe, it navigates the active chart target, waits for render, captures a screenshot, reads the objective overlay payload, writes compact structured drawing JSON, and writes a per-symbol `notes.md` page. It writes a session `index.md` after the run.
+
+Partial failures are recorded in-place. A failed timeframe still gets a matching `*-levels.json` with the screenshot/extraction error when the symbol directory can be written, and later timeframes/symbols continue. Existing successful captures are not deleted.
+
+`src/cli.ts` exposes this as `chartbook`, with universe selection options plus `--session`, `--output-dir`, `--preset`, `--study-name`, and CDP/render timing options.
+
 ### Tests
 
 `test/domain.test.ts` verifies that the bootstrap project contract continues to state the manual-only, no-broker, no-scanner boundary.
@@ -88,6 +99,8 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 `test/pine-overlay.test.ts` statically validates the tracked Pine source and manual install docs without requiring a live TradingView session.
 
 `test/pine-drawings.test.ts` and `test/pine-drawing-runner.test.ts` cover configured-study targeting, level de-duplication, zone/label/table normalization, debug raw-output gating, and health failure handling with fixture-like payloads.
+
+`test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, notes/index Markdown output, and partial failure recording with fake clients.
 
 ### Project Docs
 
@@ -131,6 +144,15 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 4. The CLI targets the configured overlay study and returns compact JSON for levels, zones, labels, and tables.
 5. Use `--debug` only when diagnosing payload shape; normal output avoids large raw TradingView internals.
 
+### Chartbook Output
+
+1. Complete the TradingView CDP health flow until a chart target is healthy.
+2. Confirm the manually installed overlay is visible as `TVMCP Objective Drawing Overlay`.
+3. Run `npm run tv:chartbook -- --group semis --tier core --port 9222`.
+4. The CLI resolves the local universe selection without ranking or scoring symbols.
+5. The runner writes a deterministic local session directory under `artifacts/tradingview-chartbooks/<session-id>/` with `index.md`, one directory per symbol, weekly/daily/65-minute screenshots, matching `*-levels.json` files, and per-symbol `notes.md`.
+6. Review failures from the index and notes. Partial failures do not remove successful captures.
+
 ### Universe Selection
 
 1. Keep the chart universe in a local JSON file such as `config/universe.sample.json` or ignored `config/universe.local.json`.
@@ -164,5 +186,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Pine overlay source must be manually installed, deterministic from chart OHLCV, and free of subjective pattern labels or scanner/ranking/trade-action text.
 - Downstream Pine drawing extraction must target the visible study name `TVMCP Objective Drawing Overlay`.
 - Pine drawing extraction must keep payloads compact by default and avoid raw TradingView internals unless debug mode is explicit.
+- Chartbook output is a local review/prep artifact only and must keep generated files under ignored artifact directories by default.
+- Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.
