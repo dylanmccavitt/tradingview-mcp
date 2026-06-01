@@ -94,3 +94,11 @@ The extractor targets `TVMCP Objective Drawing Overlay` by default and returns c
 - compact table rows when available
 
 Normal output omits large raw TradingView internals. Use `--debug` only when diagnosing the live payload shape.
+
+For reliable chartbook extraction, keep the overlay visible with the `levels`
+style preset during weekly, daily, and 65-minute runs. If TradingView exposes
+only the compact indicator legend instead of structured line, box, label, or
+table internals, the extractor can recover the plotted objective level values
+from the overlay's known Pine plot order. In that fallback mode, unavailable
+box zones, labels, and table internals remain empty instead of being inferred
+from pixels or unrelated indicators.

@@ -91,9 +91,9 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 
 ### Pine Drawing Extraction
 
-`src/tradingview/pine-drawings.ts` normalizes compact TradingView/CDP payloads for the configured study name `TVMCP Objective Drawing Overlay`. It returns deduplicated horizontal levels, box-derived high/low zones, compact labels, compact tables, chart context, and warnings. Raw TradingView internals are omitted unless debug mode is explicitly requested.
+`src/tradingview/pine-drawings.ts` normalizes compact TradingView/CDP payloads for the configured study name `TVMCP Objective Drawing Overlay`. It returns deduplicated horizontal levels, box-derived high/low zones, compact labels, compact tables, chart context, and warnings. If TradingView only exposes the overlay through DOM legend text, it falls back to the known Pine plot order for that configured study and recovers plotted objective levels from the compact legend values. Raw TradingView internals are omitted unless debug mode is explicitly requested.
 
-`src/tradingview/pine-drawing-page.ts` evaluates a bounded page probe against the active TradingView chart target. The probe targets the configured overlay study by name or the known Pine short title and collects compact study payload candidates from supported page/widget surfaces.
+`src/tradingview/pine-drawing-page.ts` evaluates a bounded page probe against the active TradingView chart target. The probe targets the configured overlay study by name or the known Pine short title and collects compact study payload candidates from supported page/widget surfaces. Its legend-DOM fallback keeps only the matched overlay legend plus the smallest surrounding legend text needed for deterministic value recovery.
 
 `src/tradingview/pine-drawing-runner.ts` combines the existing CDP health check, chart target WebSocket connection, page payload read, and normalizer into a single extraction result. `src/cli.ts` exposes this as `drawings`.
 
@@ -176,7 +176,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 1. Complete the TradingView CDP health flow until a chart target is healthy.
 2. Confirm the manually installed overlay is visible as `TVMCP Objective Drawing Overlay`.
 3. Run `npm run tv:drawings -- --port 9222 --json`.
-4. The CLI targets the configured overlay study and returns compact JSON for levels, zones, labels, and tables.
+4. The CLI targets the configured overlay study and returns compact JSON for levels, zones, labels, and tables. When structured line/box internals are hidden, plotted levels can still be recovered from the overlay legend fallback.
 5. Use `--debug` only when diagnosing payload shape; normal output avoids large raw TradingView internals.
 
 ### Chartbook Output
@@ -223,6 +223,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Pine overlay source must be manually installed, deterministic from chart OHLCV, and free of subjective pattern labels or scanner/ranking/trade-action text.
 - Downstream Pine drawing extraction must target the visible study name `TVMCP Objective Drawing Overlay`.
 - Pine drawing extraction must keep payloads compact by default and avoid raw TradingView internals unless debug mode is explicit.
+- Pine legend fallback may recover objective plot levels for the configured overlay, but must not scrape unrelated indicator legends or infer hidden box zones from pixels.
 - Current-chart capture must preserve the active chart context and avoid navigating the chart to a different symbol.
 - Chartbook output is a local review/prep artifact only and must keep generated files under ignored artifact directories by default.
 - Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.

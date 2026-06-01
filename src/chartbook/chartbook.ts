@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import {
   buildTradingViewChartUrl,
@@ -51,6 +52,8 @@ import type {
 export const DEFAULT_CHARTBOOK_OUTPUT_ROOT =
   "artifacts/tradingview-chartbooks";
 export const DEFAULT_CHARTBOOK_PRESET = "levels";
+export const DEFAULT_CHARTBOOK_DRAWING_RETRY_ATTEMPTS = 8;
+export const DEFAULT_CHARTBOOK_DRAWING_RETRY_DELAY_MS = 500;
 export const CHARTBOOK_SCHEMA_VERSION = 1;
 
 interface ChartbookFileSystem {
@@ -211,6 +214,8 @@ export interface RunChartbookOptions {
   appPath?: string;
   renderTimeoutMs?: number;
   renderSettleMs?: number;
+  drawingRetryAttempts?: number;
+  drawingRetryDelayMs?: number;
   debug?: boolean;
   now?: () => Date;
   checkHealth?: (
@@ -625,6 +630,67 @@ async function writeJsonArtifact(
   await fileSystem.writeFile(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
 
+async function readDrawingExtractionWithRetry(options: {
+  drawingClient: TradingViewPineDrawingPageClient;
+  studyName: string;
+  debug: boolean;
+  capturedAt: string;
+  endpoint: string | undefined;
+  retryAttempts: number;
+  retryDelayMs: number;
+}): Promise<ChartbookExtractionArtifact> {
+  let lastError: string | undefined;
+  let lastExtraction: ChartbookExtractionArtifact | undefined;
+
+  for (let attempt = 1; attempt <= options.retryAttempts; attempt += 1) {
+    try {
+      const payload = await options.drawingClient.readDrawingPayload({
+        studyName: options.studyName,
+        debug: options.debug
+      });
+      const normalized = normalizePineDrawingPayload(payload, {
+        studyName: options.studyName,
+        debug: options.debug
+      });
+      lastExtraction = extractionArtifactFromData(
+        normalized,
+        options.capturedAt,
+        options.endpoint,
+        undefined
+      );
+
+      if (lastExtraction.ok || attempt === options.retryAttempts) {
+        return lastExtraction;
+      }
+    } catch (error: unknown) {
+      lastError = errorMessage(error);
+
+      if (attempt === options.retryAttempts) {
+        return skippedExtraction(
+          options.studyName,
+          options.capturedAt,
+          lastError,
+          options.endpoint
+        );
+      }
+    }
+
+    if (options.retryDelayMs > 0) {
+      await sleep(options.retryDelayMs);
+    }
+  }
+
+  return (
+    lastExtraction ??
+    skippedExtraction(
+      options.studyName,
+      options.capturedAt,
+      lastError ?? "TradingView drawing extraction did not return a payload.",
+      options.endpoint
+    )
+  );
+}
+
 async function captureTimeframe(
   options: {
     chartClient: TradingViewChartPageClient | undefined;
@@ -636,6 +702,8 @@ async function captureTimeframe(
     setupError: string | undefined;
     studyName: string;
     debug: boolean;
+    drawingRetryAttempts: number;
+    drawingRetryDelayMs: number;
     symbol: ChartbookSymbolPlan;
     target: CdpTarget | undefined;
     timeframe: ChartbookTimeframeArtifactPlan;
@@ -686,29 +754,15 @@ async function captureTimeframe(
       options.endpoint
     );
   } else {
-    try {
-      const payload = await options.drawingClient.readDrawingPayload({
-        studyName: options.studyName,
-        debug: options.debug
-      });
-      const normalized = normalizePineDrawingPayload(payload, {
-        studyName: options.studyName,
-        debug: options.debug
-      });
-      extraction = extractionArtifactFromData(
-        normalized,
-        options.plan.capturedAt,
-        options.endpoint,
-        undefined
-      );
-    } catch (error: unknown) {
-      extraction = skippedExtraction(
-        options.studyName,
-        options.plan.capturedAt,
-        errorMessage(error),
-        options.endpoint
-      );
-    }
+    extraction = await readDrawingExtractionWithRetry({
+      drawingClient: options.drawingClient,
+      studyName: options.studyName,
+      debug: options.debug,
+      capturedAt: options.plan.capturedAt,
+      endpoint: options.endpoint,
+      retryAttempts: options.drawingRetryAttempts,
+      retryDelayMs: options.drawingRetryDelayMs
+    });
   }
 
   if (options.target && !extraction.chart?.url) {
@@ -794,6 +848,8 @@ async function writeFailedSymbolArtifacts(
         setupError: options.setupError,
         studyName: options.studyName,
         debug: false,
+        drawingRetryAttempts: 1,
+        drawingRetryDelayMs: 0,
         symbol: options.symbol,
         target: undefined,
         timeframe
@@ -844,6 +900,18 @@ export async function runChartbook(
   const timeoutMs = options.timeoutMs ?? DEFAULT_CDP_TIMEOUT_MS;
   const renderTimeoutMs = options.renderTimeoutMs ?? DEFAULT_RENDER_TIMEOUT_MS;
   const renderSettleMs = options.renderSettleMs ?? DEFAULT_RENDER_SETTLE_MS;
+  const drawingRetryAttempts = Math.max(
+    1,
+    Math.trunc(
+      options.drawingRetryAttempts ?? DEFAULT_CHARTBOOK_DRAWING_RETRY_ATTEMPTS
+    )
+  );
+  const drawingRetryDelayMs = Math.max(
+    0,
+    Math.trunc(
+      options.drawingRetryDelayMs ?? DEFAULT_CHARTBOOK_DRAWING_RETRY_DELAY_MS
+    )
+  );
   const fileSystem = options.fileSystem ?? {
     mkdir,
     writeFile
@@ -990,6 +1058,8 @@ export async function runChartbook(
             setupError,
             studyName,
             debug,
+            drawingRetryAttempts,
+            drawingRetryDelayMs,
             symbol,
             target,
             timeframe

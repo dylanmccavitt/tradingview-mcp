@@ -164,6 +164,48 @@ const PRICE_KEYS = [
   "last",
   "currentValue"
 ] as const;
+const LEGEND_TEXT_KEYS = [
+  "legendFullText",
+  "fullLegendText",
+  "legendText"
+] as const;
+const OBJECTIVE_OVERLAY_PRESETS = ["clean", "levels", "full-debug"] as const;
+const OBJECTIVE_OVERLAY_LEGEND_LEVEL_NAMES = [
+  "PDH",
+  "PDL",
+  "PWH",
+  "PWL",
+  "PMH",
+  "PML",
+  "20D-H",
+  "20D-L",
+  "50D-H",
+  "50D-L",
+  "SW-H",
+  "SW-L",
+  "PMKT-H",
+  "PMKT-L",
+  "OR-H",
+  "OR-L",
+  "AVWAP"
+] as const;
+
+interface ParseState {
+  index: number;
+  score: number;
+}
+
+interface ParsedLegendValue {
+  value: number | null;
+  nextIndex: number;
+  score: number;
+}
+
+interface ParsedLegendSequence {
+  values: Array<number | null>;
+  nextIndex: number;
+  score: number;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -223,6 +265,387 @@ function studyAliases(studyName: string): string[] {
   }
 
   return aliases;
+}
+
+function skipLegendSeparators(text: string, index: number): number {
+  let nextIndex = index;
+
+  while (/[\s,;:|]+/u.test(text[nextIndex] ?? "")) {
+    nextIndex += 1;
+  }
+
+  return nextIndex;
+}
+
+function parseIntegerAt(
+  text: string,
+  index: number,
+  options: {
+    min: number;
+    max: number;
+    preferred?: number;
+  }
+): ParseState[] {
+  const start = skipLegendSeparators(text, index);
+  const states: ParseState[] = [];
+
+  for (let length = 1; length <= 3; length += 1) {
+    const raw = text.slice(start, start + length);
+    if (!/^\d+$/u.test(raw)) {
+      continue;
+    }
+
+    const value = Number(raw);
+    if (value < options.min || value > options.max) {
+      continue;
+    }
+
+    states.push({
+      index: start + length,
+      score: options.preferred === value ? 0 : 2 + length
+    });
+  }
+
+  return states;
+}
+
+function parseSessionAt(text: string, index: number): ParseState[] {
+  const start = skipLegendSeparators(text, index);
+  const session = /^\d{4}-\d{4}/u.exec(text.slice(start));
+
+  if (!session) {
+    return [];
+  }
+
+  return [
+    {
+      index: start + session[0].length,
+      score: 0
+    }
+  ];
+}
+
+function parseFloatAt(
+  text: string,
+  index: number,
+  options: {
+    min: number;
+    max: number;
+    preferred?: number;
+  }
+): ParseState[] {
+  const start = skipLegendSeparators(text, index);
+  const states: ParseState[] = [];
+  const signLength = text[start] === "-" || text[start] === "+" ? 1 : 0;
+  let integerEnd = start + signLength;
+
+  while (/\d/u.test(text[integerEnd] ?? "")) {
+    integerEnd += 1;
+  }
+
+  if (integerEnd === start + signLength) {
+    return [];
+  }
+
+  const integerValue = Number(text.slice(start, integerEnd));
+  if (integerValue >= options.min && integerValue <= options.max) {
+    states.push({
+      index: integerEnd,
+      score: options.preferred === integerValue ? 0 : 8
+    });
+  }
+
+  if (text[integerEnd] !== ".") {
+    return states;
+  }
+
+  for (let decimalLength = 1; decimalLength <= 4; decimalLength += 1) {
+    const end = integerEnd + 1 + decimalLength;
+    const raw = text.slice(start, end);
+    if (!/^[+-]?\d+\.\d+$/u.test(raw)) {
+      continue;
+    }
+
+    const value = Number(raw);
+    if (value < options.min || value > options.max) {
+      continue;
+    }
+
+    const preferredScore =
+      typeof options.preferred === "number" &&
+      Math.abs(value - options.preferred) <= 0.000001
+        ? 0
+        : 4;
+    states.push({
+      index: end,
+      score: preferredScore + Math.abs(decimalLength - 2)
+    });
+  }
+
+  return states;
+}
+
+function parseOverlayInputPrefix(text: string, index: number): ParseState[] {
+  const start = skipLegendSeparators(text, index);
+  const states: ParseState[] = [];
+
+  for (const preset of OBJECTIVE_OVERLAY_PRESETS) {
+    if (text.slice(start).toLowerCase().startsWith(preset)) {
+      states.push({
+        index: start + preset.length,
+        score: preset === "levels" ? 0 : 1
+      });
+    }
+  }
+
+  const steps = [
+    (state: ParseState) =>
+      parseIntegerAt(text, state.index, {
+        min: 1,
+        max: 20,
+        preferred: 3
+      }),
+    (state: ParseState) =>
+      parseIntegerAt(text, state.index, {
+        min: 1,
+        max: 20,
+        preferred: 3
+      }),
+    (state: ParseState) => parseSessionAt(text, state.index),
+    (state: ParseState) => parseSessionAt(text, state.index),
+    (state: ParseState) =>
+      parseIntegerAt(text, state.index, {
+        min: 5,
+        max: 100,
+        preferred: 20
+      }),
+    (state: ParseState) =>
+      parseIntegerAt(text, state.index, {
+        min: 20,
+        max: 300,
+        preferred: 100
+      }),
+    (state: ParseState) =>
+      parseFloatAt(text, state.index, {
+        min: 0.1,
+        max: 5,
+        preferred: 0.75
+      }),
+    (state: ParseState) =>
+      parseIntegerAt(text, state.index, {
+        min: 10,
+        max: 300,
+        preferred: 80
+      })
+  ];
+
+  return steps.reduce<ParseState[]>((currentStates, step) => {
+    const nextStates: ParseState[] = [];
+
+    for (const state of currentStates) {
+      for (const parsed of step(state)) {
+        nextStates.push({
+          index: parsed.index,
+          score: state.score + parsed.score
+        });
+      }
+    }
+
+    return nextStates;
+  }, states);
+}
+
+function parseLegendValueAt(text: string, index: number): ParsedLegendValue[] {
+  const start = skipLegendSeparators(text, index);
+  const values: ParsedLegendValue[] = [];
+  const lowerRemainder = text.slice(start).toLowerCase();
+
+  for (const emptyMarker of ["∅", "na", "nan", "n/a"]) {
+    if (lowerRemainder.startsWith(emptyMarker)) {
+      values.push({
+        value: null,
+        nextIndex: start + emptyMarker.length,
+        score: 0
+      });
+    }
+  }
+
+  const signLength = text[start] === "-" || text[start] === "+" ? 1 : 0;
+  let integerEnd = start + signLength;
+
+  while (/[\d,]/u.test(text[integerEnd] ?? "")) {
+    integerEnd += 1;
+  }
+
+  if (integerEnd === start + signLength) {
+    return values;
+  }
+
+  const integerRaw = text.slice(start, integerEnd);
+  const validInteger = /^[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)$/u.test(integerRaw);
+  const integerValue = Number(integerRaw.replace(/,/g, ""));
+  if (validInteger && Number.isFinite(integerValue)) {
+    values.push({
+      value: integerValue,
+      nextIndex: integerEnd,
+      score: 8 + (integerValue <= 0 ? 10 : 0)
+    });
+  }
+
+  if (text[integerEnd] !== ".") {
+    return values;
+  }
+
+  for (let decimalLength = 1; decimalLength <= 4; decimalLength += 1) {
+    const end = integerEnd + 1 + decimalLength;
+    const raw = text.slice(start, end);
+    if (!/^[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d+$/u.test(raw)) {
+      continue;
+    }
+
+    const value = Number(raw.replace(/,/g, ""));
+    if (!Number.isFinite(value)) {
+      continue;
+    }
+
+    const decimalScore =
+      decimalLength === 2
+        ? 0
+        : decimalLength === 4
+          ? 2
+          : 4 + Math.abs(decimalLength - 2);
+    values.push({
+      value,
+      nextIndex: end,
+      score: decimalScore + (value <= 0 ? 10 : 0)
+    });
+  }
+
+  return values;
+}
+
+function parseLegendValueSequence(
+  text: string,
+  index: number,
+  valueCount: number
+): ParsedLegendSequence | null {
+  const memo = new Map<string, ParsedLegendSequence | null>();
+
+  const parse = (
+    currentIndex: number,
+    remainingCount: number
+  ): ParsedLegendSequence | null => {
+    const key = `${currentIndex}:${remainingCount}`;
+    if (memo.has(key)) {
+      return memo.get(key) ?? null;
+    }
+
+    if (remainingCount === 0) {
+      const result: ParsedLegendSequence = {
+        values: [],
+        nextIndex: currentIndex,
+        score: 0
+      };
+      memo.set(key, result);
+      return result;
+    }
+
+    let best: ParsedLegendSequence | null = null;
+
+    for (const candidate of parseLegendValueAt(text, currentIndex)) {
+      const rest = parse(candidate.nextIndex, remainingCount - 1);
+      if (!rest) {
+        continue;
+      }
+
+      const result: ParsedLegendSequence = {
+        values: [candidate.value, ...rest.values],
+        nextIndex: rest.nextIndex,
+        score: candidate.score + rest.score
+      };
+
+      if (!best || result.score < best.score) {
+        best = result;
+      }
+    }
+
+    memo.set(key, best);
+    return best;
+  };
+
+  return parse(index, valueCount);
+}
+
+function objectiveOverlayLegendSlices(
+  text: string,
+  studyName: string
+): string[] {
+  const lowerText = text.toLowerCase();
+  const slices: string[] = [];
+
+  for (const alias of studyAliases(studyName)) {
+    const lowerAlias = alias.toLowerCase();
+    let searchIndex = 0;
+
+    while (searchIndex < lowerText.length) {
+      const aliasIndex = lowerText.indexOf(lowerAlias, searchIndex);
+      if (aliasIndex === -1) {
+        break;
+      }
+
+      slices.push(text.slice(aliasIndex + alias.length));
+      searchIndex = aliasIndex + lowerAlias.length;
+    }
+  }
+
+  return slices;
+}
+
+function parseObjectiveOverlayLegendLevels(
+  text: string,
+  studyName: string
+): PineDrawingLevel[] {
+  const levels: PineDrawingLevel[] = [];
+
+  for (const slice of objectiveOverlayLegendSlices(text, studyName)) {
+    const inputStates = parseOverlayInputPrefix(slice, 0).sort(
+      (left, right) => left.score - right.score
+    );
+
+    for (const state of inputStates) {
+      const sequence = parseLegendValueSequence(
+        slice,
+        state.index,
+        OBJECTIVE_OVERLAY_LEGEND_LEVEL_NAMES.length
+      );
+
+      if (!sequence) {
+        continue;
+      }
+
+      for (const [index, price] of sequence.values.entries()) {
+        if (typeof price !== "number" || price <= 0) {
+          continue;
+        }
+
+        const level: PineDrawingLevel = {
+          price,
+          sources: ["plot"]
+        };
+        const name = OBJECTIVE_OVERLAY_LEGEND_LEVEL_NAMES[index];
+        if (name) {
+          level.name = name;
+        }
+        levels.push(level);
+      }
+
+      if (levels.length > 0) {
+        return levels;
+      }
+    }
+  }
+
+  return levels;
 }
 
 function textMatchesStudy(text: string, studyName: string): boolean {
@@ -567,7 +990,81 @@ function mergeLevel(
   }
 }
 
-function extractLevels(study: Record<string, unknown>): PineDrawingLevel[] {
+function uniqueStringValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+
+    seen.add(trimmed);
+    unique.push(trimmed);
+  }
+
+  return unique;
+}
+
+function legendTexts(study: Record<string, unknown>): string[] {
+  const values: string[] = [];
+
+  for (const key of LEGEND_TEXT_KEYS) {
+    const value = stringValue(study, key);
+    if (value) {
+      values.push(value);
+    }
+  }
+
+  for (const key of ["legendTexts", "texts"]) {
+    const collection = study[key];
+    if (!Array.isArray(collection)) {
+      continue;
+    }
+
+    for (const item of collection) {
+      if (typeof item === "string" && item.trim().length > 0) {
+        values.push(item.trim());
+      }
+    }
+  }
+
+  const diagnostics = study.diagnostics;
+  if (isRecord(diagnostics) && Array.isArray(diagnostics.legendTexts)) {
+    for (const item of diagnostics.legendTexts) {
+      if (typeof item === "string" && item.trim().length > 0) {
+        values.push(item.trim());
+      }
+    }
+  }
+
+  return uniqueStringValues(values);
+}
+
+function extractLegendFallbackLevels(
+  study: Record<string, unknown>,
+  studyName: string
+): PineDrawingLevel[] {
+  const levelsByKey = new Map<string, PineDrawingLevel>();
+
+  for (const text of legendTexts(study)) {
+    for (const level of parseObjectiveOverlayLegendLevels(text, studyName)) {
+      const key = `${normalizeText(level.name ?? "legend")}:${level.price.toFixed(4)}`;
+      mergeLevel(levelsByKey, {
+        level,
+        key
+      });
+    }
+  }
+
+  return [...levelsByKey.values()];
+}
+
+function extractLevels(
+  study: Record<string, unknown>,
+  studyName: string
+): PineDrawingLevel[] {
   const levelsByKey = new Map<string, PineDrawingLevel>();
 
   for (const line of collectRecordsByKeys(study, LINE_KEYS)) {
@@ -582,6 +1079,14 @@ function extractLevels(study: Record<string, unknown>): PineDrawingLevel[] {
     if (candidate) {
       mergeLevel(levelsByKey, candidate);
     }
+  }
+
+  for (const level of extractLegendFallbackLevels(study, studyName)) {
+    const key = `${normalizeText(level.name ?? "legend")}:${level.price.toFixed(4)}`;
+    mergeLevel(levelsByKey, {
+      level,
+      key
+    });
   }
 
   return [...levelsByKey.values()].sort((left, right) => right.price - left.price);
@@ -899,7 +1404,7 @@ export function normalizePineDrawingPayload(
   }
 
   const drawings = {
-    levels: extractLevels(candidate.value),
+    levels: extractLevels(candidate.value, studyName),
     zones: extractZones(candidate.value),
     labels: extractLabels(candidate.value),
     tables: extractTables(candidate.value)
