@@ -2,7 +2,7 @@
 
 ## Current System Shape
 
-The current repo is a local TypeScript/Node MCP server scaffold with the first TradingView Desktop connection checks. It has:
+The current repo is a local TypeScript/Node MCP server for high-level TradingView Desktop charting workflows. It has:
 
 - a strict TypeScript project configuration
 - a stdio MCP server entry point
@@ -12,10 +12,13 @@ The current repo is a local TypeScript/Node MCP server scaffold with the first T
 - a local universe config parser and CLI selection workflow
 - a manually installed objective Pine drawing overlay source for deterministic chart objects
 - a compact Pine drawing extraction path for the visible objective overlay study
+- a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, and an index
-- typed internal health-result shaping for later MCP tools
+- a v1 MCP tool surface made only of high-level charting workflows
+- typed internal health-result shaping for CLI and MCP tools
 - tests that pin the manual-only boundary, universe parsing behavior, and Pine overlay source contract
 - tests for CDP target discovery, health failures, chart planning, output naming, chart-runner failures, chartbook artifact creation, and Pine drawing extraction normalization without requiring a live TradingView session
+- MCP protocol tests for tool registration, server instructions, guardrail descriptions, and request validation without requiring a live TradingView session
 - repo docs for issue-driven development
 
 No scanner or broker behavior exists.
@@ -25,6 +28,18 @@ No scanner or broker behavior exists.
 ### MCP Server
 
 `src/index.ts` starts a stdio MCP server created by `src/server.ts`. Codex can launch the built server with a local `node dist/src/index.js` command.
+
+`src/mcp/tradingview-tools.ts` registers the v1 high-level tool surface:
+
+- `tradingview_connect`
+- `tradingview_status`
+- `tradingview_list_universe`
+- `tradingview_chart_symbol`
+- `tradingview_chart_universe`
+- `tradingview_capture_current_chart`
+- `tradingview_build_chartbook`
+
+The server instructions and every tool description state the charting-only guardrails. V1 does not expose raw click, type, page evaluate, or generic browser-control tools.
 
 ### Domain Contract
 
@@ -76,6 +91,10 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 
 `src/tradingview/pine-drawing-runner.ts` combines the existing CDP health check, chart target WebSocket connection, page payload read, and normalizer into a single extraction result. `src/cli.ts` exposes this as `drawings`.
 
+### Current Chart Capture
+
+`src/tradingview/current-chart-capture.ts` captures the currently visible TradingView chart without navigating it to a different symbol. It checks CDP health, captures a PNG screenshot from the active chart target, reads the configured objective overlay payload, writes `current-chart.png` plus `current-chart-levels.json` under an ignored local artifact directory, and reports partial failures in the structured result.
+
 ### Chartbook Output
 
 `src/chartbook/chartbook.ts` builds deterministic local chartbook session plans under `artifacts/tradingview-chartbooks/<session-id>/`. It resolves one directory per selected universe symbol and plans weekly, daily, and 65-minute screenshot plus `*-levels.json` artifact paths.
@@ -101,6 +120,8 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 `test/pine-drawings.test.ts` and `test/pine-drawing-runner.test.ts` cover configured-study targeting, level de-duplication, zone/label/table normalization, debug raw-output gating, and health failure handling with fixture-like payloads.
 
 `test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, notes/index Markdown output, and partial failure recording with fake clients.
+
+`test/mcp-tools.test.ts` uses in-memory MCP transports to verify the advertised v1 tool list, guardrail descriptions, server instructions, structured status output, request validation, and ordered universe charting without a live TradingView session.
 
 ### Project Docs
 
@@ -174,6 +195,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 1. Build with `npm run build`.
 2. Configure Codex to run `node dist/src/index.js` as a stdio MCP server.
 3. Codex starts the local server process when the MCP server is enabled.
+4. Codex sees only the high-level v1 charting tools; raw browser-control tools are not registered.
 
 ## Important Invariants
 
@@ -186,7 +208,9 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Pine overlay source must be manually installed, deterministic from chart OHLCV, and free of subjective pattern labels or scanner/ranking/trade-action text.
 - Downstream Pine drawing extraction must target the visible study name `TVMCP Objective Drawing Overlay`.
 - Pine drawing extraction must keep payloads compact by default and avoid raw TradingView internals unless debug mode is explicit.
+- Current-chart capture must preserve the active chart context and avoid navigating the chart to a different symbol.
 - Chartbook output is a local review/prep artifact only and must keep generated files under ignored artifact directories by default.
 - Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.
+- The MCP tool surface must stay high-level and must not expose raw browser micromanagement tools.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.
