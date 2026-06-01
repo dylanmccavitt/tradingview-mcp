@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+import { CHART_ANALYSIS_PROFILE_NAMES } from "../domain.js";
 import {
   DEFAULT_CHARTBOOK_PRESET,
   runChartbook,
@@ -98,6 +99,7 @@ const exchangeQualifiedSymbol = z
     "Symbol must be exchange-qualified, for example NASDAQ:NVDA."
   );
 const universeTier = z.enum(["core", "extended", "all"]);
+const chartAnalysisProfile = z.enum(CHART_ANALYSIS_PROFILE_NAMES);
 
 const endpointShape = {
   host: nonEmptyString.optional(),
@@ -120,6 +122,7 @@ const universeSelectionShape = {
 
 const studyShape = {
   studyName: nonEmptyString.optional(),
+  profile: chartAnalysisProfile.optional(),
   debug: z.boolean().optional()
 };
 
@@ -509,6 +512,10 @@ export function registerTradingViewMcpTools(
         debug: args.debug ?? false
       };
 
+      if (args.profile) {
+        captureOptions.profile = args.profile;
+      }
+
       if (args.outputDir) {
         captureOptions.outputRoot = args.outputDir;
       }
@@ -552,6 +559,10 @@ export function registerTradingViewMcpTools(
         studyName: args.studyName ?? DEFAULT_PINE_DRAWING_STUDY_NAME,
         debug: args.debug ?? false
       };
+
+      if (args.profile) {
+        chartbookOptions.profile = args.profile;
+      }
 
       if (args.sessionId) {
         chartbookOptions.sessionId = args.sessionId;

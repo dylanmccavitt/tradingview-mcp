@@ -233,8 +233,10 @@ artifacts/tradingview-chartbooks/manual-smoke/
 ```
 
 Use `--json` for structured command output, `--output-dir <path>` for a
-different artifact root, and `--preset <name>` to record the manually selected
-overlay preset in the chartbook metadata.
+different artifact root, `--preset <name>` to record the manually selected
+overlay preset in the chartbook metadata, and
+`--profile focus|breakout|squeeze|momentum` to choose the objective chart-facts
+emphasis.
 
 How to read chartbook artifacts:
 
@@ -244,8 +246,10 @@ How to read chartbook artifacts:
   timeframe.
 - Each `*-levels.json` file contains compact objective overlay extraction for
   the matching screenshot: horizontal levels, zones from boxes, labels, tables,
-  counts, warnings, chart context, and extraction or screenshot errors when a
-  partial failure happened.
+  counts, warnings, chart context, a `facts` object for breakout references,
+  compression state, AVWAP, timing levels, and nearest support/resistance when
+  TradingView exposes a current chart price, plus extraction or screenshot
+  errors when a partial failure happened.
 - Each `notes.md` file embeds that symbol's screenshots and leaves sections for
   human or Codex chart notes.
 

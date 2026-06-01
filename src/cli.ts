@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { parseChartAnalysisProfile } from "./chart-analysis/chart-facts.js";
 import {
   ChartbookPlanError,
   DEFAULT_CHARTBOOK_PRESET,
@@ -89,7 +90,7 @@ const USAGE = `Usage:
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
   tradingview-mcp-cli chart-universe [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-charts] [--port 9222] [--json]
-  tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--port 9222] [--json]
+  tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--profile focus|breakout|squeeze|momentum] [--port 9222] [--json]
   tradingview-mcp-cli drawings [--study-name "TVMCP Objective Drawing Overlay"] [--port 9222] [--timeout-ms 2500] [--json] [--debug]
   tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
   tradingview-mcp-cli universe resolve [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--json]
@@ -544,6 +545,9 @@ export async function runCli(
         preset: {
           type: "string"
         },
+        profile: {
+          type: "string"
+        },
         session: {
           type: "string"
         },
@@ -753,15 +757,26 @@ export async function runCli(
       return error instanceof UniverseConfigError ? 2 : 1;
     }
 
-    const chartbookOptions: RunChartbookOptions = {
-      symbols,
-      host: options.host,
-      port: options.port,
-      timeoutMs: options.timeoutMs,
-      preset: getStringOption(parsed.values, "preset") ?? DEFAULT_CHARTBOOK_PRESET,
-      selection: chartbookSelectionSummary(configPath, groupIds, tier),
-      debug: getBooleanOption(parsed.values, "debug")
-    };
+    let chartbookOptions: RunChartbookOptions;
+
+    try {
+      chartbookOptions = {
+        symbols,
+        host: options.host,
+        port: options.port,
+        timeoutMs: options.timeoutMs,
+        preset: getStringOption(parsed.values, "preset") ?? DEFAULT_CHARTBOOK_PRESET,
+        profile: parseChartAnalysisProfile(
+          getStringOption(parsed.values, "profile")
+        ),
+        selection: chartbookSelectionSummary(configPath, groupIds, tier),
+        debug: getBooleanOption(parsed.values, "debug")
+      };
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n\n${USAGE}`);
+      return 2;
+    }
 
     if (options.appPath) {
       chartbookOptions.appPath = options.appPath;

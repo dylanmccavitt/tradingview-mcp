@@ -16,6 +16,7 @@ export interface PineDrawingChartContext {
   title?: string;
   symbol?: string;
   interval?: string;
+  currentPrice?: number;
 }
 
 export interface PineDrawingStudySummary {
@@ -1321,6 +1322,17 @@ function extractChartContext(payload: unknown): PineDrawingChartContext | undefi
     context,
     "interval",
     optionalStringFromKeys(chart, ["interval", "timeframe"])
+  );
+  assignOptionalNumber(
+    context,
+    "currentPrice",
+    optionalNumberFromKeys(chart, [
+      "currentPrice",
+      "lastPrice",
+      "last",
+      "close",
+      "lastClose"
+    ])
   );
 
   return Object.keys(context).length > 0 ? context : undefined;

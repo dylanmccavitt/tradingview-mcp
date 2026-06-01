@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, current-chart capture, and local chartbook artifact output.
+This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, and local chartbook artifact output.
 
 ## Requirements
 
@@ -36,6 +36,7 @@ npm run tv:health -- --port 9222
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 npm run tv:chart-universe -- --group semis --tier core --port 9222
 npm run tv:chartbook -- --group semis --tier core --port 9222
+npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222
 npm run tv:drawings -- --port 9222 --json
 npm run tv:universe -- list
 npm run tv:universe -- resolve --group semis --tier core
@@ -61,7 +62,7 @@ After TradingView Desktop is running with CDP enabled, a chart tab is open, and 
 npm run tv:drawings -- --port 9222 --json
 ```
 
-The extractor targets the configured study name, `TVMCP Objective Drawing Overlay`, and does not scrape every visible indicator by default. It returns deduplicated horizontal levels, high/low zones from boxes, compact labels, and compact tables for chartbook artifacts and Codex review. When TradingView exposes only the visible indicator legend, the extractor falls back to the objective overlay's known Pine plot order and recovers plotted levels such as `PDH`, `PWH`, `20D-H`, `OR-H`, and `AVWAP` from the compact legend text. Use `--study-name <name>` only when intentionally validating a differently named local copy of the overlay.
+The extractor targets the configured study name, `TVMCP Objective Drawing Overlay`, and does not scrape every visible indicator by default. It returns deduplicated horizontal levels, high/low zones from boxes, compact labels, and compact tables for chartbook artifacts and Codex review. When TradingView exposes only the visible indicator legend, the extractor falls back to the objective overlay's known Pine plot order and recovers plotted levels such as `PDH`, `PWH`, `20D-H`, `OR-H`, and `AVWAP` from the compact legend text. Chartbook and current-chart artifacts also include a `facts` object for objective breakout, squeeze, and momentum review fields derived from the extracted overlay data. Use `--study-name <name>` only when intentionally validating a differently named local copy of the overlay.
 
 Use `--debug` with `--json` only when diagnosing a TradingView payload shape. Normal output avoids dumping large raw TradingView internals.
 
@@ -179,7 +180,7 @@ artifacts/tradingview-chartbooks/<session-id>/
     NASDAQ-NVDA-65-minute-levels.json
 ```
 
-Use `--session <id>` for a deterministic session name, `--output-dir <path>` for a different local artifact root, `--preset <name>` to record the manually selected overlay preset, and the same `--group`, `--tier`, and `--config` options as universe resolution. Partial failures remain recorded in `index.md`, `notes.md`, and the matching `*-levels.json` files without deleting successful screenshots.
+Use `--session <id>` for a deterministic session name, `--output-dir <path>` for a different local artifact root, `--preset <name>` to record the manually selected overlay preset, `--profile focus|breakout|squeeze|momentum` to choose the chart-facts emphasis, and the same `--group`, `--tier`, and `--config` options as universe resolution. Partial failures remain recorded in `index.md`, `notes.md`, and the matching `*-levels.json` files without deleting successful screenshots.
 
 Chartbooks are local review/prep artifacts only. They do not rank symbols, recommend trades, place orders, use broker APIs, or bypass TradingView access controls.
 

@@ -100,7 +100,8 @@ class FakePineDrawingPageClient implements TradingViewPineDrawingPageClient {
     if (this.readCount <= this.emptyReadsBeforeData) {
       return Promise.resolve({
         chart: {
-          url: `https://www.tradingview.com/chart/chartid/?symbol=NASDAQ%3ANVDA&interval=${this.chartClient.lastTimeframe}`
+          url: `https://www.tradingview.com/chart/chartid/?symbol=NASDAQ%3ANVDA&interval=${this.chartClient.lastTimeframe}`,
+          currentPrice: 890
         },
         studies: [
           {
@@ -113,7 +114,8 @@ class FakePineDrawingPageClient implements TradingViewPineDrawingPageClient {
 
     return Promise.resolve({
       chart: {
-        url: `https://www.tradingview.com/chart/chartid/?symbol=NASDAQ%3ANVDA&interval=${this.chartClient.lastTimeframe}`
+        url: `https://www.tradingview.com/chart/chartid/?symbol=NASDAQ%3ANVDA&interval=${this.chartClient.lastTimeframe}`,
+        currentPrice: 890
       },
       studies: [
         {
@@ -202,6 +204,7 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
         groups: ["semis"],
         tier: "core"
       },
+      profile: "breakout",
       checkHealth: () => Promise.resolve(healthyResult),
       chartClientFactory: () => Promise.resolve(fakeChartClient),
       drawingClientFactory: () => Promise.resolve(fakeDrawingClient),
@@ -250,8 +253,12 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.equal(weekly.ok, true);
     assert.equal(weekly.symbol.symbol, "NASDAQ:NVDA");
     assert.equal(weekly.timeframe.id, "weekly");
+    assert.equal(weekly.profile, "breakout");
     assert.equal(weekly.paths.screenshot, "NASDAQ-NVDA-weekly.png");
     assert.equal(weekly.extraction.drawings.levels[0]?.name, "weekly-level");
+    assert.equal(weekly.extraction.facts.profile, "breakout");
+    assert.equal(weekly.extraction.facts.nearest.resistance?.name, "weekly-level");
+    assert.match(result.symbols[0]?.timeframes[0]?.warnings.join(" ") ?? "", /AVWAP value was not available/i);
     assert.equal(daily.ok, false);
     assert.match(daily.screenshot.error ?? "", /render failed for daily/);
     assert.match(daily.extraction.error ?? "", /Skipped drawing extraction/);
@@ -262,12 +269,15 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.match(notes, /# NVDA - NVIDIA/);
     assert.match(notes, /- Tags: semis, gpu/);
     assert.match(notes, /- Preset: `levels`/);
+    assert.match(notes, /- Profile: `breakout`/);
+    assert.match(notes, /AVWAP value was not available/);
     assert.match(notes, /!\[Weekly screenshot\]\(\.\/NASDAQ-NVDA-weekly\.png\)/);
     assert.match(notes, /## Codex Notes/);
     assert.match(notes, /### Cross-Timeframe/);
 
     const index = await readFile(join(outputRoot, "session-a", "index.md"), "utf8");
     assert.match(index, /# TradingView Chartbook session-a/);
+    assert.match(index, /- Profile: `breakout`/);
     assert.match(index, /\[NVDA\]\(\.\/NASDAQ-NVDA\/notes\.md\)/);
     assert.match(index, /not a scanner, ranking, recommendation, broker action, or order workflow/);
   } finally {
