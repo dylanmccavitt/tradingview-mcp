@@ -46,6 +46,12 @@ the visible chart:
 npm run tv:drawings -- --port 9222 --json
 ```
 
+Create a local chartbook for a selected universe group and tier:
+
+```bash
+npm run tv:chartbook -- --group semis --tier core --port 9222
+```
+
 List local universe groups and resolve chart symbols from the sample config:
 
 ```bash

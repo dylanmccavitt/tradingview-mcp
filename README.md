@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, and compact extraction for the installed objective Pine drawing overlay. Chartbooks are intentionally deferred.
+This repo has a TypeScript MCP server scaffold, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, and local chartbook artifact output.
 
 ## Requirements
 
@@ -31,6 +31,7 @@ npm run test:pine
 npm run tv:launch -- --port 9222
 npm run tv:health -- --port 9222
 npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+npm run tv:chartbook -- --group semis --tier core --port 9222
 npm run tv:drawings -- --port 9222 --json
 npm run tv:universe -- list
 npm run tv:universe -- resolve --group semis --tier core
@@ -130,6 +131,33 @@ artifacts/tradingview-charts/NASDAQ-NVDA/
 ```
 
 Use `--output-dir <path>` to choose a different artifact root. The command reports each timeframe as `OK` or `FAILED`; it does not scan, rank, place orders, or bypass TradingView access controls.
+
+## Chartbook Output
+
+After TradingView Desktop is running with CDP enabled, a chart tab is open, and the objective overlay is installed, create a local chartbook for a selected universe:
+
+```bash
+npm run tv:chartbook -- --group semis --tier core --port 9222
+```
+
+By default, the command writes an ignored local session directory under:
+
+```text
+artifacts/tradingview-chartbooks/<session-id>/
+  index.md
+  NASDAQ-NVDA/
+    notes.md
+    NASDAQ-NVDA-weekly.png
+    NASDAQ-NVDA-weekly-levels.json
+    NASDAQ-NVDA-daily.png
+    NASDAQ-NVDA-daily-levels.json
+    NASDAQ-NVDA-65-minute.png
+    NASDAQ-NVDA-65-minute-levels.json
+```
+
+Use `--session <id>` for a deterministic session name, `--output-dir <path>` for a different local artifact root, `--preset <name>` to record the manually selected overlay preset, and the same `--group`, `--tier`, and `--config` options as universe resolution. Partial failures remain recorded in `index.md`, `notes.md`, and the matching `*-levels.json` files without deleting successful screenshots.
+
+Chartbooks are local review/prep artifacts only. They do not rank symbols, recommend trades, place orders, use broker APIs, or bypass TradingView access controls.
 
 ## Run the MCP Server
 

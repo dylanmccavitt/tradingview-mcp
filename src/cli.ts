@@ -5,6 +5,13 @@ import { resolve as resolvePath } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
+  ChartbookPlanError,
+  DEFAULT_CHARTBOOK_PRESET,
+  runChartbook,
+  type ChartbookResult,
+  type RunChartbookOptions
+} from "./chartbook/chartbook.js";
+import {
   chartOneSymbol,
   type ChartOneSymbolOptions,
   type ChartOneSymbolResult
@@ -64,6 +71,7 @@ const USAGE = `Usage:
   tradingview-mcp-cli launch [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
+  tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--port 9222] [--json]
   tradingview-mcp-cli drawings [--study-name "TVMCP Objective Drawing Overlay"] [--port 9222] [--timeout-ms 2500] [--json] [--debug]
   tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
   tradingview-mcp-cli universe resolve [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--json]
@@ -73,6 +81,7 @@ npm scripts:
   npm run tv:launch -- --port 9222
   npm run tv:launch-command -- --port 9222
   npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
+  npm run tv:chartbook -- --group semis --tier core --port 9222
   npm run tv:drawings -- --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
@@ -359,6 +368,62 @@ function formatPineDrawingExtractionResult(
   return `${lines.join("\n")}\n`;
 }
 
+function chartbookSelectionSummary(
+  configPath: string,
+  groupIds: string[] | undefined,
+  tier: UniverseSelectionTier
+): {
+  configPath: string;
+  groups: string[] | "all";
+  tier: UniverseSelectionTier;
+} {
+  return {
+    configPath: resolvePath(configPath),
+    groups: groupIds ?? "all",
+    tier
+  };
+}
+
+function formatChartbookResult(result: ChartbookResult): string {
+  const lines = [
+    `Status: ${result.ok ? "success" : "failed"}`,
+    `Session: ${result.sessionId}`,
+    `Endpoint: ${result.endpoint}`,
+    `Output directory: ${result.sessionDirectory}`,
+    `Index: ${result.indexPath}`
+  ];
+
+  if (result.target) {
+    lines.push(`Chart target: ${result.target.title} <${result.target.url}>`);
+  }
+
+  if (result.error) {
+    lines.push(`Error: ${result.error}`);
+  }
+
+  lines.push("Symbols:");
+
+  for (const symbol of result.symbols) {
+    lines.push(
+      `- ${symbol.symbol} (${symbol.alias}): ${symbol.ok ? "OK" : "FAILED"} ${symbol.notesPath}`
+    );
+
+    for (const timeframe of symbol.timeframes) {
+      if (timeframe.ok) {
+        lines.push(
+          `  ${timeframe.timeframe}: OK screenshot ${timeframe.screenshotPath} levels ${timeframe.levelsJsonPath}`
+        );
+      } else {
+        lines.push(
+          `  ${timeframe.timeframe}: FAILED ${timeframe.error ?? "Unknown error"}`
+        );
+      }
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 export async function runCli(
   argv = process.argv.slice(2),
   streams: CliStreams = {
@@ -406,6 +471,12 @@ export async function runCli(
           type: "string"
         },
         "render-timeout-ms": {
+          type: "string"
+        },
+        preset: {
+          type: "string"
+        },
+        session: {
           type: "string"
         },
         symbol: {
@@ -492,6 +563,114 @@ export async function runCli(
       writeJson(streams.stdout, result);
     } else {
       streams.stdout.write(formatChartResult(result));
+    }
+
+    return result.ok ? 0 : 1;
+  }
+
+  if (command === "chartbook") {
+    const configPath =
+      getStringOption(parsed.values, "config") ?? DEFAULT_UNIVERSE_CONFIG_PATH;
+
+    let groupIds: string[] | undefined;
+    let tier: UniverseSelectionTier;
+
+    try {
+      groupIds = parseGroupSelection(getStringOption(parsed.values, "group"));
+      tier = parseUniverseTier(getStringOption(parsed.values, "tier"));
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n\n${USAGE}`);
+      return 2;
+    }
+
+    let config: UniverseConfig;
+
+    try {
+      config = await loadUniverseConfig(configPath);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n`);
+      return error instanceof UniverseConfigError ? 2 : 1;
+    }
+
+    let symbols: ResolvedUniverseSymbol[];
+
+    try {
+      const selectionOptions: ResolveUniverseSelectionOptions = {
+        tier
+      };
+
+      if (groupIds) {
+        selectionOptions.groupIds = groupIds;
+      }
+
+      symbols = resolveUniverseSelection(config, selectionOptions);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n`);
+      return error instanceof UniverseConfigError ? 2 : 1;
+    }
+
+    const chartbookOptions: RunChartbookOptions = {
+      symbols,
+      host: options.host,
+      port: options.port,
+      timeoutMs: options.timeoutMs,
+      preset: getStringOption(parsed.values, "preset") ?? DEFAULT_CHARTBOOK_PRESET,
+      selection: chartbookSelectionSummary(configPath, groupIds, tier),
+      debug: getBooleanOption(parsed.values, "debug")
+    };
+
+    if (options.appPath) {
+      chartbookOptions.appPath = options.appPath;
+    }
+
+    const outputRoot = getStringOption(parsed.values, "output-dir");
+    if (outputRoot) {
+      chartbookOptions.outputRoot = outputRoot;
+    }
+
+    const sessionId = getStringOption(parsed.values, "session");
+    if (sessionId) {
+      chartbookOptions.sessionId = sessionId;
+    }
+
+    const studyName = getStringOption(parsed.values, "study-name");
+    if (studyName) {
+      chartbookOptions.studyName = studyName;
+    }
+
+    const renderTimeoutMs = getStringOption(parsed.values, "render-timeout-ms");
+    if (renderTimeoutMs) {
+      chartbookOptions.renderTimeoutMs = parsePositiveInteger(
+        renderTimeoutMs,
+        "--render-timeout-ms"
+      );
+    }
+
+    const renderSettleMs = getStringOption(parsed.values, "render-settle-ms");
+    if (renderSettleMs) {
+      chartbookOptions.renderSettleMs = parsePositiveInteger(
+        renderSettleMs,
+        "--render-settle-ms"
+      );
+    }
+
+    let result: ChartbookResult;
+
+    try {
+      result = await runChartbook(chartbookOptions);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n`);
+      return error instanceof ChartbookPlanError ? 2 : 1;
+    }
+
+    if (options.json) {
+      writeJson(streams.stdout, result);
+    } else {
+      streams.stdout.write(formatChartbookResult(result));
     }
 
     return result.ok ? 0 : 1;
