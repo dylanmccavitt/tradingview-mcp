@@ -1429,6 +1429,12 @@ export function normalizePineDrawingPayload(
   const counts = countsFromDrawings(drawings);
   const totalObjects = counts.levels + counts.zones + counts.labels + counts.tables;
 
+  if (candidate.value.source === "legend-dom") {
+    warnings.push(
+      `Legend-only extraction fallback was used for study '${studyName}'; extracted facts may omit drawing boxes, labels, and tables.`
+    );
+  }
+
   if (totalObjects === 0) {
     warnings.push(
       `Study '${studyName}' was found, but no supported Pine drawing objects were detected.`
