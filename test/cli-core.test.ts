@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { Writable } from "node:stream";
 import test from "node:test";
 
+import type {
+  ChartbookResult,
+  RunChartbookOptions
+} from "../src/chartbook/chartbook.js";
 import { runCli } from "../src/cli.js";
 import type { ChartOneSymbolOptions, ChartOneSymbolResult } from "../src/tradingview/chart-runner.js";
 import type {
@@ -12,6 +16,7 @@ import type {
   CheckTradingViewHealthOptions,
   TradingViewHealthResult
 } from "../src/tradingview/health.js";
+import type { UniverseConfig } from "../src/universe/config.js";
 
 function captureStream(chunks: string[]): Writable {
   return new Writable({
@@ -86,6 +91,77 @@ function launchResult(port: number): TradingViewLaunchResult {
     },
     pid: 1234,
     nextSteps: ["Open a TradingView chart tab."]
+  };
+}
+
+const chartbookUniverseConfig: UniverseConfig = {
+  version: 1,
+  groups: [
+    {
+      id: "semis",
+      label: "Semiconductors",
+      tags: ["semis"],
+      core: [
+        {
+          symbol: "NASDAQ:NVDA",
+          alias: "NVDA",
+          name: "NVIDIA",
+          tags: ["gpu"]
+        },
+        {
+          symbol: "NASDAQ:AMD",
+          alias: "AMD",
+          name: "Advanced Micro Devices",
+          tags: ["gpu"]
+        }
+      ],
+      extended: []
+    }
+  ]
+};
+
+function chartbookResultFromOptions(
+  options: RunChartbookOptions
+): ChartbookResult {
+  const sessionId = options.sessionId ?? "session-a";
+
+  return {
+    ok: true,
+    schemaVersion: 2,
+    sessionId,
+    capturedAt: "2026-06-01T17:30:00.000Z",
+    preset: options.preset ?? "levels",
+    profile: options.profile ?? "focus",
+    sessionDirectory: `/tmp/chartbooks/${sessionId}`,
+    indexPath: `/tmp/chartbooks/${sessionId}/index.md`,
+    endpoint: `http://${options.host ?? "127.0.0.1"}:${options.port ?? 9222}`,
+    ...(options.selection
+      ? {
+          selection: options.selection
+        }
+      : {}),
+    symbols: options.symbols.map((symbol) => {
+      const symbolSlug = symbol.symbol.replace(":", "-");
+      const result = {
+        symbol: symbol.symbol,
+        alias: symbol.alias,
+        tags: [...symbol.tags],
+        groups: [...symbol.groups],
+        tiers: [...symbol.tiers],
+        ok: true,
+        symbolSlug,
+        directory: `/tmp/chartbooks/${sessionId}/${symbolSlug}`,
+        notesPath: `/tmp/chartbooks/${sessionId}/${symbolSlug}/notes.md`,
+        timeframes: []
+      };
+
+      return symbol.name
+        ? {
+            ...result,
+            name: symbol.name
+          }
+        : result;
+    })
   };
 }
 
@@ -204,4 +280,97 @@ void test("CLI parses launch arguments and formats next steps", async () => {
   assert.match(output, /Launched TradingView Desktop with CDP/);
   assert.match(output, /Command: \/Applications\/TradingView\.app\/Contents\/MacOS\/TradingView --remote-debugging-port=9333/);
   assert.match(output, /- Open a TradingView chart tab\./);
+});
+
+void test("CLI parses chartbook profile and preserves selected universe order", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let capturedOptions: RunChartbookOptions | undefined;
+
+  const exitCode = await runCli(
+    [
+      "chartbook",
+      "--config",
+      "/tmp/universe.json",
+      "--group",
+      "semis",
+      "--tier",
+      "core",
+      "--profile",
+      "momentum",
+      "--session",
+      "manual-review",
+      "--port",
+      "9223",
+      "--output-dir",
+      "/tmp/chartbooks"
+    ],
+    {
+      stdout: captureStream(stdout),
+      stderr: captureStream(stderr)
+    },
+    {
+      handlers: {
+        loadUniverseConfig: (configPath) => {
+          assert.equal(configPath, "/tmp/universe.json");
+          return Promise.resolve(chartbookUniverseConfig);
+        },
+        runChartbook: (options) => {
+          capturedOptions = options;
+          return Promise.resolve(chartbookResultFromOptions(options));
+        }
+      }
+    }
+  );
+
+  const output = stdout.join("");
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.join(""), "");
+  assert.equal(capturedOptions?.profile, "momentum");
+  assert.deepEqual(
+    capturedOptions?.symbols.map((symbol) => symbol.symbol),
+    ["NASDAQ:NVDA", "NASDAQ:AMD"]
+  );
+  assert.deepEqual(capturedOptions?.selection, {
+    configPath: "/tmp/universe.json",
+    groups: ["semis"],
+    tier: "core"
+  });
+  assert.match(output, /Status: success/);
+  assert.match(output, /Profile: momentum/);
+  assert.doesNotMatch(output, /score|rank|recommend/i);
+});
+
+void test("CLI rejects unsupported chartbook profiles before loading config", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let configLoaded = false;
+  let chartbookRan = false;
+
+  const exitCode = await runCli(
+    ["chartbook", "--profile", "scanner"],
+    {
+      stdout: captureStream(stdout),
+      stderr: captureStream(stderr)
+    },
+    {
+      handlers: {
+        loadUniverseConfig: () => {
+          configLoaded = true;
+          return Promise.resolve(chartbookUniverseConfig);
+        },
+        runChartbook: (options) => {
+          chartbookRan = true;
+          return Promise.resolve(chartbookResultFromOptions(options));
+        }
+      }
+    }
+  );
+
+  assert.equal(exitCode, 2);
+  assert.equal(stdout.join(""), "");
+  assert.equal(configLoaded, false);
+  assert.equal(chartbookRan, false);
+  assert.match(stderr.join(""), /Chart-analysis profile must be one of/);
 });

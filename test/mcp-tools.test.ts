@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { buildChartFacts } from "../src/chart-analysis/chart-facts.js";
+import { CHART_ANALYSIS_PROFILE_NAMES } from "../src/domain.js";
 import { createServer, type CreateServerOptions } from "../src/server.js";
 import {
   MCP_SERVER_INSTRUCTIONS,
@@ -55,6 +56,15 @@ function contentText(result: Awaited<ReturnType<Client["callTool"]>>): string {
   const item = callResult(result).content?.[0];
 
   return item?.type === "text" ? (item.text ?? "") : "";
+}
+
+interface JsonSchemaProperty {
+  enum?: unknown[];
+  description?: string;
+}
+
+interface JsonSchemaObject {
+  properties?: Record<string, JsonSchemaProperty>;
 }
 
 const healthyResult: TradingViewHealthResult = {
@@ -172,6 +182,41 @@ void test("MCP server advertises only high-level v1 charting tools with guardrai
       assert.doesNotMatch(tool.description ?? "", /raw .*browser/i);
       assert.equal(tool.inputSchema.type, "object");
     }
+  } finally {
+    await close();
+  }
+});
+
+void test("profile-aware MCP tools expose accepted review profile schema", async () => {
+  const { client, close } = await connectClient();
+
+  try {
+    const listed = await client.listTools();
+    const toolsByName = new Map(
+      listed.tools.map((tool) => [tool.name, tool])
+    );
+    const profileToolNames = [
+      "tradingview_capture_current_chart",
+      "tradingview_build_chartbook"
+    ];
+
+    for (const toolName of profileToolNames) {
+      const tool = toolsByName.get(toolName);
+      assert.ok(tool, `${toolName} should be registered`);
+      const schema = tool.inputSchema as JsonSchemaObject;
+      const profileProperty = schema.properties?.profile;
+
+      assert.deepEqual(profileProperty?.enum, [
+        ...CHART_ANALYSIS_PROFILE_NAMES
+      ]);
+      assert.match(profileProperty?.description ?? "", /review profile/i);
+      assert.match(tool.description ?? "", /profile-aware|selected chart|review chartbook/i);
+      assert.match(tool.description ?? "", /no scanner\/ranking behavior/i);
+    }
+
+    const chartUniverseSchema = toolsByName.get("tradingview_chart_universe")
+      ?.inputSchema as JsonSchemaObject;
+    assert.equal(chartUniverseSchema.properties?.profile, undefined);
   } finally {
     await close();
   }
@@ -342,13 +387,17 @@ void test("current-chart capture tool uses the injected capture workflow", async
   }
 });
 
-void test("chartbook tool passes chart-analysis profile to the runner", async () => {
+void test("chartbook tool passes profile and ordered symbols without rank fields", async () => {
   let requestedProfile = "";
+  let requestedSymbols: string[] = [];
+  let requestedSelection: unknown;
   const { client, close } = await connectClient({
     handlers: {
       loadUniverseConfig: () => Promise.resolve(universeConfig),
       runChartbook: (options) => {
         requestedProfile = options.profile ?? "";
+        requestedSymbols = options.symbols.map((symbol) => symbol.symbol);
+        requestedSelection = options.selection;
         return Promise.resolve({
           ok: true,
           schemaVersion: 2,
@@ -359,7 +408,33 @@ void test("chartbook tool passes chart-analysis profile to the runner", async ()
           sessionDirectory: "/tmp/chartbook/session-a",
           indexPath: "/tmp/chartbook/session-a/index.md",
           endpoint: "http://127.0.0.1:9223",
-          symbols: []
+          ...(options.selection
+            ? {
+                selection: options.selection
+              }
+            : {}),
+          symbols: options.symbols.map((symbol) => {
+            const symbolSlug = symbol.symbol.replace(":", "-");
+            const result = {
+              symbol: symbol.symbol,
+              alias: symbol.alias,
+              tags: [...symbol.tags],
+              groups: [...symbol.groups],
+              tiers: [...symbol.tiers],
+              ok: true,
+              symbolSlug,
+              directory: `/tmp/chartbook/session-a/${symbolSlug}`,
+              notesPath: `/tmp/chartbook/session-a/${symbolSlug}/notes.md`,
+              timeframes: []
+            };
+
+            return symbol.name
+              ? {
+                  ...result,
+                  name: symbol.name
+                }
+              : result;
+          })
         });
       }
     }
@@ -378,7 +453,17 @@ void test("chartbook tool passes chart-analysis profile to the runner", async ()
 
     assert.equal(typedResult.isError, undefined);
     assert.equal(requestedProfile, "squeeze");
+    assert.deepEqual(requestedSymbols, ["NASDAQ:NVDA", "NASDAQ:AMD"]);
+    assert.deepEqual(requestedSelection, {
+      configPath: "config/universe.sample.json",
+      groups: ["semis"],
+      tier: "core"
+    });
     assert.equal(typedResult.structuredContent?.profile, "squeeze");
+    assert.doesNotMatch(
+      JSON.stringify(typedResult.structuredContent),
+      /"score"|"rank"|"ranking"/i
+    );
   } finally {
     await close();
   }

@@ -51,7 +51,7 @@ import {
 } from "../universe/config.js";
 
 export const MCP_SERVER_INSTRUCTIONS =
-  "Use this server only for local TradingView Desktop charting workflows. It charts user-selected symbols or configured universe groups, captures screenshots/drawing JSON/chartbooks, and checks CDP status. It does not scan, rank, recommend trades, place orders, call brokers, or bypass TradingView access controls.";
+  "Use this server only for local TradingView Desktop charting workflows. It charts user-selected symbols or configured universe groups, captures screenshots/drawing JSON/chartbooks, checks CDP status, and lets profile fields select focus, breakout, squeeze, or momentum review emphasis. Profiles are selected-chart review modes only. This server does not scan, rank, recommend trades, place orders, call brokers, or bypass TradingView access controls.";
 
 export const TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_connect",
@@ -99,7 +99,11 @@ const exchangeQualifiedSymbol = z
     "Symbol must be exchange-qualified, for example NASDAQ:NVDA."
   );
 const universeTier = z.enum(["core", "extended", "all"]);
-const chartAnalysisProfile = z.enum(CHART_ANALYSIS_PROFILE_NAMES);
+const chartAnalysisProfile = z
+  .enum(CHART_ANALYSIS_PROFILE_NAMES)
+  .describe(
+    "Chart review profile: focus, breakout, squeeze, or momentum. Profiles change objective facts and checklist emphasis only; they do not scan, rank, recommend, or trade."
+  );
 
 const endpointShape = {
   host: nonEmptyString.optional(),
@@ -451,7 +455,7 @@ export function registerTradingViewMcpTools(
     {
       title: "Chart Universe Group",
       description: guardrailedDescription(
-        "Chart configured universe symbols in local config order without scoring or ranking them."
+        "Smoke-chart configured universe symbols in local config order without scoring or ranking them; use chartbook for profile-aware review artifacts."
       ),
       inputSchema: chartUniverseSchema,
       annotations: {
@@ -495,7 +499,7 @@ export function registerTradingViewMcpTools(
     {
       title: "Capture Current Chart",
       description: guardrailedDescription(
-        "Capture the currently visible TradingView chart screenshot and objective overlay drawing JSON."
+        "Capture the currently visible selected chart as a profile-aware review artifact with a screenshot and objective overlay drawing JSON."
       ),
       inputSchema: captureCurrentChartSchema,
       annotations: {
@@ -538,7 +542,7 @@ export function registerTradingViewMcpTools(
     {
       title: "Build Chartbook",
       description: guardrailedDescription(
-        "Build a local chartbook for configured universe symbols with screenshots, notes, and drawing JSON."
+        "Build a local profile-aware review chartbook for configured universe symbols in resolved order with screenshots, notes, and drawing JSON."
       ),
       inputSchema: chartbookSchema,
       annotations: {
