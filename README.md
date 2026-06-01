@@ -180,7 +180,7 @@ artifacts/tradingview-chartbooks/<session-id>/
     NASDAQ-NVDA-65-minute-levels.json
 ```
 
-Use `--session <id>` for a deterministic session name, `--output-dir <path>` for a different local artifact root, `--preset <name>` to record the manually selected overlay preset, `--profile focus|breakout|squeeze|momentum` to choose the chart-facts emphasis, and the same `--group`, `--tier`, and `--config` options as universe resolution. Partial failures remain recorded in `index.md`, `notes.md`, and the matching `*-levels.json` files without deleting successful screenshots.
+Use `--session <id>` for a deterministic session name, `--output-dir <path>` for a different local artifact root, `--preset <name>` to record the manually selected overlay preset, `--profile focus|breakout|squeeze|momentum` to choose the chart-facts emphasis, and the same `--group`, `--tier`, and `--config` options as universe resolution. Each `notes.md` embeds the screenshots, surfaces extraction warnings, and includes a profile-aware human review checklist for the selected focus. Partial failures remain recorded in `index.md`, `notes.md`, and the matching `*-levels.json` files without deleting successful screenshots.
 
 Chartbooks are local review/prep artifacts only. They do not rank symbols, recommend trades, place orders, use broker APIs, or bypass TradingView access controls.
 

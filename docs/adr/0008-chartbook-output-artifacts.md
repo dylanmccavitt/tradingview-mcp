@@ -8,7 +8,7 @@ Accepted
 
 Generate chartbooks as ignored local artifact directories under `artifacts/tradingview-chartbooks/<session-id>/`.
 
-Each chartbook session contains an `index.md` file and one directory per resolved universe symbol. Each symbol directory contains weekly, daily, and 65-minute screenshots, matching `*-levels.json` structured drawing artifacts, and a `notes.md` page with local screenshot embeds and empty Codex notes sections.
+Each chartbook session contains an `index.md` file and one directory per resolved universe symbol. Each symbol directory contains weekly, daily, and 65-minute screenshots, matching `*-levels.json` structured drawing artifacts, and a `notes.md` page with local screenshot embeds, extraction warnings, and a profile-aware human review checklist.
 
 The chartbook runner records partial failures in the index, notes, and per-timeframe JSON. It continues through later timeframes and symbols without deleting successful captures.
 

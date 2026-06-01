@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import {
   DEFAULT_CHART_ANALYSIS_PROFILE,
   buildChartFacts,
+  type ChartFactLevel,
   type ChartFacts
 } from "../chart-analysis/chart-facts.js";
 import type { ChartAnalysisProfileName } from "../domain.js";
@@ -532,6 +533,328 @@ function displayName(symbol: ChartbookSymbolMetadata): string {
   return symbol.name ? `${symbol.alias} - ${symbol.name}` : symbol.alias;
 }
 
+function formatPrice(value: number): string {
+  return value
+    .toFixed(2)
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1");
+}
+
+function formatLevel(level: ChartFactLevel | undefined): string {
+  return level ? `${level.name} ${formatPrice(level.price)}` : "unavailable";
+}
+
+function uniqueLevels(
+  levels: Array<ChartFactLevel | undefined>
+): ChartFactLevel[] {
+  const seen = new Set<string>();
+  const unique: ChartFactLevel[] = [];
+
+  for (const level of levels) {
+    if (!level) {
+      continue;
+    }
+
+    const key = `${level.name}:${level.price}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    unique.push(level);
+  }
+
+  return unique;
+}
+
+function formatLevelList(
+  levels: readonly ChartFactLevel[],
+  emptyText = "none extracted"
+): string {
+  return levels.length > 0 ? levels.map(formatLevel).join(", ") : emptyText;
+}
+
+function timeframeById(
+  result: ChartbookSymbolResult,
+  id: ChartTimeframeId
+): ChartbookTimeframeResult | undefined {
+  return result.timeframes.find((timeframe) => timeframe.timeframe === id);
+}
+
+function timeframeFacts(
+  result: ChartbookSymbolResult,
+  id: ChartTimeframeId
+): ChartFacts | undefined {
+  return timeframeById(result, id)?.facts;
+}
+
+function formatNearest(facts: ChartFacts | undefined): string {
+  if (!facts) {
+    return "unavailable";
+  }
+
+  const parts: string[] = [];
+
+  if (typeof facts.nearest.referencePrice === "number") {
+    parts.push(`reference ${formatPrice(facts.nearest.referencePrice)}`);
+  }
+
+  if (facts.nearest.support) {
+    parts.push(`support ${formatLevel(facts.nearest.support)}`);
+  }
+
+  if (facts.nearest.resistance) {
+    parts.push(`resistance ${formatLevel(facts.nearest.resistance)}`);
+  }
+
+  return parts.length > 0 ? parts.join("; ") : "unavailable";
+}
+
+function formatAvwap(facts: ChartFacts | undefined): string {
+  return facts?.avwap.present && typeof facts.avwap.value === "number"
+    ? formatPrice(facts.avwap.value)
+    : "unavailable";
+}
+
+function formatCompression(facts: ChartFacts | undefined): string {
+  if (!facts) {
+    return "unavailable";
+  }
+
+  if (facts.compression.range) {
+    return `${facts.compression.state}; range high ${formatPrice(
+      facts.compression.range.high
+    )}, range low ${formatPrice(facts.compression.range.low)} (${facts.compression.range.source})`;
+  }
+
+  return facts.compression.state;
+}
+
+function keyLevels(facts: ChartFacts | undefined): ChartFactLevel[] {
+  if (!facts) {
+    return [];
+  }
+
+  return uniqueLevels([
+    ...facts.breakout.referenceLevels,
+    facts.nearest.resistance,
+    facts.nearest.support,
+    ...facts.timing.priorDayLevels,
+    ...facts.timing.premarketLevels,
+    ...facts.timing.openingRangeLevels,
+    facts.avwap.present && typeof facts.avwap.value === "number"
+      ? {
+          name: "AVWAP",
+          price: facts.avwap.value,
+          role: "avwap",
+          sources: []
+        }
+      : undefined
+  ]);
+}
+
+function formatTimeframeLevels(
+  label: string,
+  facts: ChartFacts | undefined
+): string {
+  return `${label}: ${formatLevelList(keyLevels(facts), "no extracted levels")}`;
+}
+
+function expansionWatchLevel(facts: ChartFacts | undefined): string {
+  if (!facts) {
+    return "unavailable";
+  }
+
+  if (facts.compression.range) {
+    return `range high ${formatPrice(facts.compression.range.high)}`;
+  }
+
+  return formatLevel(facts.nearest.resistance);
+}
+
+function factsWithCompressionRange(
+  facts: Array<ChartFacts | undefined>
+): ChartFacts | undefined {
+  return (
+    facts.find((candidate) => candidate?.compression.range) ??
+    facts.find((candidate) => candidate)
+  );
+}
+
+function warningsSection(result: ChartbookSymbolResult): string[] {
+  const warningLines = result.timeframes
+    .filter((timeframe) => timeframe.warnings.length > 0)
+    .map(
+      (timeframe) => `- ${timeframe.label}: ${timeframe.warnings.join("; ")}`
+    );
+
+  return warningLines.length > 0
+    ? ["", "## Extraction Warnings", "", ...warningLines]
+    : [];
+}
+
+function renderBreakoutReviewTemplate(
+  result: ChartbookSymbolResult
+): string[] {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+
+  return [
+    "",
+    "## Breakout Review Checklist",
+    "",
+    "### Weekly Context",
+    "",
+    `- Reference levels: ${formatLevelList(weekly?.breakout.referenceLevels ?? [])}`,
+    `- Nearest level context: ${formatNearest(weekly)}`,
+    "- Human review notes:",
+    "",
+    "### Daily Setup",
+    "",
+    `- Breakout levels: ${formatLevelList(daily?.breakout.referenceLevels ?? [])}`,
+    `- Nearest level context: ${formatNearest(daily)}`,
+    "- Setup quality notes:",
+    "",
+    "### 65-Minute Timing",
+    "",
+    `- Prior day levels: ${formatLevelList(intraday?.timing.priorDayLevels ?? [])}`,
+    `- Opening range levels: ${formatLevelList(intraday?.timing.openingRangeLevels ?? [])}`,
+    `- Premarket levels: ${formatLevelList(intraday?.timing.premarketLevels ?? [])}`,
+    "- Timing notes:",
+    "",
+    "### Key Extracted Levels",
+    "",
+    `- ${formatTimeframeLevels("Weekly", weekly)}`,
+    `- ${formatTimeframeLevels("Daily", daily)}`,
+    `- ${formatTimeframeLevels("65-minute", intraday)}`,
+    "",
+    "### Volume / Confirmation",
+    "",
+    "- Volume behavior: [ ] Review visible volume or overlay context if present in the screenshot.",
+    "- Confirmation notes: [ ] Record whether chart behavior confirms the extracted levels.",
+    "",
+    "### Invalidation Notes",
+    "",
+    "- Invalidation context: [ ] Note which level or chart condition would make the reviewed setup no longer relevant."
+  ];
+}
+
+function renderSqueezeReviewTemplate(result: ChartbookSymbolResult): string[] {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+  const rangeFacts = factsWithCompressionRange([daily, weekly, intraday]);
+
+  return [
+    "",
+    "## Squeeze Review Checklist",
+    "",
+    "### Compression Context",
+    "",
+    `- Weekly compression: ${formatCompression(weekly)}`,
+    `- Daily compression: ${formatCompression(daily)}`,
+    `- 65-minute compression: ${formatCompression(intraday)}`,
+    "- Compression notes:",
+    "",
+    "### Range High / Low",
+    "",
+    `- Review range: ${formatCompression(rangeFacts)}`,
+    `- Nearest level context: ${formatNearest(rangeFacts)}`,
+    "",
+    "### Expansion Watch Level",
+    "",
+    `- Level for human review: ${expansionWatchLevel(rangeFacts)}`,
+    "- Expansion notes:",
+    "",
+    "### Risk Notes",
+    "",
+    "- Range failure notes: [ ] Note what would weaken the compression context.",
+    "- Chart risk notes: [ ] Record gap, volatility, or level-cluster concerns visible on the chart."
+  ];
+}
+
+function renderMomentumReviewTemplate(result: ChartbookSymbolResult): string[] {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+
+  return [
+    "",
+    "## Momentum Review Checklist",
+    "",
+    "### Trend Context",
+    "",
+    `- Weekly level context: ${formatNearest(weekly)}`,
+    `- Daily level context: ${formatNearest(daily)}`,
+    "- Trend notes:",
+    "",
+    "### Relative Position To Extracted Levels",
+    "",
+    `- ${formatTimeframeLevels("Weekly", weekly)}`,
+    `- ${formatTimeframeLevels("Daily", daily)}`,
+    `- ${formatTimeframeLevels("65-minute", intraday)}`,
+    "",
+    "### AVWAP Context",
+    "",
+    `- Weekly AVWAP: ${formatAvwap(weekly)}`,
+    `- Daily AVWAP: ${formatAvwap(daily)}`,
+    `- 65-minute AVWAP: ${formatAvwap(intraday)}`,
+    "",
+    "### Continuation / Retest Notes",
+    "",
+    "- Continuation context: [ ] Note whether price is respecting relevant extracted levels.",
+    "- Retest context: [ ] Note levels that price is retesting or rejecting."
+  ];
+}
+
+function renderFocusReviewTemplate(result: ChartbookSymbolResult): string[] {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+
+  return [
+    "",
+    "## Focus Review Checklist",
+    "",
+    "### Cross-Timeframe Context",
+    "",
+    `- Weekly: ${formatNearest(weekly)}`,
+    `- Daily: ${formatNearest(daily)}`,
+    `- 65-minute: ${formatNearest(intraday)}`,
+    "",
+    "### Key Extracted Levels",
+    "",
+    `- ${formatTimeframeLevels("Weekly", weekly)}`,
+    `- ${formatTimeframeLevels("Daily", daily)}`,
+    `- ${formatTimeframeLevels("65-minute", intraday)}`,
+    "",
+    "### Review Notes",
+    "",
+    "- Context notes:",
+    "- Follow-up chart questions:"
+  ];
+}
+
+function renderProfileReviewTemplate(
+  profile: ChartAnalysisProfileName,
+  result: ChartbookSymbolResult
+): string[] {
+  if (profile === "breakout") {
+    return renderBreakoutReviewTemplate(result);
+  }
+
+  if (profile === "squeeze") {
+    return renderSqueezeReviewTemplate(result);
+  }
+
+  if (profile === "momentum") {
+    return renderMomentumReviewTemplate(result);
+  }
+
+  return renderFocusReviewTemplate(result);
+}
+
 export function renderSymbolNotesMarkdown(
   symbol: ChartbookSymbolPlan,
   result: ChartbookSymbolResult,
@@ -580,17 +903,16 @@ export function renderSymbolNotesMarkdown(
   }
 
   lines.push(
+    ...warningsSection(result),
+    ...renderProfileReviewTemplate(plan.profile, result),
     "",
-    "## Codex Notes",
+    "## Manual Notes",
     "",
     "### Weekly",
     "",
-    "",
     "### Daily",
     "",
-    "",
     "### 65-Minute",
-    "",
     "",
     "### Cross-Timeframe",
     ""

@@ -250,8 +250,9 @@ How to read chartbook artifacts:
   compression state, AVWAP, timing levels, and nearest support/resistance when
   TradingView exposes a current chart price, plus extraction or screenshot
   errors when a partial failure happened.
-- Each `notes.md` file embeds that symbol's screenshots and leaves sections for
-  human or Codex chart notes.
+- Each `notes.md` file embeds that symbol's screenshots, surfaces extraction
+  warnings, and includes a profile-aware human review checklist for the
+  selected focus.
 
 Partial failures are recorded in `index.md`, `notes.md`, and the matching
 `*-levels.json` files. Successful captures are kept.
