@@ -45,17 +45,32 @@ import {
 import { DEFAULT_PINE_DRAWING_STUDY_NAME } from "./tradingview/pine-drawings.js";
 import {
   DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
+  DEFAULT_RAW_FIND_MAX_MATCHES,
+  DEFAULT_RAW_SCROLL_AMOUNT,
+  RAW_FIND_MAX_MATCHES_LIMIT,
+  RAW_SCROLL_MAX_AMOUNT,
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
   runRawClick,
   runRawEvaluate,
+  runRawFindElement,
   runRawKeypress,
+  runRawScroll,
+  runRawSelectorClick,
+  runRawSelectorHover,
   runRawTypeText,
   type RawAutomationResult,
   type RawClickOptions,
+  type RawElementSelectorStrategy,
   type RawEvaluateOptions,
+  type RawFindElementOptions,
   type RawInputButton,
   type RawKeypressOptions,
+  type RawScrollDirection,
+  type RawScrollOptions,
+  type RawSelectorClickMethod,
+  type RawSelectorClickOptions,
+  type RawSelectorHoverOptions,
   type RawTypeTextOptions
 } from "./tradingview/raw-automation.js";
 import {
@@ -91,6 +106,10 @@ export interface CliHandlers {
   runRawClick: typeof runRawClick;
   runRawKeypress: typeof runRawKeypress;
   runRawTypeText: typeof runRawTypeText;
+  runRawFindElement: typeof runRawFindElement;
+  runRawSelectorClick: typeof runRawSelectorClick;
+  runRawSelectorHover: typeof runRawSelectorHover;
+  runRawScroll: typeof runRawScroll;
 }
 
 export interface RunCliOptions {
@@ -118,6 +137,10 @@ const USAGE = `Usage:
   tradingview-mcp-cli raw click --x 100 --y 200 [--button left|middle|right] [--port 9222] [--json]
   tradingview-mcp-cli raw keypress --key Escape [--port 9222] [--json]
   tradingview-mcp-cli raw type-text --text "NASDAQ:NVDA" [--port 9222] [--json]
+  tradingview-mcp-cli raw find-element --strategy text|aria-label|data-name|css --value "Watchlist" [--max-matches 10] [--port 9222] [--json]
+  tradingview-mcp-cli raw selector-click --strategy css --value "[data-name=watchlist-button]" [--match-index 0] [--button left|middle|right] [--click-method mouse|dom] [--port 9222] [--json]
+  tradingview-mcp-cli raw selector-hover --strategy aria-label --value "Watchlist" [--match-index 0] [--port 9222] [--json]
+  tradingview-mcp-cli raw scroll --direction up|down|left|right [--amount 600] [--x 500] [--y 500] [--port 9222] [--json]
   tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
   tradingview-mcp-cli universe resolve [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--json]
 
@@ -132,6 +155,7 @@ npm scripts:
   npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
   npm run tv:drawings -- --port 9222 --json
   TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- evaluate --expression "document.title" --port 9222 --json
+  TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- find-element --strategy text --value "Watchlist" --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
 `;
@@ -152,7 +176,11 @@ function handlersWithDefaults(
     runRawEvaluate: handlers?.runRawEvaluate ?? runRawEvaluate,
     runRawClick: handlers?.runRawClick ?? runRawClick,
     runRawKeypress: handlers?.runRawKeypress ?? runRawKeypress,
-    runRawTypeText: handlers?.runRawTypeText ?? runRawTypeText
+    runRawTypeText: handlers?.runRawTypeText ?? runRawTypeText,
+    runRawFindElement: handlers?.runRawFindElement ?? runRawFindElement,
+    runRawSelectorClick: handlers?.runRawSelectorClick ?? runRawSelectorClick,
+    runRawSelectorHover: handlers?.runRawSelectorHover ?? runRawSelectorHover,
+    runRawScroll: handlers?.runRawScroll ?? runRawScroll
   };
 }
 
@@ -531,6 +559,106 @@ function parseRawButton(value: string | undefined): RawInputButton {
   throw new Error("--button must be left, middle, or right.");
 }
 
+function parseRawSelectorStrategy(
+  value: string | undefined
+): RawElementSelectorStrategy {
+  if (
+    value === "text" ||
+    value === "aria-label" ||
+    value === "data-name" ||
+    value === "css"
+  ) {
+    return value;
+  }
+
+  throw new Error("--strategy must be text, aria-label, data-name, or css.");
+}
+
+function parseRawClickMethod(
+  value: string | undefined
+): RawSelectorClickMethod {
+  const method = value ?? "mouse";
+
+  if (method === "mouse" || method === "dom") {
+    return method;
+  }
+
+  throw new Error("--click-method must be mouse or dom.");
+}
+
+function parseRawScrollDirection(
+  value: string | undefined
+): RawScrollDirection {
+  if (value === "up" || value === "down" || value === "left" || value === "right") {
+    return value;
+  }
+
+  throw new Error("--direction must be up, down, left, or right.");
+}
+
+function parseOptionalNonNegativeInteger(
+  value: string | undefined,
+  label: string
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+
+  return parsed;
+}
+
+function rawSelectorOptionsFromCli(
+  parsed: Record<string, string | boolean | string[] | undefined>,
+  options: CommonCliOptions
+): {
+  strategy: RawElementSelectorStrategy;
+  value: string;
+  maxMatches: number;
+  host: string;
+  port: number;
+  timeoutMs: number;
+  appPath?: string;
+} {
+  const value = getStringOption(parsed, "value");
+
+  if (!value) {
+    throw new Error("--value is required for raw selector commands.");
+  }
+
+  const maxMatchesValue = getStringOption(parsed, "max-matches");
+  const maxMatches = maxMatchesValue
+    ? parsePositiveInteger(maxMatchesValue, "--max-matches")
+    : DEFAULT_RAW_FIND_MAX_MATCHES;
+
+  if (maxMatches > RAW_FIND_MAX_MATCHES_LIMIT) {
+    throw new Error(
+      `--max-matches must be ${RAW_FIND_MAX_MATCHES_LIMIT} or less.`
+    );
+  }
+
+  const rawOptions = {
+    strategy: parseRawSelectorStrategy(getStringOption(parsed, "strategy")),
+    value,
+    maxMatches,
+    host: options.host,
+    port: options.port,
+    timeoutMs: options.timeoutMs
+  };
+
+  return options.appPath
+    ? {
+        ...rawOptions,
+        appPath: options.appPath
+      }
+    : rawOptions;
+}
+
 function chartbookSelectionSummary(
   configPath: string,
   groupIds: string[] | undefined,
@@ -630,6 +758,15 @@ export async function runCli(
         button: {
           type: "string"
         },
+        amount: {
+          type: "string"
+        },
+        "click-method": {
+          type: "string"
+        },
+        direction: {
+          type: "string"
+        },
         expression: {
           type: "string"
         },
@@ -637,6 +774,12 @@ export async function runCli(
           type: "string"
         },
         "max-result-bytes": {
+          type: "string"
+        },
+        "max-matches": {
+          type: "string"
+        },
+        "match-index": {
           type: "string"
         },
         "output-dir": {
@@ -668,6 +811,9 @@ export async function runCli(
         "study-name": {
           type: "string"
         },
+        strategy: {
+          type: "string"
+        },
         text: {
           type: "string"
         },
@@ -678,6 +824,9 @@ export async function runCli(
           type: "string"
         },
         x: {
+          type: "string"
+        },
+        value: {
           type: "string"
         },
         y: {
@@ -1070,9 +1219,91 @@ export async function runCli(
         }
 
         result = await handlers.runRawTypeText(rawOptions);
+      } else if (subcommand === "find-element") {
+        const rawOptions: RawFindElementOptions = rawSelectorOptionsFromCli(
+          parsed.values,
+          options
+        );
+
+        result = await handlers.runRawFindElement(rawOptions);
+      } else if (subcommand === "selector-click") {
+        const selectorOptions = rawSelectorOptionsFromCli(
+          parsed.values,
+          options
+        );
+        const rawOptions: RawSelectorClickOptions = {
+          ...selectorOptions,
+          button: parseRawButton(getStringOption(parsed.values, "button")),
+          clickMethod: parseRawClickMethod(
+            getStringOption(parsed.values, "click-method")
+          )
+        };
+        const matchIndex = parseOptionalNonNegativeInteger(
+          getStringOption(parsed.values, "match-index"),
+          "--match-index"
+        );
+
+        if (matchIndex !== undefined) {
+          rawOptions.matchIndex = matchIndex;
+        }
+
+        result = await handlers.runRawSelectorClick(rawOptions);
+      } else if (subcommand === "selector-hover") {
+        const selectorOptions = rawSelectorOptionsFromCli(
+          parsed.values,
+          options
+        );
+        const rawOptions: RawSelectorHoverOptions = {
+          ...selectorOptions
+        };
+        const matchIndex = parseOptionalNonNegativeInteger(
+          getStringOption(parsed.values, "match-index"),
+          "--match-index"
+        );
+
+        if (matchIndex !== undefined) {
+          rawOptions.matchIndex = matchIndex;
+        }
+
+        result = await handlers.runRawSelectorHover(rawOptions);
+      } else if (subcommand === "scroll") {
+        const amountValue = getStringOption(parsed.values, "amount");
+        const amount = amountValue
+          ? parsePositiveInteger(amountValue, "--amount")
+          : DEFAULT_RAW_SCROLL_AMOUNT;
+
+        if (amount > RAW_SCROLL_MAX_AMOUNT) {
+          throw new Error(`--amount must be ${RAW_SCROLL_MAX_AMOUNT} or less.`);
+        }
+
+        const rawOptions: RawScrollOptions = {
+          direction: parseRawScrollDirection(
+            getStringOption(parsed.values, "direction")
+          ),
+          amount,
+          host: options.host,
+          port: options.port,
+          timeoutMs: options.timeoutMs
+        };
+        const rawX = getStringOption(parsed.values, "x");
+        const rawY = getStringOption(parsed.values, "y");
+
+        if (rawX !== undefined) {
+          rawOptions.x = parseNonNegativeNumber(rawX, "--x");
+        }
+
+        if (rawY !== undefined) {
+          rawOptions.y = parseNonNegativeNumber(rawY, "--y");
+        }
+
+        if (options.appPath) {
+          rawOptions.appPath = options.appPath;
+        }
+
+        result = await handlers.runRawScroll(rawOptions);
       } else {
         throw new Error(
-          "Raw command must be evaluate, click, keypress, or type-text."
+          "Raw command must be evaluate, click, keypress, type-text, find-element, selector-click, selector-hover, or scroll."
         );
       }
     } catch (error: unknown) {

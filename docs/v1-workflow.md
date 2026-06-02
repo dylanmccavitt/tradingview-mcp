@@ -91,8 +91,9 @@ browser-control tools.
 
 ## Experimental Raw Automation Boundary
 
-The first experimental raw automation slice supports bounded CDP/page
-evaluation plus basic mouse, keyboard, and text input against the active local
+The experimental raw automation slice supports bounded CDP/page evaluation,
+basic mouse, keyboard, and text input, visible UI element discovery,
+selector-based click/hover, and bounded scroll against the active local
 TradingView chart target. Raw automation is not part of the default high-level
 chartbook workflow.
 
@@ -115,6 +116,10 @@ Current enabled MCP raw tools are:
 - `tradingview_raw_click`
 - `tradingview_raw_keypress`
 - `tradingview_raw_type_text`
+- `tradingview_raw_find_element`
+- `tradingview_raw_selector_click`
+- `tradingview_raw_selector_hover`
+- `tradingview_raw_scroll`
 
 The matching CLI commands are:
 
@@ -123,6 +128,10 @@ TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- evaluate --expression 
 TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- click --x 100 --y 200 --button left --port 9222
 TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- keypress --key Escape --port 9222
 TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- type-text --text "NASDAQ:NVDA" --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- find-element --strategy text --value "Watchlist" --port 9222 --json
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- selector-click --strategy css --value "[data-name=watchlist-button]" --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- selector-hover --strategy aria-label --value "Watchlist" --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- scroll --direction down --amount 600 --port 9222
 ```
 
 Raw tools must target only the active local `tradingview.com/chart` page found

@@ -6,7 +6,11 @@ import {
   isRawAutomationEnabled,
   runRawClick,
   runRawEvaluate,
+  runRawFindElement,
   runRawKeypress,
+  runRawScroll,
+  runRawSelectorClick,
+  runRawSelectorHover,
   runRawTypeText,
   type RawTradingViewPageClient
 } from "../src/tradingview/raw-automation.js";
@@ -62,7 +66,14 @@ class FakeRawPageClient implements RawTradingViewPageClient {
     args: unknown[];
   }[] = [];
 
-  constructor(readonly evaluateValue: unknown = { title: "NVDA" }) {}
+  private evaluateValues: unknown[];
+
+  constructor(evaluateValue: unknown = { title: "NVDA" }) {
+    const values = Array.isArray(evaluateValue)
+      ? (evaluateValue as unknown[])
+      : [evaluateValue];
+    this.evaluateValues = values.slice();
+  }
 
   evaluate(
     expression: string,
@@ -74,7 +85,11 @@ class FakeRawPageClient implements RawTradingViewPageClient {
       method: "evaluate",
       args: [expression, options]
     });
-    return Promise.resolve(this.evaluateValue);
+    return Promise.resolve(
+      this.evaluateValues.length > 1
+        ? this.evaluateValues.shift()
+        : this.evaluateValues[0]
+    );
   }
 
   click(options: {
@@ -101,6 +116,27 @@ class FakeRawPageClient implements RawTradingViewPageClient {
     this.calls.push({
       method: "typeText",
       args: [text]
+    });
+    return Promise.resolve();
+  }
+
+  hover(options: { x: number; y: number }): Promise<void> {
+    this.calls.push({
+      method: "hover",
+      args: [options]
+    });
+    return Promise.resolve();
+  }
+
+  scroll(options: {
+    direction: "up" | "down" | "left" | "right";
+    amount: number;
+    x: number;
+    y: number;
+  }): Promise<void> {
+    this.calls.push({
+      method: "scroll",
+      args: [options]
     });
     return Promise.resolve();
   }
@@ -274,4 +310,280 @@ void test("raw input primitives validate payloads and dispatch click, keypress, 
       args: ["NVDA"]
     }
   ]);
+});
+
+void test("raw find-element returns compact visible element metadata", async () => {
+  const fakeClient = new FakeRawPageClient({
+    query: {
+      strategy: "text",
+      value: "Watchlist"
+    },
+    count: 1,
+    truncated: false,
+    elements: [
+      {
+        index: 0,
+        tagName: "button",
+        text: "Watchlist",
+        ariaLabel: "Open Watchlist",
+        dataName: "watchlist-button",
+        rect: {
+          x: 10,
+          y: 20,
+          width: 80,
+          height: 30,
+          centerX: 50,
+          centerY: 35
+        }
+      }
+    ]
+  });
+
+  const result = await runRawFindElement({
+    strategy: "text",
+    value: "Watchlist",
+    maxMatches: 5,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(fakeClient)
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, "find-element");
+  assert.deepEqual(result.value, {
+    query: {
+      strategy: "text",
+      value: "Watchlist"
+    },
+    count: 1,
+    truncated: false,
+    elements: [
+      {
+        index: 0,
+        tagName: "button",
+        text: "Watchlist",
+        ariaLabel: "Open Watchlist",
+        dataName: "watchlist-button",
+        rect: {
+          x: 10,
+          y: 20,
+          width: 80,
+          height: 30,
+          centerX: 50,
+          centerY: 35
+        }
+      }
+    ]
+  });
+  assert.equal(fakeClient.calls[0]?.method, "evaluate");
+  assert.match(String(fakeClient.calls[0]?.args[0]), /querySelectorAll/);
+  assert.equal(fakeClient.closed, true);
+});
+
+void test("raw selector actions report not-found and ambiguous matches clearly", async () => {
+  const notFoundClient = new FakeRawPageClient({
+    query: {
+      strategy: "aria-label",
+      value: "Missing"
+    },
+    count: 0,
+    truncated: false,
+    elements: []
+  });
+  const ambiguousClient = new FakeRawPageClient({
+    query: {
+      strategy: "css",
+      value: ".button"
+    },
+    count: 2,
+    truncated: false,
+    elements: [
+      {
+        index: 0,
+        tagName: "button",
+        text: "One",
+        rect: { x: 0, y: 0, width: 20, height: 20, centerX: 10, centerY: 10 }
+      },
+      {
+        index: 1,
+        tagName: "button",
+        text: "Two",
+        rect: { x: 30, y: 0, width: 20, height: 20, centerX: 40, centerY: 10 }
+      }
+    ]
+  });
+
+  const notFound = await runRawSelectorClick({
+    strategy: "aria-label",
+    value: "Missing",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(notFoundClient)
+  });
+  const ambiguous = await runRawSelectorHover({
+    strategy: "css",
+    value: ".button",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(ambiguousClient)
+  });
+
+  assert.equal(notFound.ok, false);
+  assert.match(notFound.error ?? "", /did not match/i);
+  assert.equal(ambiguous.ok, false);
+  assert.match(ambiguous.error ?? "", /matched 2 visible elements/i);
+});
+
+void test("raw selector click rejects forbidden and broad click scopes", async () => {
+  let clientCalled = false;
+  const forbiddenText = await runRawSelectorClick({
+    strategy: "text",
+    value: "Buy order",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      clientCalled = true;
+      return Promise.resolve(new FakeRawPageClient());
+    }
+  });
+  const broadCss = await runRawSelectorClick({
+    strategy: "css",
+    value: "body *",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      clientCalled = true;
+      return Promise.resolve(new FakeRawPageClient());
+    }
+  });
+  const accountElementClient = new FakeRawPageClient({
+    query: {
+      strategy: "data-name",
+      value: "menu-item"
+    },
+    count: 1,
+    truncated: false,
+    elements: [
+      {
+        index: 0,
+        tagName: "button",
+        text: "Account security",
+        dataName: "menu-item",
+        rect: { x: 0, y: 0, width: 20, height: 20, centerX: 10, centerY: 10 }
+      }
+    ]
+  });
+
+  const accountElement = await runRawSelectorClick({
+    strategy: "data-name",
+    value: "menu-item",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(accountElementClient)
+  });
+
+  assert.equal(forbiddenText.ok, false);
+  assert.match(forbiddenText.error ?? "", /broker\/order|account|security/i);
+  assert.equal(broadCss.ok, false);
+  assert.match(broadCss.error ?? "", /narrow TradingView chart-control/i);
+  assert.equal(clientCalled, false);
+  assert.equal(accountElement.ok, false);
+  assert.match(accountElement.error ?? "", /account|security/i);
+  assert.equal(accountElementClient.calls.length, 1);
+});
+
+void test("raw selector click, hover, and scroll dispatch bounded page input", async () => {
+  const elementPayload = {
+    query: {
+      strategy: "data-name",
+      value: "drawing-toolbar"
+    },
+    count: 1,
+    truncated: false,
+    elements: [
+      {
+        index: 0,
+        tagName: "button",
+        dataName: "drawing-toolbar",
+        rect: {
+          x: 100,
+          y: 50,
+          width: 40,
+          height: 30,
+          centerX: 120,
+          centerY: 65
+        }
+      }
+    ]
+  };
+  const fakeClient = new FakeRawPageClient(elementPayload);
+
+  const click = await runRawSelectorClick({
+    strategy: "data-name",
+    value: "drawing-toolbar",
+    button: "middle",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(fakeClient)
+  });
+  const hover = await runRawSelectorHover({
+    strategy: "data-name",
+    value: "drawing-toolbar",
+    matchIndex: 0,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(fakeClient)
+  });
+  const scroll = await runRawScroll({
+    direction: "down",
+    amount: 450,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => Promise.resolve(fakeClient)
+  });
+
+  assert.equal(click.ok, true);
+  assert.equal(hover.ok, true);
+  assert.equal(scroll.ok, true);
+  assert.deepEqual(fakeClient.calls, [
+    {
+      method: "evaluate",
+      args: [fakeClient.calls[0]?.args[0], undefined]
+    },
+    {
+      method: "click",
+      args: [{ x: 120, y: 65, button: "middle" }]
+    },
+    {
+      method: "evaluate",
+      args: [fakeClient.calls[2]?.args[0], undefined]
+    },
+    {
+      method: "hover",
+      args: [{ x: 120, y: 65 }]
+    },
+    {
+      method: "scroll",
+      args: [{ direction: "down", amount: 450, x: 500, y: 500 }]
+    }
+  ]);
+});
+
+void test("raw selector validation rejects invalid payloads before CDP", async () => {
+  let clientCalled = false;
+  const invalidSelector = await runRawFindElement({
+    strategy: "css",
+    value: "",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      clientCalled = true;
+      return Promise.resolve(new FakeRawPageClient());
+    }
+  });
+  const invalidScroll = await runRawScroll({
+    direction: "down",
+    amount: 5000,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      clientCalled = true;
+      return Promise.resolve(new FakeRawPageClient());
+    }
+  });
+
+  assert.equal(invalidSelector.ok, false);
+  assert.match(invalidSelector.error ?? "", /selector value/i);
+  assert.equal(invalidScroll.ok, false);
+  assert.match(invalidScroll.error ?? "", /scroll amount/i);
+  assert.equal(clientCalled, false);
 });
