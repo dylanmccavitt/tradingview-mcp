@@ -15,14 +15,15 @@ export const PROJECT_GUARDRAILS = {
 } as const;
 
 export const RAW_AUTOMATION_BOUNDARY = {
-  status: "future_opt_in_experimental",
+  status: "opt_in_experimental",
   gateEnv: "TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION",
-  toolPrefixes: ["tradingview_raw_", "tradingview_draw_"],
+  toolPrefixes: ["tradingview_raw_", "tradingview_draw_", "tradingview_pine_"],
   allowed: [
     "local_chart_target_evaluate",
     "local_chart_target_input",
     "native_tradingview_drawings",
-    "direct_chart_manipulation"
+    "direct_chart_manipulation",
+    "explicit_pine_editor_actions"
   ],
   constraints: [
     "disabled_by_default",

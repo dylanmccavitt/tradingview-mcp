@@ -97,7 +97,8 @@ selector-based click/hover, and bounded scroll against the active local
 TradingView chart target. It also supports MCP-only direct chart controls and
 native TradingView drawing tools when the active chart exposes the needed
 chart/drawing APIs, plus quant drawing macros for Fib-style levels,
-measured-move projections, and range projections. Raw automation is not part of the default high-level chartbook workflow.
+measured-move projections, range projections, and MCP-only Pine Editor tools.
+Raw automation is not part of the default high-level chartbook workflow.
 
 Raw automation tools must be explicitly enabled with:
 
@@ -111,6 +112,8 @@ Raw tool names must use clear namespaces:
   direct chart controls
 - `tradingview_draw_*` for native TradingView drawing creation, inspection, and
   removal
+- `tradingview_pine_*` for explicit Pine Editor source, compile, save, errors,
+  and console actions
 
 Current enabled MCP raw tools are:
 
@@ -136,6 +139,13 @@ Current enabled MCP raw tools are:
 - `tradingview_draw_clear_all`
 - `tradingview_draw_fib_levels`
 - `tradingview_draw_projection`
+- `tradingview_pine_open_editor`
+- `tradingview_pine_set_source`
+- `tradingview_pine_get_source`
+- `tradingview_pine_get_errors`
+- `tradingview_pine_get_console`
+- `tradingview_pine_compile`
+- `tradingview_pine_save`
 
 Native drawing tools create supported shapes from explicit price/time anchors,
 list drawing ids/types/names when available, inspect drawing points and
@@ -147,6 +157,10 @@ mechanical Fib-style, measured-move, and range-projection review levels from
 explicit anchors or caller-selected extracted range facts. They return created
 drawing ids, anchor metadata, levels used, and warnings; outputs are review
 context only, not predictions, recommendations, rankings, or advice.
+Pine Editor tools can open or focus the editor, set bounded source without
+compiling or saving, read bounded source with truncation warnings, read compact
+compile markers and console/output rows, and run explicit compile or save calls
+as separate user-directed actions.
 
 The matching CLI commands are:
 

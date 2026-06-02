@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, and native drawing tools against the active chart target
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, native drawing tools, and Pine Editor tools against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -50,8 +50,9 @@ evaluate, or generic browser-control tools.
 
 ADR 0011 documents the experimental raw automation surface. Raw tools are
 disabled by default, gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`,
-namespaced as `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the
-active local TradingView chart target. The current gated raw MCP tools are:
+namespaced as `tradingview_raw_*`, `tradingview_draw_*`, or
+`tradingview_pine_*`, and scoped to the active local TradingView chart target.
+The current gated raw MCP tools are:
 
 - `tradingview_raw_evaluate`
 - `tradingview_raw_click`
@@ -75,6 +76,13 @@ active local TradingView chart target. The current gated raw MCP tools are:
 - `tradingview_draw_clear_all`
 - `tradingview_draw_fib_levels`
 - `tradingview_draw_projection`
+- `tradingview_pine_open_editor`
+- `tradingview_pine_set_source`
+- `tradingview_pine_get_source`
+- `tradingview_pine_get_errors`
+- `tradingview_pine_get_console`
+- `tradingview_pine_compile`
+- `tradingview_pine_save`
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -145,11 +153,21 @@ local JSON records which macro context was associated with the capture.
 Projected macro levels are mechanical chart-review context only and must not be
 presented as predictions, recommendations, rankings, or financial advice.
 
+The same gated MCP surface exposes Pine Editor automation for explicit local
+Pine iteration. `tradingview_pine_open_editor` opens or focuses the Pine Editor
+panel. `tradingview_pine_set_source` sets bounded source but does not compile
+or save. `tradingview_pine_get_source` reads bounded source and reports
+truncation warnings for larger scripts. `tradingview_pine_get_errors` and
+`tradingview_pine_get_console` return compact editor markers and console/output
+rows. `tradingview_pine_compile` and `tradingview_pine_save` are explicit
+separate calls. These tools use exposed local TradingView/Monaco editor
+surfaces only and report unsupported editor/API paths clearly.
+
 `src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
 `raw type-text`, `raw find-element`, `raw selector-click`,
 `raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
 matching input/selector tools plus the direct chart state/control
-`tradingview_raw_*` MCP tools only when
+`tradingview_raw_*`, `tradingview_draw_*`, and `tradingview_pine_*` MCP tools only when
 `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 
@@ -313,7 +331,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 4. Codex sees only the default high-level v1 charting tools unless the server
    process is intentionally started with
    `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, which also registers the gated
-   `tradingview_raw_*` primitives.
+   `tradingview_raw_*`, `tradingview_draw_*`, and `tradingview_pine_*` tools.
 
 ## Important Invariants
 

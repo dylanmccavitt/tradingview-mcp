@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, local chartbook artifact output, and an explicitly gated experimental raw automation surface for bounded chart-target CDP primitives.
+This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, local chartbook artifact output, and an explicitly gated experimental raw automation surface for bounded chart-target CDP primitives, native drawings, chart controls, and Pine Editor actions.
 
 ## Requirements
 
@@ -320,6 +320,14 @@ browser controls. When the server process is started with
 - `tradingview_draw_clear_all`
 - `tradingview_draw_fib_levels`
 - `tradingview_draw_projection`
+- `tradingview_pine_*`
+- `tradingview_pine_open_editor`
+- `tradingview_pine_set_source`
+- `tradingview_pine_get_source`
+- `tradingview_pine_get_errors`
+- `tradingview_pine_get_console`
+- `tradingview_pine_compile`
+- `tradingview_pine_save`
 
 These raw tools are experimental, scoped only to the active local TradingView
 chart target, compact by default, and still governed by the no broker/order,
@@ -330,6 +338,10 @@ drawings for mechanical chart-review levels and return metadata that can be
 recorded in current-chart or chartbook artifacts via `macroMetadata`.
 `tradingview_draw_clear_all` requires an explicit `confirmClearAll: true`
 argument because it removes every native drawing on the active chart.
+Pine Editor tools are MCP-only in this slice. They can open/focus the editor,
+set source without compiling or saving, read bounded source with truncation
+warnings for large scripts, read compact errors and console output, and run
+explicit compile or save calls as separate user-directed actions.
 
 ## V1 Boundary
 

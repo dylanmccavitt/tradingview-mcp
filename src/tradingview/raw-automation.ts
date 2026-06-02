@@ -45,6 +45,12 @@ export const RAW_ENTITY_ID_MAX_CHARS = 200;
 export const RAW_DRAWING_TEXT_MAX_CHARS = 500;
 export const RAW_DRAWING_MAX_POINTS = 2;
 export const RAW_DRAWING_MAX_OVERRIDES = 40;
+export const RAW_PINE_SOURCE_MAX_CHARS = 200_000;
+export const DEFAULT_RAW_PINE_GET_SOURCE_MAX_CHARS = 12_000;
+export const RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT = 100_000;
+export const DEFAULT_RAW_PINE_COMPILE_SETTLE_MS = 2_500;
+export const DEFAULT_RAW_PINE_SAVE_SETTLE_MS = 800;
+export const RAW_PINE_ACTION_SETTLE_MS_LIMIT = 10_000;
 
 const RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS = [
   /\baccount\b/i,
@@ -105,7 +111,14 @@ export type RawAutomationAction =
   | "draw-remove"
   | "draw-clear-all"
   | "draw-fib-levels"
-  | "draw-projection";
+  | "draw-projection"
+  | "pine-open-editor"
+  | "pine-set-source"
+  | "pine-get-source"
+  | "pine-get-errors"
+  | "pine-get-console"
+  | "pine-compile"
+  | "pine-save";
 
 export interface RawElementSummary {
   index: number;
@@ -312,6 +325,28 @@ export interface RawDrawProjectionOptions
   extends RawAutomationBaseOptions,
     BuildProjectionMacroOptions {}
 
+export type RawPineOpenEditorOptions = RawAutomationBaseOptions;
+
+export interface RawPineSetSourceOptions extends RawAutomationBaseOptions {
+  source: string;
+}
+
+export interface RawPineGetSourceOptions extends RawAutomationBaseOptions {
+  maxSourceChars?: number;
+}
+
+export type RawPineGetErrorsOptions = RawAutomationBaseOptions;
+
+export type RawPineGetConsoleOptions = RawAutomationBaseOptions;
+
+export interface RawPineCompileOptions extends RawAutomationBaseOptions {
+  settleMs?: number;
+}
+
+export interface RawPineSaveOptions extends RawAutomationBaseOptions {
+  settleMs?: number;
+}
+
 export interface RawAutomationResult {
   ok: boolean;
   action: RawAutomationAction;
@@ -407,6 +442,7 @@ function successResult(
     executedAt: string;
     target: CdpTarget;
     value?: unknown;
+    warnings?: string[];
   }
 ): RawAutomationResult {
   const result: RawAutomationResult = {
@@ -415,7 +451,7 @@ function successResult(
     endpoint: options.endpoint,
     executedAt: options.executedAt,
     target: options.target,
-    warnings: []
+    warnings: options.warnings ?? []
   };
 
   if ("value" in options) {
@@ -767,6 +803,42 @@ function invalidClearAllMessage(confirmClearAll: boolean): string | null {
   return confirmClearAll
     ? null
     : "Raw drawing clear-all requires confirmClearAll=true because it removes all native drawings on the active chart.";
+}
+
+function invalidPineSourceMessage(source: string): string | null {
+  if (source.length === 0) {
+    return "Raw Pine source is required.";
+  }
+
+  if (source.length > RAW_PINE_SOURCE_MAX_CHARS) {
+    return `Raw Pine source must be ${RAW_PINE_SOURCE_MAX_CHARS} characters or fewer.`;
+  }
+
+  return null;
+}
+
+function invalidPineGetSourceLimitMessage(maxSourceChars: number): string | null {
+  if (
+    !Number.isInteger(maxSourceChars) ||
+    maxSourceChars <= 0 ||
+    maxSourceChars > RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT
+  ) {
+    return `Raw Pine source retrieval maxSourceChars must be an integer from 1 to ${RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT}.`;
+  }
+
+  return null;
+}
+
+function invalidPineSettleMsMessage(settleMs: number): string | null {
+  if (
+    !Number.isInteger(settleMs) ||
+    settleMs < 0 ||
+    settleMs > RAW_PINE_ACTION_SETTLE_MS_LIMIT
+  ) {
+    return `Raw Pine settleMs must be an integer from 0 to ${RAW_PINE_ACTION_SETTLE_MS_LIMIT}.`;
+  }
+
+  return null;
 }
 
 function normalizedClickScopeText(value: string): string {
@@ -1475,11 +1547,424 @@ async (command, args) => {
 }
 `;
 
+const RAW_PINE_EDITOR_EVALUATOR = String.raw`
+async (command, args) => {
+  const MAX_TEXT = 240;
+  const MAX_ERRORS = 50;
+  const MAX_CONSOLE_ROWS = 30;
+  const root = globalThis;
+
+  function compactText(value, maxText = MAX_TEXT) {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.replace(/\s+/g, " ").trim();
+    return trimmed.length > maxText ? trimmed.slice(0, maxText) + "..." : trimmed;
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function visible(element) {
+    if (!element || typeof element.getBoundingClientRect !== "function") {
+      return false;
+    }
+    const rect = element.getBoundingClientRect();
+    const style =
+      typeof getComputedStyle === "function"
+        ? getComputedStyle(element)
+        : { display: "block", visibility: "visible" };
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.display !== "none" &&
+      style.visibility !== "hidden"
+    );
+  }
+
+  function editorFromMonacoGlobal() {
+    const monacoEditor = root.monaco?.editor;
+    if (!monacoEditor || typeof monacoEditor.getEditors !== "function") {
+      return undefined;
+    }
+    try {
+      const editors = monacoEditor.getEditors();
+      const editor = Array.isArray(editors) ? editors[0] : undefined;
+      return editor ? { editor, env: { editor: monacoEditor } } : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function editorFromReactFiber() {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+    const container =
+      document.querySelector(".monaco-editor.pine-editor-monaco") ||
+      document.querySelector(".pine-editor-monaco") ||
+      document.querySelector("[class*=pine-editor] .monaco-editor");
+    if (!container) {
+      return undefined;
+    }
+    let element = container;
+    let fiberKey;
+    for (let index = 0; index < 20 && element; index += 1) {
+      fiberKey = Object.keys(element).find((key) => key.startsWith("__reactFiber$"));
+      if (fiberKey) {
+        break;
+      }
+      element = element.parentElement;
+    }
+    if (!fiberKey || !element) {
+      return undefined;
+    }
+    let current = element[fiberKey];
+    for (let depth = 0; depth < 20 && current; depth += 1) {
+      const env = current.memoizedProps?.value?.monacoEnv;
+      if (env?.editor && typeof env.editor.getEditors === "function") {
+        const editors = env.editor.getEditors();
+        const editor = Array.isArray(editors) ? editors[0] : undefined;
+        if (editor) {
+          return { editor, env };
+        }
+      }
+      current = current.return;
+    }
+    return undefined;
+  }
+
+  function findMonacoEditor() {
+    return editorFromMonacoGlobal() || editorFromReactFiber();
+  }
+
+  function clickPineButton() {
+    if (typeof document === "undefined") {
+      return false;
+    }
+    const candidates = [
+      '[aria-label="Pine"]',
+      '[aria-label="Pine Editor"]',
+      '[data-name="pine-dialog-button"]',
+      '[data-name="pine-editor"]'
+    ];
+    for (const selector of candidates) {
+      const element = document.querySelector(selector);
+      if (element && typeof element.click === "function") {
+        element.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function ensureEditorOpen() {
+    if (findMonacoEditor()) {
+      return { ready: true, opened: false, method: "already-open", warnings: [] };
+    }
+    const warnings = [];
+    const bottomWidgetBar = root.TradingView?.bottomWidgetBar;
+    let method = "none";
+    try {
+      if (bottomWidgetBar && typeof bottomWidgetBar.activateScriptEditorTab === "function") {
+        bottomWidgetBar.activateScriptEditorTab();
+        method = "activateScriptEditorTab";
+      } else if (bottomWidgetBar && typeof bottomWidgetBar.showWidget === "function") {
+        bottomWidgetBar.showWidget("pine-editor");
+        method = "showWidget";
+      } else if (clickPineButton()) {
+        method = "button-click";
+      } else {
+        warnings.push("TradingView Pine Editor opener was not exposed; open the Pine Editor manually and retry.");
+      }
+    } catch (error) {
+      warnings.push("Pine Editor opener failed: " + String(error?.message ?? error));
+    }
+    for (let attempt = 0; attempt < 25; attempt += 1) {
+      if (findMonacoEditor()) {
+        return { ready: true, opened: true, method, warnings };
+      }
+      await sleep(100);
+    }
+    return {
+      ready: false,
+      opened: method !== "none",
+      method,
+      warnings,
+      error: "Could not open or focus the TradingView Pine Editor, or Monaco was not exposed."
+    };
+  }
+
+  function lineCount(source) {
+    return source.length === 0 ? 0 : source.split("\n").length;
+  }
+
+  function severityName(value) {
+    if (value === 8 || value === "8") {
+      return "error";
+    }
+    if (value === 4 || value === "4") {
+      return "warning";
+    }
+    if (value === 2 || value === "2") {
+      return "info";
+    }
+    if (value === 1 || value === "1") {
+      return "hint";
+    }
+    return typeof value === "string" ? value.toLowerCase() : "unknown";
+  }
+
+  function readErrors(editorResult) {
+    const model =
+      typeof editorResult.editor.getModel === "function"
+        ? editorResult.editor.getModel()
+        : undefined;
+    if (!model) {
+      return {
+        hasErrors: false,
+        errorCount: 0,
+        errors: [],
+        warnings: ["Pine Editor model was not exposed, so compile markers could not be read."]
+      };
+    }
+    const markerReader =
+      editorResult.env?.editor?.getModelMarkers ??
+      root.monaco?.editor?.getModelMarkers;
+    if (typeof markerReader !== "function") {
+      return {
+        hasErrors: false,
+        errorCount: 0,
+        errors: [],
+        warnings: ["Monaco model marker reader was not exposed."]
+      };
+    }
+    const markers = markerReader({ resource: model.uri });
+    const normalized = (Array.isArray(markers) ? markers : [])
+      .map((marker) => ({
+        line: Number(marker.startLineNumber ?? marker.line ?? 0),
+        column: Number(marker.startColumn ?? marker.column ?? 0),
+        endLine: Number(marker.endLineNumber ?? marker.endLine ?? marker.startLineNumber ?? 0),
+        endColumn: Number(marker.endColumn ?? marker.startColumn ?? 0),
+        severity: severityName(marker.severity),
+        message: compactText(String(marker.message ?? ""))
+      }))
+      .filter((marker) => marker.message)
+      .slice(0, MAX_ERRORS);
+    const errorCount = normalized.filter((marker) => marker.severity === "error").length;
+    return {
+      hasErrors: errorCount > 0,
+      errorCount,
+      markerCount: Array.isArray(markers) ? markers.length : 0,
+      truncated: Array.isArray(markers) && markers.length > MAX_ERRORS,
+      errors: normalized
+    };
+  }
+
+  function buttonText(element) {
+    return compactText(String(element?.textContent ?? element?.innerText ?? ""));
+  }
+
+  function clickCompileButton() {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+    const buttons = Array.from(document.querySelectorAll("button"));
+    let fallback;
+    for (const button of buttons) {
+      if (!visible(button)) {
+        continue;
+      }
+      const text = buttonText(button) ?? "";
+      if (!fallback && /^(add to chart|update on chart)$/i.test(text)) {
+        fallback = button;
+      }
+    }
+    if (fallback) {
+      const text = buttonText(fallback) ?? "Add or update chart";
+      fallback.click();
+      return text;
+    }
+    return undefined;
+  }
+
+  function clickSaveButtonOrShortcut() {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+    const buttons = Array.from(document.querySelectorAll("button"));
+    for (const button of buttons) {
+      if (!visible(button)) {
+        continue;
+      }
+      const text = buttonText(button) ?? "";
+      const aria = String(button.getAttribute?.("aria-label") ?? "");
+      if (/^save$/i.test(text) || /^save$/i.test(aria)) {
+        button.click();
+        return text || aria;
+      }
+    }
+    return undefined;
+  }
+
+  function readConsoleRows() {
+    if (typeof document === "undefined") {
+      return [];
+    }
+    const selectors = [
+      '[class*="consoleRow"]',
+      '[class*="consoleLine"]',
+      '[class*="log-"]',
+      '[class*="pine"] [class*="message"]',
+      '[class*="pine"] [class*="console"]',
+      '[class*="layout__area--bottom"] [class*="message"]'
+    ];
+    const seen = new Set();
+    const rows = [];
+    for (const selector of selectors) {
+      for (const row of Array.from(document.querySelectorAll(selector))) {
+        const message = compactText(String(row.textContent ?? ""));
+        if (!message || seen.has(message)) {
+          continue;
+        }
+        seen.add(message);
+        const className = String(row.className ?? "");
+        const type = /error/i.test(className + " " + message)
+          ? "error"
+          : /warn/i.test(className + " " + message)
+            ? "warning"
+            : /compil/i.test(message)
+              ? "compile"
+              : "info";
+        rows.push({ type, message });
+      }
+    }
+    return rows;
+  }
+
+  const openResult = await ensureEditorOpen();
+  if (!openResult.ready) {
+    return { ok: false, error: openResult.error, warnings: openResult.warnings };
+  }
+  if (command === "openEditor") {
+    return { ok: true, value: openResult };
+  }
+  const editorResult = findMonacoEditor();
+  if (!editorResult) {
+    return { ok: false, error: "TradingView Pine Editor Monaco instance was not exposed." };
+  }
+
+  if (command === "setSource") {
+    if (typeof editorResult.editor.setValue !== "function") {
+      return { ok: false, error: "TradingView Pine Editor does not expose setValue()." };
+    }
+    editorResult.editor.setValue(args.source);
+    return {
+      ok: true,
+      value: {
+        linesSet: lineCount(args.source),
+        charCount: args.source.length,
+        warnings: openResult.warnings
+      }
+    };
+  }
+
+  if (command === "getSource") {
+    if (typeof editorResult.editor.getValue !== "function") {
+      return { ok: false, error: "TradingView Pine Editor does not expose getValue()." };
+    }
+    const source = String(editorResult.editor.getValue() ?? "");
+    const maxSourceChars = args.maxSourceChars;
+    const truncated = source.length > maxSourceChars;
+    const warnings = [...openResult.warnings];
+    if (truncated) {
+      warnings.push("Pine source was truncated to " + maxSourceChars + " characters; raise maxSourceChars intentionally if more source is required.");
+    }
+    return {
+      ok: true,
+      value: {
+        source: truncated ? source.slice(0, maxSourceChars) : source,
+        charCount: source.length,
+        lineCount: lineCount(source),
+        truncated,
+        maxSourceChars,
+        warnings
+      },
+      warnings
+    };
+  }
+
+  if (command === "getErrors") {
+    const errors = readErrors(editorResult);
+    return { ok: true, value: errors, warnings: errors.warnings ?? [] };
+  }
+
+  if (command === "getConsole") {
+    const rows = readConsoleRows();
+    const truncated = rows.length > MAX_CONSOLE_ROWS;
+    return {
+      ok: true,
+      value: {
+        entryCount: rows.length,
+        truncated,
+        entries: rows.slice(0, MAX_CONSOLE_ROWS)
+      }
+    };
+  }
+
+  if (command === "compile") {
+    const clicked = clickCompileButton();
+    if (!clicked) {
+      return {
+        ok: false,
+        error: "Could not find a visible Pine compile, add-to-chart, or update button."
+      };
+    }
+    await sleep(args.settleMs);
+    const errors = readErrors(editorResult);
+    return {
+      ok: true,
+      value: {
+        buttonClicked: clicked,
+        ...errors
+      },
+      warnings: errors.warnings ?? []
+    };
+  }
+
+  if (command === "save") {
+    const method = clickSaveButtonOrShortcut();
+    if (!method) {
+      return { ok: false, error: "Could not find a Pine save button or dispatch the save shortcut." };
+    }
+    await sleep(args.settleMs);
+    return {
+      ok: true,
+      value: {
+        method,
+        warnings: openResult.warnings
+      },
+      warnings: openResult.warnings
+    };
+  }
+
+  return { ok: false, error: "Unknown Pine editor command: " + command };
+}
+`;
+
 function chartControlExpression(
   command: string,
   args: Record<string, unknown>
 ): string {
   return `(${RAW_CHART_CONTROL_EVALUATOR})(${JSON.stringify(command)}, ${JSON.stringify(args)})`;
+}
+
+function pineEditorExpression(
+  command: string,
+  args: Record<string, unknown>
+): string {
+  return `(${RAW_PINE_EDITOR_EVALUATOR})(${JSON.stringify(command)}, ${JSON.stringify(args)})`;
 }
 
 function isChartControlPayload(
@@ -2418,6 +2903,107 @@ async function runRawChartControl(
   }
 }
 
+async function runRawPineEditorControl(
+  action: RawAutomationAction,
+  command: string,
+  args: Record<string, unknown>,
+  options: RawAutomationBaseOptions,
+  invalidMessage?: string | null,
+  maxResultBytes = DEFAULT_RAW_CHART_CONTROL_MAX_RESULT_BYTES
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+
+  if (invalidMessage) {
+    return failureResult(action, {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: invalidMessage
+    });
+  }
+
+  const resolved = await resolveRawClient(action, options, executedAt);
+
+  if (!resolved.ok) {
+    return resolved.result;
+  }
+
+  try {
+    const rawValue = await resolved.client.evaluate(
+      pineEditorExpression(command, args),
+      {
+        awaitPromise: true,
+        throwOnSideEffect: false
+      }
+    );
+    const payload = normalizeEvaluateResponse(rawValue);
+
+    if (!isChartControlPayload(payload)) {
+      return failureResult(action, {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: "TradingView Pine editor command returned an unexpected response shape."
+      });
+    }
+
+    const payloadRecord = payload as Record<string, unknown>;
+    const payloadWarnings = Array.isArray(payloadRecord.warnings)
+      ? payloadRecord.warnings.filter((warning: unknown): warning is string =>
+          typeof warning === "string"
+        )
+      : [];
+
+    if (!payload.ok) {
+      return failureResult(action, {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: payload.error ?? "TradingView Pine editor command failed.",
+        warnings: payloadWarnings,
+        value: "before" in payload ? { before: payload.before } : undefined
+      });
+    }
+
+    if (compactJsonByteLength(payload.value) > maxResultBytes) {
+      return failureResult(action, {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: "Raw Pine editor result exceeded the compact output limit.",
+        warnings: payloadWarnings
+      });
+    }
+
+    const targetFailure = await verifyRawTargetStillChart(action, options, {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target
+    });
+
+    if (targetFailure) {
+      return targetFailure;
+    }
+
+    return successResult(action, {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      value: payload.value,
+      warnings: payloadWarnings
+    });
+  } catch (error: unknown) {
+    return failureResult(action, {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      error: errorMessage(error)
+    });
+  } finally {
+    await resolved.client.close();
+  }
+}
+
 export function runRawChartState(
   options: RawChartStateOptions
 ): Promise<RawAutomationResult> {
@@ -2636,6 +3222,106 @@ export function runRawDrawProjection(
     },
     options,
     invalidMessage
+  );
+}
+
+export function runRawPineOpenEditor(
+  options: RawPineOpenEditorOptions
+): Promise<RawAutomationResult> {
+  return runRawPineEditorControl(
+    "pine-open-editor",
+    "openEditor",
+    {},
+    options
+  );
+}
+
+export function runRawPineSetSource(
+  options: RawPineSetSourceOptions
+): Promise<RawAutomationResult> {
+  return runRawPineEditorControl(
+    "pine-set-source",
+    "setSource",
+    {
+      source: options.source
+    },
+    options,
+    invalidPineSourceMessage(options.source)
+  );
+}
+
+export function runRawPineGetSource(
+  options: RawPineGetSourceOptions
+): Promise<RawAutomationResult> {
+  const maxSourceChars =
+    options.maxSourceChars ?? DEFAULT_RAW_PINE_GET_SOURCE_MAX_CHARS;
+
+  return runRawPineEditorControl(
+    "pine-get-source",
+    "getSource",
+    {
+      maxSourceChars
+    },
+    options,
+    invalidPineGetSourceLimitMessage(maxSourceChars),
+    Math.max(
+      DEFAULT_RAW_CHART_CONTROL_MAX_RESULT_BYTES,
+      maxSourceChars + 2_048
+    )
+  );
+}
+
+export function runRawPineGetErrors(
+  options: RawPineGetErrorsOptions
+): Promise<RawAutomationResult> {
+  return runRawPineEditorControl(
+    "pine-get-errors",
+    "getErrors",
+    {},
+    options
+  );
+}
+
+export function runRawPineGetConsole(
+  options: RawPineGetConsoleOptions
+): Promise<RawAutomationResult> {
+  return runRawPineEditorControl(
+    "pine-get-console",
+    "getConsole",
+    {},
+    options
+  );
+}
+
+export function runRawPineCompile(
+  options: RawPineCompileOptions
+): Promise<RawAutomationResult> {
+  const settleMs = options.settleMs ?? DEFAULT_RAW_PINE_COMPILE_SETTLE_MS;
+
+  return runRawPineEditorControl(
+    "pine-compile",
+    "compile",
+    {
+      settleMs
+    },
+    options,
+    invalidPineSettleMsMessage(settleMs)
+  );
+}
+
+export function runRawPineSave(
+  options: RawPineSaveOptions
+): Promise<RawAutomationResult> {
+  const settleMs = options.settleMs ?? DEFAULT_RAW_PINE_SAVE_SETTLE_MS;
+
+  return runRawPineEditorControl(
+    "pine-save",
+    "save",
+    {
+      settleMs
+    },
+    options,
+    invalidPineSettleMsMessage(settleMs)
   );
 }
 

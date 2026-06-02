@@ -23,7 +23,7 @@ void test("project info documents the manual-only boundary", () => {
     "squeeze",
     "momentum"
   ]);
-  assert.equal(info.rawAutomation.status, "future_opt_in_experimental");
+  assert.equal(info.rawAutomation.status, "opt_in_experimental");
 });
 
 void test("guardrails do not include trade execution behavior", () => {
@@ -41,10 +41,12 @@ void test("raw automation boundary is experimental and opt-in", () => {
   );
   assert.deepEqual([...RAW_AUTOMATION_BOUNDARY.toolPrefixes], [
     "tradingview_raw_",
-    "tradingview_draw_"
+    "tradingview_draw_",
+    "tradingview_pine_"
   ]);
   assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("native_tradingview_drawings"));
   assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("direct_chart_manipulation"));
+  assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("explicit_pine_editor_actions"));
   assert.ok(RAW_AUTOMATION_BOUNDARY.constraints.includes("disabled_by_default"));
   assert.ok(
     RAW_AUTOMATION_BOUNDARY.constraints.includes(

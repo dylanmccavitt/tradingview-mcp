@@ -23,6 +23,8 @@ Raw tools must use clear namespaces:
   direct chart controls
 - `tradingview_draw_*` for native TradingView drawing creation, inspection, and
   removal
+- `tradingview_pine_*` for explicit Pine Editor source, compile, save, errors,
+  and console actions
 
 The raw surface may support local chart-target evaluation, mouse/keyboard/text
 input, selector-oriented UI actions, native TradingView drawings, and direct
@@ -95,5 +97,13 @@ issues must port reference behavior in small slices.
   review context only; they must not output predictions, recommendations,
   rankings, or advice. Current-chart and chartbook artifact requests may record
   returned macro metadata through an explicit `macroMetadata` field.
+- The Pine Editor slice adds MCP-only `tradingview_pine_open_editor`,
+  `tradingview_pine_set_source`, `tradingview_pine_get_source`,
+  `tradingview_pine_get_errors`, `tradingview_pine_get_console`,
+  `tradingview_pine_compile`, and `tradingview_pine_save` behind the same gate.
+  Setting source, compiling, and saving are explicit separate calls. Source
+  retrieval is bounded by default and reports truncation warnings for larger
+  scripts. These tools use the active local chart target and exposed
+  TradingView/Monaco Pine Editor surfaces only.
 - Future native drawing, chart manipulation, Pine editor, data extraction, and
   quant macro issues should build behind this boundary.
