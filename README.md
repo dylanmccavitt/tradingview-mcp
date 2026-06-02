@@ -307,11 +307,20 @@ browser controls. When the server process is started with
 - `tradingview_raw_set_visible_range`
 - `tradingview_raw_add_indicator`
 - `tradingview_raw_remove_entity`
-- `tradingview_draw_*` for later native drawing primitives behind the same gate
+- `tradingview_draw_*`
+- `tradingview_draw_shape`
+- `tradingview_draw_list`
+- `tradingview_draw_properties`
+- `tradingview_draw_remove`
+- `tradingview_draw_clear_all`
 
 These raw tools are experimental, scoped only to the active local TradingView
 chart target, compact by default, and still governed by the no broker/order,
-no scanner/ranking, no advice, no unattended-candidate guardrails.
+no scanner/ranking, no advice, no unattended-candidate guardrails. Native
+drawing tools use TradingView chart/drawing APIs only when exposed and report
+clear unsupported-API failures otherwise. `tradingview_draw_clear_all` requires
+an explicit `confirmClearAll: true` argument because it removes every native
+drawing on the active chart.
 
 ## V1 Boundary
 

@@ -109,7 +109,11 @@ TradingView chart target. The current raw slice registers
 `tradingview_raw_chart_state`, `tradingview_raw_set_symbol`,
 `tradingview_raw_set_timeframe`, `tradingview_raw_set_chart_type`,
 `tradingview_raw_set_visible_range`, `tradingview_raw_add_indicator`, and
-`tradingview_raw_remove_entity` only when the gate is enabled.
+`tradingview_raw_remove_entity`, plus `tradingview_draw_shape`,
+`tradingview_draw_list`, `tradingview_draw_properties`,
+`tradingview_draw_remove`, and `tradingview_draw_clear_all` only when the gate
+is enabled. `tradingview_draw_clear_all` is destructive and must require an
+explicit clear-all confirmation in its schema and caller intent.
 
 ## Test, Lint, And Typecheck
 

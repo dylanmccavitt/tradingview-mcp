@@ -644,6 +644,185 @@ void test("raw MCP chart control tools call injected handlers when enabled", asy
   }
 });
 
+void test("raw MCP native drawing tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const drawValue = {
+    entityId: "shape-1",
+    drawing: {
+      id: "shape-1",
+      type: "trend-line",
+      points: [
+        {
+          time: 1_780_000_000,
+          price: 510
+        },
+        {
+          time: 1_780_086_400,
+          price: 530
+        }
+      ]
+    },
+    before: {
+      drawings: [],
+      count: 0,
+      warnings: []
+    },
+    after: {
+      drawings: [
+        {
+          id: "shape-1",
+          type: "trend_line"
+        }
+      ],
+      count: 1,
+      warnings: []
+    }
+  };
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawDrawShape: (options) => {
+        calls.push(`${options.shapeType}:${options.points.length}:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "draw-shape",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          value: drawValue,
+          warnings: []
+        });
+      },
+      runRawDrawList: (options) => {
+        calls.push(`list:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "draw-list",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          value: drawValue.after,
+          warnings: []
+        });
+      },
+      runRawDrawingProperties: (options) => {
+        calls.push(`properties:${options.entityId}`);
+        return Promise.resolve({
+          ok: true,
+          action: "draw-properties",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          value: {
+            drawing: {
+              id: options.entityId,
+              type: "trend_line",
+              points: drawValue.drawing.points,
+              properties: {
+                linewidth: 2
+              },
+              style: {
+                linecolor: "#00ff00"
+              },
+              visible: true,
+              locked: false,
+              selectable: true
+            }
+          },
+          warnings: []
+        });
+      },
+      runRawDrawRemove: (options) => {
+        calls.push(`remove:${options.entityId}`);
+        return Promise.resolve({
+          ok: true,
+          action: "draw-remove",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          value: {
+            ...drawValue,
+            entityId: options.entityId
+          },
+          warnings: []
+        });
+      },
+      runRawDrawClearAll: (options) => {
+        calls.push(`clear:${options.confirmClearAll}`);
+        return Promise.resolve({
+          ok: true,
+          action: "draw-clear-all",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          value: {
+            before: drawValue.after,
+            after: {
+              drawings: [],
+              count: 0,
+              warnings: []
+            }
+          },
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const shape = await client.callTool({
+      name: "tradingview_draw_shape",
+      arguments: {
+        shapeType: "trend-line",
+        points: drawValue.drawing.points,
+        port: 9223
+      }
+    });
+    const list = await client.callTool({
+      name: "tradingview_draw_list",
+      arguments: {
+        port: 9223
+      }
+    });
+    const properties = await client.callTool({
+      name: "tradingview_draw_properties",
+      arguments: {
+        entityId: "shape-1"
+      }
+    });
+    const remove = await client.callTool({
+      name: "tradingview_draw_remove",
+      arguments: {
+        entityId: "shape-1"
+      }
+    });
+    const clearAll = await client.callTool({
+      name: "tradingview_draw_clear_all",
+      arguments: {
+        confirmClearAll: true
+      }
+    });
+
+    assert.equal(callResult(shape).structuredContent?.action, "draw-shape");
+    assert.equal(callResult(list).structuredContent?.action, "draw-list");
+    assert.equal(
+      callResult(properties).structuredContent?.action,
+      "draw-properties"
+    );
+    assert.equal(callResult(remove).structuredContent?.action, "draw-remove");
+    assert.equal(
+      callResult(clearAll).structuredContent?.action,
+      "draw-clear-all"
+    );
+    assert.deepEqual(calls, [
+      "trend-line:2:9223",
+      "list:9223",
+      "properties:shape-1",
+      "remove:shape-1",
+      "clear:true"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
 void test("profile-aware MCP tools expose accepted review profile schema", async () => {
   const { client, close } = await connectClient();
 
@@ -815,6 +994,66 @@ void test("raw chart-control validation rejects invalid MCP requests before hand
     assert.match(contentText(badSymbol), /Input validation error/i);
     assert.equal(callResult(badRange).isError, true);
     assert.match(contentText(badRange), /Input validation error/i);
+  } finally {
+    await close();
+  }
+});
+
+void test("raw native drawing validation rejects invalid MCP requests before handlers run", async () => {
+  let called = false;
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawDrawShape: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "draw-shape",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawDrawClearAll: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "draw-clear-all",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const badShape = await client.callTool({
+      name: "tradingview_draw_shape",
+      arguments: {
+        shapeType: "rectangle",
+        points: [
+          {
+            time: 1_780_000_000,
+            price: 510
+          }
+        ]
+      }
+    });
+    const unconfirmedClear = await client.callTool({
+      name: "tradingview_draw_clear_all",
+      arguments: {
+        confirmClearAll: false
+      }
+    });
+
+    assert.equal(called, false);
+    assert.equal(callResult(badShape).isError, true);
+    assert.match(contentText(badShape), /Input validation error/i);
+    assert.equal(callResult(unconfirmedClear).isError, true);
+    assert.match(contentText(unconfirmedClear), /Input validation error/i);
   } finally {
     await close();
   }

@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, and direct chart state/control primitives against the active chart target
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, and native drawing tools against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -68,6 +68,11 @@ active local TradingView chart target. The current gated raw MCP tools are:
 - `tradingview_raw_set_visible_range`
 - `tradingview_raw_add_indicator`
 - `tradingview_raw_remove_entity`
+- `tradingview_draw_shape`
+- `tradingview_draw_list`
+- `tradingview_draw_properties`
+- `tradingview_draw_remove`
+- `tradingview_draw_clear_all`
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -118,6 +123,17 @@ mutating tools return before/after state for set symbol, set timeframe, set
 chart type, set visible range, add indicator, and remove entity. If TradingView
 does not expose the needed chart API, the tools fail with a clear reason rather
 than scraping broader internals.
+
+The same gated MCP surface exposes native drawing tools through supported
+TradingView chart/drawing APIs when available. `tradingview_draw_shape` creates
+horizontal line, trend line, rectangle, and text drawings from explicit
+price/time anchors and returns the native entity id. `tradingview_draw_list`
+returns compact drawing ids, types, and names when exposed.
+`tradingview_draw_properties` returns points, style/properties, visibility,
+lock, and selectability when exposed. `tradingview_draw_remove` removes one
+drawing by id. `tradingview_draw_clear_all` is explicitly destructive and
+requires `confirmClearAll` before removing every native drawing on the active
+chart.
 
 `src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
 `raw type-text`, `raw find-element`, `raw selector-click`,

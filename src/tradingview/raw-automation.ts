@@ -34,6 +34,9 @@ export const RAW_TIMEFRAME_MAX_CHARS = 32;
 export const RAW_CHART_TYPE_MAX_CHARS = 64;
 export const RAW_INDICATOR_NAME_MAX_CHARS = 120;
 export const RAW_ENTITY_ID_MAX_CHARS = 200;
+export const RAW_DRAWING_TEXT_MAX_CHARS = 500;
+export const RAW_DRAWING_MAX_POINTS = 2;
+export const RAW_DRAWING_MAX_OVERRIDES = 40;
 
 const RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS = [
   /\baccount\b/i,
@@ -87,7 +90,12 @@ export type RawAutomationAction =
   | "set-chart-type"
   | "set-visible-range"
   | "add-indicator"
-  | "remove-entity";
+  | "remove-entity"
+  | "draw-shape"
+  | "draw-list"
+  | "draw-properties"
+  | "draw-remove"
+  | "draw-clear-all";
 
 export interface RawElementSummary {
   index: number;
@@ -127,6 +135,30 @@ export interface RawChartState {
   visibleRange?: RawVisibleRange;
   studies: RawChartStudySummary[];
   warnings: string[];
+}
+
+export type RawDrawingShapeType =
+  | "horizontal-line"
+  | "trend-line"
+  | "rectangle"
+  | "text";
+
+export interface RawDrawingPoint {
+  time: number;
+  price: number;
+}
+
+export type RawDrawingOverrideValue = string | number | boolean | null;
+
+export interface RawDrawingSummary {
+  id: string;
+  type?: string;
+  name?: string;
+  points?: RawDrawingPoint[];
+  text?: string;
+  visible?: boolean;
+  locked?: boolean;
+  selectable?: boolean;
 }
 
 export interface RawTradingViewPageClient {
@@ -237,6 +269,29 @@ export interface RawAddIndicatorOptions extends RawAutomationBaseOptions {
 
 export interface RawRemoveEntityOptions extends RawAutomationBaseOptions {
   entityId: string;
+}
+
+export interface RawDrawShapeOptions extends RawAutomationBaseOptions {
+  shapeType: RawDrawingShapeType;
+  points: RawDrawingPoint[];
+  text?: string;
+  overrides?: Record<string, RawDrawingOverrideValue>;
+  lock?: boolean;
+  disableSelection?: boolean;
+}
+
+export type RawDrawListOptions = RawAutomationBaseOptions;
+
+export interface RawDrawingPropertiesOptions extends RawAutomationBaseOptions {
+  entityId: string;
+}
+
+export interface RawDrawRemoveOptions extends RawAutomationBaseOptions {
+  entityId: string;
+}
+
+export interface RawDrawClearAllOptions extends RawAutomationBaseOptions {
+  confirmClearAll: boolean;
 }
 
 export interface RawAutomationResult {
@@ -591,6 +646,111 @@ function invalidEntityIdMessage(entityId: string): string | null {
   return null;
 }
 
+function invalidDrawingPointMessage(point: RawDrawingPoint, index: number): string | null {
+  if (
+    !Number.isFinite(point.time) ||
+    !Number.isInteger(point.time) ||
+    point.time < 0
+  ) {
+    return `Raw drawing point ${index + 1} time must be a non-negative Unix timestamp integer.`;
+  }
+
+  if (!Number.isFinite(point.price) || point.price <= 0) {
+    return `Raw drawing point ${index + 1} price must be a finite positive number.`;
+  }
+
+  return null;
+}
+
+function invalidDrawingOverridesMessage(
+  overrides: Record<string, RawDrawingOverrideValue> | undefined
+): string | null {
+  if (!overrides) {
+    return null;
+  }
+
+  const entries = Object.entries(overrides);
+
+  if (entries.length > RAW_DRAWING_MAX_OVERRIDES) {
+    return `Raw drawing overrides may include at most ${RAW_DRAWING_MAX_OVERRIDES} keys.`;
+  }
+
+  for (const [key, value] of entries) {
+    if (key.trim().length === 0) {
+      return "Raw drawing override keys must be non-empty strings.";
+    }
+
+    if (
+      value !== null &&
+      typeof value !== "string" &&
+      typeof value !== "number" &&
+      typeof value !== "boolean"
+    ) {
+      return "Raw drawing overrides may only contain string, number, boolean, or null values.";
+    }
+  }
+
+  return null;
+}
+
+function invalidDrawShapeMessage(options: RawDrawShapeOptions): string | null {
+  if (
+    options.shapeType !== "horizontal-line" &&
+    options.shapeType !== "trend-line" &&
+    options.shapeType !== "rectangle" &&
+    options.shapeType !== "text"
+  ) {
+    return "Raw drawing shapeType must be horizontal-line, trend-line, rectangle, or text.";
+  }
+
+  if (
+    !Array.isArray(options.points) ||
+    options.points.length === 0 ||
+    options.points.length > RAW_DRAWING_MAX_POINTS
+  ) {
+    return `Raw drawing points must include 1 to ${RAW_DRAWING_MAX_POINTS} price/time anchors.`;
+  }
+
+  const expectedPoints =
+    options.shapeType === "trend-line" || options.shapeType === "rectangle"
+      ? 2
+      : 1;
+
+  if (options.points.length !== expectedPoints) {
+    return `Raw drawing ${options.shapeType} requires exactly ${expectedPoints} price/time anchor${expectedPoints === 1 ? "" : "s"}.`;
+  }
+
+  for (let index = 0; index < options.points.length; index += 1) {
+    const invalidPoint = invalidDrawingPointMessage(options.points[index]!, index);
+
+    if (invalidPoint) {
+      return invalidPoint;
+    }
+  }
+
+  if (
+    options.shapeType === "text" &&
+    (!options.text || options.text.trim().length === 0)
+  ) {
+    return "Raw drawing text shape requires non-empty text.";
+  }
+
+  if (
+    options.text !== undefined &&
+    options.text.length > RAW_DRAWING_TEXT_MAX_CHARS
+  ) {
+    return `Raw drawing text must be ${RAW_DRAWING_TEXT_MAX_CHARS} characters or fewer.`;
+  }
+
+  return invalidDrawingOverridesMessage(options.overrides);
+}
+
+function invalidClearAllMessage(confirmClearAll: boolean): string | null {
+  return confirmClearAll
+    ? null
+    : "Raw drawing clear-all requires confirmClearAll=true because it removes all native drawings on the active chart.";
+}
+
 function normalizedClickScopeText(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
@@ -757,6 +917,216 @@ async (command, args) => {
     return studies;
   }
 
+  function normalizeDrawingPoint(value) {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+    const time = Number(value.time ?? value.timestamp ?? value.time_t);
+    const price = Number(value.price ?? value.value);
+    return Number.isFinite(time) && Number.isFinite(price)
+      ? { time: Math.trunc(time), price }
+      : undefined;
+  }
+
+  function normalizeDrawingPoints(value) {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+    const points = value.map(normalizeDrawingPoint).filter(Boolean);
+    return points.length > 0 ? points.slice(0, 4) : undefined;
+  }
+
+  function compactPrimitiveRecord(value, maxKeys) {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+    const result = {};
+    let count = 0;
+    for (const [key, candidate] of Object.entries(value)) {
+      if (count >= maxKeys) {
+        break;
+      }
+      if (
+        candidate === null ||
+        typeof candidate === "string" ||
+        typeof candidate === "number" ||
+        typeof candidate === "boolean"
+      ) {
+        result[key] =
+          typeof candidate === "string" ? compactText(candidate) : candidate;
+        count += 1;
+      } else if (Array.isArray(candidate)) {
+        const primitives = candidate
+          .filter(
+            (item) =>
+              item === null ||
+              typeof item === "string" ||
+              typeof item === "number" ||
+              typeof item === "boolean"
+          )
+          .slice(0, 10);
+        if (primitives.length > 0) {
+          result[key] = primitives;
+          count += 1;
+        }
+      }
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
+  }
+
+  function shapeEntity(chart, id) {
+    if (typeof chart.getShapeById !== "function") {
+      return undefined;
+    }
+    try {
+      return chart.getShapeById(id);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function drawingSummary(chart, entityOrId) {
+    const entity =
+      typeof entityOrId === "string" || typeof entityOrId === "number"
+        ? shapeEntity(chart, String(entityOrId))
+        : entityOrId;
+    const id = compactText(
+      String(
+        valueFrom(entity, ["id", "entityId", "shapeId", "paneEntityId"]) ??
+          (typeof entityOrId === "string" || typeof entityOrId === "number"
+            ? entityOrId
+            : "")
+      )
+    );
+    if (!id) {
+      return undefined;
+    }
+    const summary = { id };
+    const typeValue = valueFrom(entity, ["shapeType", "type", "toolname", "toolName", "name"]);
+    const nameValue = valueFrom(entity, ["title", "name", "description"]);
+    const points = normalizeDrawingPoints(valueFrom(entity, ["getPoints", "points"]));
+    const textValue = valueFrom(entity, ["text", "getText"]);
+    const visible = valueFrom(entity, ["isVisible", "visible", "getVisible"]);
+    const locked = valueFrom(entity, ["isLocked", "locked"]);
+    const selectable = valueFrom(entity, ["isSelectable", "selectable"]);
+    const type = compactText(typeof typeValue === "string" ? typeValue : String(typeValue ?? ""));
+    const name = compactText(typeof nameValue === "string" ? nameValue : String(nameValue ?? ""));
+    const text = compactText(typeof textValue === "string" ? textValue : String(textValue ?? ""));
+    if (type) {
+      summary.type = type;
+    }
+    if (name && name !== type) {
+      summary.name = name;
+    }
+    if (points) {
+      summary.points = points;
+    }
+    if (text) {
+      summary.text = text;
+    }
+    if (typeof visible === "boolean") {
+      summary.visible = visible;
+    }
+    if (typeof locked === "boolean") {
+      summary.locked = locked;
+    }
+    if (typeof selectable === "boolean") {
+      summary.selectable = selectable;
+    }
+    return summary;
+  }
+
+  function drawingProperties(chart, entityId) {
+    const entity = shapeEntity(chart, entityId);
+    if (!entity) {
+      return { error: "TradingView chart API does not expose getShapeById() for native drawing properties, or the drawing id was not found." };
+    }
+    const summary = drawingSummary(chart, entity);
+    if (!summary) {
+      return { error: "TradingView drawing properties did not include a usable drawing id." };
+    }
+    const rawProperties = valueFrom(entity, ["getProperties", "properties", "state"]);
+    const rawStyle = valueFrom(entity, ["getStyle", "style", "overrides"]);
+    const properties = compactPrimitiveRecord(rawProperties, 40);
+    const style = compactPrimitiveRecord(rawStyle, 40);
+    const drawing = { ...summary };
+    if (properties) {
+      drawing.properties = properties;
+    }
+    if (style) {
+      drawing.style = style;
+    }
+    return { drawing };
+  }
+
+  function readDrawings(chart) {
+    const warnings = [];
+    const rawDrawings = methodValue(chart, [
+      "getAllShapes",
+      "getAllDrawings",
+      "getAllDrawingObjects"
+    ]);
+    if (!Array.isArray(rawDrawings)) {
+      const error = "TradingView chart API did not expose native drawing identifiers through getAllShapes(), getAllDrawings(), or getAllDrawingObjects().";
+      return {
+        drawings: [],
+        count: 0,
+        error,
+        warnings: [error]
+      };
+    }
+    const drawings = rawDrawings
+      .map((drawing) => drawingSummary(chart, drawing))
+      .filter(Boolean)
+      .slice(0, MAX_STUDIES);
+    if (rawDrawings.length > MAX_STUDIES) {
+      warnings.push("Drawing list truncated to " + MAX_STUDIES + " entries.");
+    }
+    if (drawings.length < rawDrawings.length && typeof chart.getShapeById !== "function") {
+      warnings.push("TradingView chart API exposed drawing ids but not getShapeById(), so type/name/properties may be unavailable.");
+    }
+    return {
+      drawings,
+      count: rawDrawings.length,
+      warnings
+    };
+  }
+
+  function nativeShapeName(shapeType) {
+    if (shapeType === "horizontal-line") {
+      return "horizontal_line";
+    }
+    if (shapeType === "trend-line") {
+      return "trend_line";
+    }
+    if (shapeType === "rectangle") {
+      return "rectangle";
+    }
+    if (shapeType === "text") {
+      return "text";
+    }
+    return shapeType;
+  }
+
+  function drawingCreateOptions(args) {
+    const options = {
+      shape: nativeShapeName(args.shapeType)
+    };
+    if (args.text) {
+      options.text = args.text;
+    }
+    if (args.overrides && typeof args.overrides === "object") {
+      options.overrides = args.overrides;
+    }
+    if (typeof args.lock === "boolean") {
+      options.lock = args.lock;
+    }
+    if (typeof args.disableSelection === "boolean") {
+      options.disableSelection = args.disableSelection;
+    }
+    return options;
+  }
+
   function findWidget() {
     const direct = [
       root.tvWidget,
@@ -916,6 +1286,82 @@ async (command, args) => {
       await awaitMaybe(chart.removeEntity(args.entityId));
       return { ok: true, before };
     }
+    if (command === "drawShape") {
+      const drawingBefore = readDrawings(chart);
+      const options = drawingCreateOptions(args);
+      let entityId;
+      if (args.shapeType === "horizontal-line" || args.shapeType === "text") {
+        if (typeof chart.createShape !== "function") {
+          return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose createShape() for single-anchor native drawings." };
+        }
+        entityId = await awaitMaybe(chart.createShape(args.points[0], options));
+      } else {
+        if (typeof chart.createMultipointShape !== "function") {
+          return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose createMultipointShape() for multi-anchor native drawings." };
+        }
+        entityId = await awaitMaybe(chart.createMultipointShape(args.points, options));
+      }
+      const id =
+        typeof entityId === "string" || typeof entityId === "number"
+          ? String(entityId)
+          : compactText(String(valueFrom(entityId, ["id", "entityId", "shapeId"]) ?? ""));
+      if (!id) {
+        return { ok: false, before: drawingBefore, after: readDrawings(chart), error: "TradingView native drawing API did not return a drawing entity id." };
+      }
+      return {
+        ok: true,
+        before: drawingBefore,
+        entityId: id,
+        drawing: {
+          id,
+          type: args.shapeType,
+          points: args.points,
+          ...(args.text ? { text: args.text } : {})
+        }
+      };
+    }
+    if (command === "drawList") {
+      const drawings = readDrawings(chart);
+      if (drawings.error) {
+        return { ok: false, before: drawings, error: drawings.error };
+      }
+      return { ok: true, value: drawings };
+    }
+    if (command === "drawProperties") {
+      const properties = drawingProperties(chart, args.entityId);
+      if (properties.error) {
+        return { ok: false, before: readDrawings(chart), error: properties.error };
+      }
+      return { ok: true, value: properties };
+    }
+    if (command === "drawRemove") {
+      const drawingBefore = readDrawings(chart);
+      if (typeof chart.removeEntity !== "function") {
+        return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose removeEntity() for native drawing removal." };
+      }
+      await awaitMaybe(chart.removeEntity(args.entityId));
+      return { ok: true, before: drawingBefore, entityId: args.entityId };
+    }
+    if (command === "drawClearAll") {
+      const drawingBefore = readDrawings(chart);
+      if (drawingBefore.error) {
+        return { ok: false, before: drawingBefore, error: drawingBefore.error };
+      }
+      if (typeof chart.removeAllShapes === "function") {
+        await awaitMaybe(chart.removeAllShapes());
+        return { ok: true, before: drawingBefore };
+      }
+      if (typeof chart.removeEntity === "function" && drawingBefore.drawings.length > 0) {
+        for (const drawing of drawingBefore.drawings) {
+          await awaitMaybe(chart.removeEntity(drawing.id));
+        }
+        return { ok: true, before: drawingBefore };
+      }
+      if (drawingBefore.drawings.length === 0 && drawingBefore.count === 0) {
+        return { ok: true, before: drawingBefore };
+      }
+      return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose removeAllShapes(), or removable drawing ids were unavailable." };
+    }
     return { ok: false, before, error: "Unknown chart command: " + command };
   }
 
@@ -930,9 +1376,19 @@ async (command, args) => {
     return mutation;
   }
   const after = command === "state" ? before : readState(chartResult.chart);
-  const value = { before, after };
+  if (mutation.value) {
+    return { ok: true, value: mutation.value };
+  }
+  const isDrawingCommand = command.startsWith("draw");
+  const value = {
+    before: mutation.before ?? before,
+    after: isDrawingCommand ? readDrawings(chartResult.chart) : after
+  };
   if (mutation.entityId) {
     value.entityId = mutation.entityId;
+  }
+  if (mutation.drawing) {
+    value.drawing = mutation.drawing;
   }
   return { ok: true, value };
 }
@@ -1974,6 +2430,97 @@ export function runRawRemoveEntity(
     { entityId },
     options,
     invalidEntityIdMessage(options.entityId)
+  );
+}
+
+export function runRawDrawShape(
+  options: RawDrawShapeOptions
+): Promise<RawAutomationResult> {
+  const args: {
+    shapeType: RawDrawingShapeType;
+    points: RawDrawingPoint[];
+    text?: string;
+    overrides?: Record<string, RawDrawingOverrideValue>;
+    lock?: boolean;
+    disableSelection?: boolean;
+  } = {
+    shapeType: options.shapeType,
+    points: options.points.map((point) => ({
+      time: Math.trunc(point.time),
+      price: point.price
+    }))
+  };
+
+  if (options.text !== undefined) {
+    args.text = options.text.trim();
+  }
+
+  if (options.overrides) {
+    args.overrides = options.overrides;
+  }
+
+  if (typeof options.lock === "boolean") {
+    args.lock = options.lock;
+  }
+
+  if (typeof options.disableSelection === "boolean") {
+    args.disableSelection = options.disableSelection;
+  }
+
+  return runRawChartControl(
+    "draw-shape",
+    "drawShape",
+    args,
+    options,
+    invalidDrawShapeMessage(options)
+  );
+}
+
+export function runRawDrawList(
+  options: RawDrawListOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("draw-list", "drawList", {}, options);
+}
+
+export function runRawDrawingProperties(
+  options: RawDrawingPropertiesOptions
+): Promise<RawAutomationResult> {
+  const entityId = options.entityId.trim();
+
+  return runRawChartControl(
+    "draw-properties",
+    "drawProperties",
+    { entityId },
+    options,
+    invalidEntityIdMessage(options.entityId)
+  );
+}
+
+export function runRawDrawRemove(
+  options: RawDrawRemoveOptions
+): Promise<RawAutomationResult> {
+  const entityId = options.entityId.trim();
+
+  return runRawChartControl(
+    "draw-remove",
+    "drawRemove",
+    { entityId },
+    options,
+    invalidEntityIdMessage(options.entityId)
+  );
+}
+
+export function runRawDrawClearAll(
+  options: RawDrawClearAllOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl(
+    "draw-clear-all",
+    "drawClearAll",
+    {
+      confirmClearAll: options.confirmClearAll
+    },
+    options,
+    invalidClearAllMessage(options.confirmClearAll)
   );
 }
 

@@ -8,6 +8,11 @@ import {
   runRawAddIndicator,
   runRawChartState,
   runRawClick,
+  runRawDrawClearAll,
+  runRawDrawList,
+  runRawDrawRemove,
+  runRawDrawShape,
+  runRawDrawingProperties,
   runRawEvaluate,
   runRawFindElement,
   runRawKeypress,
@@ -165,6 +170,30 @@ interface FakeStudy {
   name: string;
 }
 
+interface FakeDrawingPoint {
+  time: number;
+  price: number;
+}
+
+interface FakeDrawing {
+  id: string;
+  shapeType: string;
+  title: string;
+  points: FakeDrawingPoint[];
+  text?: string;
+  visible: boolean;
+  locked: boolean;
+  selectable: boolean;
+  properties: Record<string, string | number | boolean | null>;
+  style: Record<string, string | number | boolean | null>;
+  getPoints(): FakeDrawingPoint[];
+  getProperties(): Record<string, string | number | boolean | null>;
+  getStyle(): Record<string, string | number | boolean | null>;
+  isVisible(): boolean;
+  isLocked(): boolean;
+  isSelectable(): boolean;
+}
+
 interface FakeChartApi {
   symbol(): string;
   resolution(): string;
@@ -180,6 +209,28 @@ interface FakeChartApi {
   setVisibleRange?: (range: { from: number; to: number }) => void;
   createStudy?: (name: string) => string;
   removeEntity?: (entityId: string) => void;
+  getAllShapes?: () => string[];
+  getShapeById?: (entityId: string) => FakeDrawing | undefined;
+  createShape?: (
+    point: FakeDrawingPoint,
+    options: {
+      shape: string;
+      text?: string;
+      overrides?: Record<string, string | number | boolean | null>;
+      lock?: boolean;
+      disableSelection?: boolean;
+    }
+  ) => string;
+  createMultipointShape?: (
+    points: FakeDrawingPoint[],
+    options: {
+      shape: string;
+      overrides?: Record<string, string | number | boolean | null>;
+      lock?: boolean;
+      disableSelection?: boolean;
+    }
+  ) => string;
+  removeAllShapes?: () => void;
 }
 
 class EvaluatingRawPageClient implements RawTradingViewPageClient {
@@ -262,6 +313,8 @@ function installFakeWidget(chart: FakeChartApi): () => void {
 function fakeChartApi(options: {
   withMutators?: boolean;
   studyCount?: number;
+  withDrawingApi?: boolean;
+  withClearAll?: boolean;
 } = {}): FakeChartApi {
   let symbol = "NASDAQ:NVDA";
   let timeframe = "65";
@@ -279,6 +332,14 @@ function fakeChartApi(options: {
       name: index === 0 ? "Volume" : `Study ${index + 1}`
     })
   );
+  let drawings: FakeDrawing[] = [
+    makeFakeDrawing("shape-1", "horizontal_line", [
+      {
+        time: 1_780_000_000,
+        price: 512.25
+      }
+    ])
+  ];
 
   const chart: FakeChartApi = {
     symbol: () => symbol,
@@ -327,10 +388,122 @@ function fakeChartApi(options: {
     };
     chart.removeEntity = (entityId: string) => {
       studies = studies.filter((study) => study.id !== entityId);
+      drawings = drawings.filter((drawing) => drawing.id !== entityId);
+    };
+  }
+
+  if (options.withDrawingApi) {
+    chart.getAllShapes = () => drawings.map((drawing) => drawing.id);
+    chart.getShapeById = (entityId: string) =>
+      drawings.find((drawing) => drawing.id === entityId);
+    chart.createShape = (point, createOptions) => {
+      const id = `shape-${drawings.length + 1}`;
+      const drawingOptions: {
+        text?: string;
+        lock?: boolean;
+        disableSelection?: boolean;
+        overrides?: Record<string, string | number | boolean | null>;
+      } = {};
+
+      if (createOptions.text !== undefined) {
+        drawingOptions.text = createOptions.text;
+      }
+
+      if (createOptions.lock !== undefined) {
+        drawingOptions.lock = createOptions.lock;
+      }
+
+      if (createOptions.disableSelection !== undefined) {
+        drawingOptions.disableSelection = createOptions.disableSelection;
+      }
+
+      if (createOptions.overrides !== undefined) {
+        drawingOptions.overrides = createOptions.overrides;
+      }
+
+      drawings = [
+        ...drawings,
+        makeFakeDrawing(id, createOptions.shape, [point], drawingOptions)
+      ];
+      return id;
+    };
+    chart.createMultipointShape = (points, createOptions) => {
+      const id = `shape-${drawings.length + 1}`;
+      const drawingOptions: {
+        lock?: boolean;
+        disableSelection?: boolean;
+        overrides?: Record<string, string | number | boolean | null>;
+      } = {};
+
+      if (createOptions.lock !== undefined) {
+        drawingOptions.lock = createOptions.lock;
+      }
+
+      if (createOptions.disableSelection !== undefined) {
+        drawingOptions.disableSelection = createOptions.disableSelection;
+      }
+
+      if (createOptions.overrides !== undefined) {
+        drawingOptions.overrides = createOptions.overrides;
+      }
+
+      drawings = [
+        ...drawings,
+        makeFakeDrawing(id, createOptions.shape, points, drawingOptions)
+      ];
+      return id;
+    };
+  }
+
+  if (options.withClearAll) {
+    chart.removeAllShapes = () => {
+      drawings = [];
     };
   }
 
   return chart;
+}
+
+function makeFakeDrawing(
+  id: string,
+  shapeType: string,
+  points: FakeDrawingPoint[],
+  options: {
+    text?: string;
+    lock?: boolean;
+    disableSelection?: boolean;
+    overrides?: Record<string, string | number | boolean | null>;
+  } = {}
+): FakeDrawing {
+  const drawing: FakeDrawing = {
+    id,
+    shapeType,
+    title: shapeType.replace("_", " "),
+    points,
+    visible: true,
+    locked: options.lock ?? false,
+    selectable: options.disableSelection ? false : true,
+    properties: {
+      linewidth: 2,
+      color: "#ff0000",
+      showLabel: true
+    },
+    style: options.overrides ?? {
+      linecolor: "#ff0000"
+    },
+    getPoints: () => points,
+    getProperties: () => drawing.properties,
+    getStyle: () => drawing.style,
+    isVisible: () => drawing.visible,
+    isLocked: () => drawing.locked,
+    isSelectable: () => drawing.selectable
+  };
+
+  if (options.text) {
+    drawing.text = options.text;
+  }
+
+  return drawing;
 }
 
 void test("raw automation env gate is enabled only by the exact stable value", () => {
@@ -654,6 +827,188 @@ void test("raw chart control validation and missing API failures are explicit", 
       "NASDAQ:NVDA"
     );
     assert.equal(fakeClient.closed, true);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw native drawing tools create, list, inspect, remove, and clear shapes", async () => {
+  const restore = installFakeWidget(
+    fakeChartApi({
+      withMutators: true,
+      withDrawingApi: true,
+      withClearAll: true
+    })
+  );
+
+  try {
+    const makeClient = () => Promise.resolve(new EvaluatingRawPageClient());
+    const common = {
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: makeClient
+    };
+    const horizontalLine = await runRawDrawShape({
+      ...common,
+      shapeType: "horizontal-line",
+      points: [
+        {
+          time: 1_780_010_000,
+          price: 520.5
+        }
+      ],
+      lock: true,
+      overrides: {
+        linecolor: "#00ff00"
+      }
+    });
+    const rectangle = await runRawDrawShape({
+      ...common,
+      shapeType: "rectangle",
+      points: [
+        {
+          time: 1_780_010_000,
+          price: 525
+        },
+        {
+          time: 1_780_020_000,
+          price: 510
+        }
+      ]
+    });
+    const text = await runRawDrawShape({
+      ...common,
+      shapeType: "text",
+      points: [
+        {
+          time: 1_780_020_000,
+          price: 530
+        }
+      ],
+      text: "Earnings gap"
+    });
+    const list = await runRawDrawList(common);
+    const properties = await runRawDrawingProperties({
+      ...common,
+      entityId: "shape-2"
+    });
+    const remove = await runRawDrawRemove({
+      ...common,
+      entityId: "shape-2"
+    });
+    const clearAll = await runRawDrawClearAll({
+      ...common,
+      confirmClearAll: true
+    });
+
+    assert.equal(horizontalLine.ok, true);
+    assert.equal(horizontalLine.action, "draw-shape");
+    assert.equal(
+      (horizontalLine.value as { entityId: string }).entityId,
+      "shape-2"
+    );
+    assert.deepEqual(
+      (horizontalLine.value as { drawing: { type: string; points: unknown[] } })
+        .drawing,
+      {
+        id: "shape-2",
+        type: "horizontal-line",
+        points: [
+          {
+            time: 1_780_010_000,
+            price: 520.5
+          }
+        ]
+      }
+    );
+    assert.equal(rectangle.ok, true);
+    assert.equal((rectangle.value as { entityId: string }).entityId, "shape-3");
+    assert.equal(text.ok, true);
+    assert.equal((text.value as { drawing: { text: string } }).drawing.text, "Earnings gap");
+    assert.equal(list.ok, true);
+    assert.equal((list.value as { count: number }).count, 4);
+    assert.equal(properties.ok, true);
+    assert.deepEqual(
+      (properties.value as { drawing: { id: string; locked: boolean } }).drawing
+        .id,
+      "shape-2"
+    );
+    assert.equal(
+      (properties.value as { drawing: { locked: boolean } }).drawing.locked,
+      true
+    );
+    assert.deepEqual(
+      (properties.value as { drawing: { style: unknown } }).drawing.style,
+      {
+        linecolor: "#00ff00"
+      }
+    );
+    assert.equal(remove.ok, true);
+    assert.equal((remove.value as { entityId: string }).entityId, "shape-2");
+    assert.equal(clearAll.ok, true);
+    assert.equal((clearAll.value as { after: { count: number } }).after.count, 0);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw native drawing validation and missing API failures are explicit", async () => {
+  let pageClientCalled = false;
+  const invalidShape = await runRawDrawShape({
+    shapeType: "trend-line",
+    points: [
+      {
+        time: 1_780_010_000,
+        price: 520.5
+      }
+    ],
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+  const unconfirmedClear = await runRawDrawClearAll({
+    confirmClearAll: false,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(invalidShape.ok, false);
+  assert.match(invalidShape.error ?? "", /requires exactly 2/i);
+  assert.equal(unconfirmedClear.ok, false);
+  assert.match(unconfirmedClear.error ?? "", /confirmClearAll=true/i);
+  assert.equal(pageClientCalled, false);
+
+  const restore = installFakeWidget(fakeChartApi());
+
+  try {
+    const missingApi = await runRawDrawList({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+    const missingProperties = await runRawDrawingProperties({
+      entityId: "shape-1",
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+    const missingClearAllApi = await runRawDrawClearAll({
+      confirmClearAll: true,
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(missingApi.ok, false);
+    assert.match(missingApi.error ?? "", /did not expose native drawing identifiers/i);
+    assert.equal(missingProperties.ok, false);
+    assert.match(missingProperties.error ?? "", /getShapeById/i);
+    assert.equal(missingClearAllApi.ok, false);
+    assert.match(
+      missingClearAllApi.error ?? "",
+      /did not expose native drawing identifiers/i
+    );
   } finally {
     restore();
   }
