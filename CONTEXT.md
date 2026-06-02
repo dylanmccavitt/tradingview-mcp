@@ -33,8 +33,8 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   chartbook creation.
 - Experimental raw automation is allowed only as an opt-in surface gated by
   `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, namespaced as
-  `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the active local
-  TradingView chart target.
+  `tradingview_raw_*`, `tradingview_draw_*`, or `tradingview_pine_*`, and
+  scoped to the active local TradingView chart target.
 - The current raw automation slice exposes bounded evaluate, coordinate click,
   keypress, text insertion, visible element discovery, selector click/hover,
   and bounded scroll primitives through CLI and MCP only when that gate is
@@ -46,7 +46,10 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   exposes drawing APIs. Macro output is mechanical review context: created
   drawing ids, anchors, levels, and warnings for Fib-style levels, measured
   moves, and range projections. It must not be presented as predictions,
-  recommendations, rankings, or advice.
+  recommendations, rankings, or advice. The gated MCP surface also exposes
+  Pine Editor tools for opening/focusing the editor, setting bounded source,
+  reading bounded source, reading compact errors/console output, and explicit
+  compile or save actions.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.
@@ -67,8 +70,9 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   actions, broker calls, unattended alerts, or generated candidates.
 - No bypassing TradingView subscriptions or access controls.
 - No Pine editor automation or subjective chart-pattern labels in the default
-  high-level workflow. Pine editor automation, if added later, must be explicit
-  and opt-in under the experimental raw automation boundary.
+  high-level workflow. Pine editor automation must be explicit and opt-in under
+  the experimental raw automation boundary; setting source, compiling, and
+  saving remain separate calls.
 - Raw automation must not target non-TradingView pages, automate account or
   security settings, create broker/order actions, add unattended alerts, rank
   symbols, or generate candidates.

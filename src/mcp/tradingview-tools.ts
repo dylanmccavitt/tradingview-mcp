@@ -52,10 +52,16 @@ import {
 import {
   DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
   DEFAULT_RAW_FIND_MAX_MATCHES,
+  DEFAULT_RAW_PINE_COMPILE_SETTLE_MS,
+  DEFAULT_RAW_PINE_GET_SOURCE_MAX_CHARS,
+  DEFAULT_RAW_PINE_SAVE_SETTLE_MS,
   DEFAULT_RAW_SCROLL_AMOUNT,
   RAW_DRAWING_MAX_OVERRIDES,
   RAW_DRAWING_TEXT_MAX_CHARS,
   RAW_FIND_MAX_MATCHES_LIMIT,
+  RAW_PINE_ACTION_SETTLE_MS_LIMIT,
+  RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT,
+  RAW_PINE_SOURCE_MAX_CHARS,
   RAW_SCROLL_MAX_AMOUNT,
   RAW_SELECTOR_MAX_CHARS,
   type RawAddIndicatorOptions,
@@ -74,6 +80,13 @@ import {
   runRawEvaluate,
   runRawFindElement,
   runRawKeypress,
+  runRawPineCompile,
+  runRawPineGetConsole,
+  runRawPineGetErrors,
+  runRawPineGetSource,
+  runRawPineOpenEditor,
+  runRawPineSave,
+  runRawPineSetSource,
   runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
@@ -96,6 +109,13 @@ import {
   type RawFindElementOptions,
   type RawEvaluateOptions,
   type RawKeypressOptions,
+  type RawPineCompileOptions,
+  type RawPineGetConsoleOptions,
+  type RawPineGetErrorsOptions,
+  type RawPineGetSourceOptions,
+  type RawPineOpenEditorOptions,
+  type RawPineSaveOptions,
+  type RawPineSetSourceOptions,
   type RawRemoveEntityOptions,
   type RawScrollOptions,
   type RawSelectorClickOptions,
@@ -155,7 +175,14 @@ export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_draw_remove",
   "tradingview_draw_clear_all",
   "tradingview_draw_fib_levels",
-  "tradingview_draw_projection"
+  "tradingview_draw_projection",
+  "tradingview_pine_open_editor",
+  "tradingview_pine_set_source",
+  "tradingview_pine_get_source",
+  "tradingview_pine_get_errors",
+  "tradingview_pine_get_console",
+  "tradingview_pine_compile",
+  "tradingview_pine_save"
 ] as const;
 
 export type RawTradingViewMcpToolName =
@@ -231,6 +258,27 @@ export interface TradingViewMcpToolHandlers {
   ) => Promise<RawAutomationResult>;
   runRawDrawProjection: (
     options: RawDrawProjectionOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineOpenEditor: (
+    options: RawPineOpenEditorOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineSetSource: (
+    options: RawPineSetSourceOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineGetSource: (
+    options: RawPineGetSourceOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineGetErrors: (
+    options: RawPineGetErrorsOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineGetConsole: (
+    options: RawPineGetConsoleOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineCompile: (
+    options: RawPineCompileOptions
+  ) => Promise<RawAutomationResult>;
+  runRawPineSave: (
+    options: RawPineSaveOptions
   ) => Promise<RawAutomationResult>;
 }
 
@@ -688,6 +736,59 @@ const rawDrawProjectionSchema = z
     }
   });
 
+const rawPineOpenEditorSchema = z.object(endpointShape);
+
+const rawPineSetSourceSchema = z.object({
+  ...endpointShape,
+  source: z
+    .string()
+    .min(1)
+    .max(RAW_PINE_SOURCE_MAX_CHARS)
+    .describe(
+      "Pine Script source to set in the active local TradingView Pine Editor. This does not compile or save."
+    )
+});
+
+const rawPineGetSourceSchema = z.object({
+  ...endpointShape,
+  maxSourceChars: positiveInteger
+    .max(RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT)
+    .optional()
+    .describe(
+      `Maximum source characters to return. Defaults to ${DEFAULT_RAW_PINE_GET_SOURCE_MAX_CHARS}; large scripts are truncated with a warning.`
+    )
+});
+
+const rawPineGetErrorsSchema = z.object(endpointShape);
+
+const rawPineGetConsoleSchema = z.object(endpointShape);
+
+const rawPineCompileSchema = z.object({
+  ...endpointShape,
+  settleMs: z
+    .number()
+    .int()
+    .min(0)
+    .max(RAW_PINE_ACTION_SETTLE_MS_LIMIT)
+    .optional()
+    .describe(
+      `Milliseconds to wait after clicking compile/add/update before reading markers. Defaults to ${DEFAULT_RAW_PINE_COMPILE_SETTLE_MS}.`
+    )
+});
+
+const rawPineSaveSchema = z.object({
+  ...endpointShape,
+  settleMs: z
+    .number()
+    .int()
+    .min(0)
+    .max(RAW_PINE_ACTION_SETTLE_MS_LIMIT)
+    .optional()
+    .describe(
+      `Milliseconds to wait after the explicit save action. Defaults to ${DEFAULT_RAW_PINE_SAVE_SETTLE_MS}.`
+    )
+});
+
 type MacroPointArg = z.infer<typeof rawMacroPoint>;
 type MacroMetadataArg = NonNullable<z.infer<typeof macroMetadataSchema>>[number];
 type MacroRangeArg = NonNullable<
@@ -801,7 +902,21 @@ function handlersWithDefaults(
     runRawDrawFibLevels:
       handlers?.runRawDrawFibLevels ?? runRawDrawFibLevels,
     runRawDrawProjection:
-      handlers?.runRawDrawProjection ?? runRawDrawProjection
+      handlers?.runRawDrawProjection ?? runRawDrawProjection,
+    runRawPineOpenEditor:
+      handlers?.runRawPineOpenEditor ?? runRawPineOpenEditor,
+    runRawPineSetSource:
+      handlers?.runRawPineSetSource ?? runRawPineSetSource,
+    runRawPineGetSource:
+      handlers?.runRawPineGetSource ?? runRawPineGetSource,
+    runRawPineGetErrors:
+      handlers?.runRawPineGetErrors ?? runRawPineGetErrors,
+    runRawPineGetConsole:
+      handlers?.runRawPineGetConsole ?? runRawPineGetConsole,
+    runRawPineCompile:
+      handlers?.runRawPineCompile ?? runRawPineCompile,
+    runRawPineSave:
+      handlers?.runRawPineSave ?? runRawPineSave
   };
 }
 
@@ -1988,6 +2103,204 @@ export function registerTradingViewMcpTools(
 
       return textToolResult(
         `Draw projection levels: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_open_editor",
+    {
+      title: "Open TradingView Pine Editor",
+      description: rawGuardrailedDescription(
+        "Open or focus the Pine Editor panel in the active local TradingView chart target."
+      ),
+      inputSchema: rawPineOpenEditorSchema,
+      annotations: {
+        title: "Open TradingView Pine Editor",
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineOpenEditorOptions = endpointOptions(args);
+      const result = await handlers.runRawPineOpenEditor(rawOptions);
+
+      return textToolResult(
+        `Open Pine Editor: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_set_source",
+    {
+      title: "Set TradingView Pine Source",
+      description: rawGuardrailedDescription(
+        "Set bounded Pine source in the active Pine Editor only; this does not compile, save, or add the script to the chart."
+      ),
+      inputSchema: rawPineSetSourceSchema,
+      annotations: {
+        title: "Set TradingView Pine Source",
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineSetSourceOptions = {
+        source: args.source,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawPineSetSource(rawOptions);
+
+      return textToolResult(
+        `Set Pine source: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_get_source",
+    {
+      title: "Get TradingView Pine Source",
+      description: rawGuardrailedDescription(
+        "Read the current Pine Editor source with bounded output; large scripts are truncated unless maxSourceChars is raised intentionally."
+      ),
+      inputSchema: rawPineGetSourceSchema,
+      annotations: {
+        title: "Get TradingView Pine Source",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineGetSourceOptions = {
+        maxSourceChars:
+          args.maxSourceChars ?? DEFAULT_RAW_PINE_GET_SOURCE_MAX_CHARS,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawPineGetSource(rawOptions);
+
+      return textToolResult(
+        `Get Pine source: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_get_errors",
+    {
+      title: "Get TradingView Pine Errors",
+      description: rawGuardrailedDescription(
+        "Read compact Monaco compile markers from the active Pine Editor without compiling or saving."
+      ),
+      inputSchema: rawPineGetErrorsSchema,
+      annotations: {
+        title: "Get TradingView Pine Errors",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineGetErrorsOptions = endpointOptions(args);
+      const result = await handlers.runRawPineGetErrors(rawOptions);
+
+      return textToolResult(
+        `Get Pine errors: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_get_console",
+    {
+      title: "Get TradingView Pine Console",
+      description: rawGuardrailedDescription(
+        "Read compact Pine console or output rows from the active Pine Editor without compiling or saving."
+      ),
+      inputSchema: rawPineGetConsoleSchema,
+      annotations: {
+        title: "Get TradingView Pine Console",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineGetConsoleOptions = endpointOptions(args);
+      const result = await handlers.runRawPineGetConsole(rawOptions);
+
+      return textToolResult(
+        `Get Pine console: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_compile",
+    {
+      title: "Compile TradingView Pine Source",
+      description: rawGuardrailedDescription(
+        "Explicitly click the Pine Editor compile/add/update control, wait briefly, and return compact compile markers."
+      ),
+      inputSchema: rawPineCompileSchema,
+      annotations: {
+        title: "Compile TradingView Pine Source",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineCompileOptions = {
+        settleMs: args.settleMs ?? DEFAULT_RAW_PINE_COMPILE_SETTLE_MS,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawPineCompile(rawOptions);
+
+      return textToolResult(
+        `Compile Pine source: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_pine_save",
+    {
+      title: "Save TradingView Pine Source",
+      description: rawGuardrailedDescription(
+        "Explicitly save the current Pine Editor source; this is separate from setting source and compiling."
+      ),
+      inputSchema: rawPineSaveSchema,
+      annotations: {
+        title: "Save TradingView Pine Source",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawPineSaveOptions = {
+        settleMs: args.settleMs ?? DEFAULT_RAW_PINE_SAVE_SETTLE_MS,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawPineSave(rawOptions);
+
+      return textToolResult(
+        `Save Pine source: ${result.ok ? "success" : "failed"}.`,
         asToolData(result)
       );
     }

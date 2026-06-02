@@ -100,8 +100,8 @@ to TradingView, checking status, listing the local universe, charting one
 symbol, charting a configured universe selection, capturing the current chart,
 and building a chartbook. Experimental raw automation tools are opt-in only,
 gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, namespaced as
-`tradingview_raw_*` or `tradingview_draw_*`, and scoped to the active local
-TradingView chart target. The current raw slice registers
+`tradingview_raw_*`, `tradingview_draw_*`, or `tradingview_pine_*`, and scoped
+to the active local TradingView chart target. The current raw slice registers
 `tradingview_raw_evaluate`, `tradingview_raw_click`,
 `tradingview_raw_keypress`, `tradingview_raw_type_text`,
 `tradingview_raw_find_element`, `tradingview_raw_selector_click`,
@@ -112,8 +112,13 @@ TradingView chart target. The current raw slice registers
 `tradingview_raw_remove_entity`, plus `tradingview_draw_shape`,
 `tradingview_draw_list`, `tradingview_draw_properties`,
 `tradingview_draw_remove`, `tradingview_draw_clear_all`,
-`tradingview_draw_fib_levels`, and `tradingview_draw_projection` only when the
-gate is enabled. Quant drawing macros must return review context only:
+`tradingview_draw_fib_levels`, and `tradingview_draw_projection`, plus
+`tradingview_pine_open_editor`, `tradingview_pine_set_source`,
+`tradingview_pine_get_source`, `tradingview_pine_get_errors`,
+`tradingview_pine_get_console`, `tradingview_pine_compile`, and
+`tradingview_pine_save` only when the gate is enabled. Pine source setting,
+compile, and save are explicit separate calls; source retrieval is bounded and
+may return truncation warnings. Quant drawing macros must return review context only:
 created drawing ids, anchors, levels, and warnings, never predictions,
 recommendations, rankings, or advice. `tradingview_draw_clear_all` is
 destructive and must require an explicit clear-all confirmation in its schema

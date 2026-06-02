@@ -104,6 +104,9 @@ void test("v1 workflow documents experimental raw automation boundary", () => {
   assert.match(workflow, /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
   assert.match(workflow, /`tradingview_raw_\*`/);
   assert.match(workflow, /`tradingview_draw_\*`/);
+  assert.match(workflow, /`tradingview_pine_\*`/);
+  assert.match(workflow, /set bounded source without\s+compiling or saving/i);
+  assert.match(workflow, /truncation warnings/i);
   assert.match(workflow, /active local `tradingview\.com\/chart` page/);
   assert.match(workflow, /not part of the default high-level\s+chartbook workflow/i);
   assert.match(workflow, /broker\/order pages/i);
@@ -116,6 +119,8 @@ void test("raw automation ADR pins opt-in naming and guardrails", () => {
   assert.match(rawAutomationAdr, /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
   assert.match(rawAutomationAdr, /`tradingview_raw_\*`/);
   assert.match(rawAutomationAdr, /`tradingview_draw_\*`/);
+  assert.match(rawAutomationAdr, /`tradingview_pine_\*`/);
+  assert.match(rawAutomationAdr, /Source\s+retrieval is bounded/i);
   assert.match(rawAutomationAdr, /disabled by default/i);
   assert.match(rawAutomationAdr, /active local TradingView chart target/i);
   assert.match(rawAutomationAdr, /must not automate broker\/order workflows/i);
@@ -129,4 +134,6 @@ void test("README links the v1 workflow", () => {
   assert.match(readme, /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
   assert.match(readme, /`tradingview_raw_\*`/);
   assert.match(readme, /`tradingview_draw_\*`/);
+  assert.match(readme, /`tradingview_pine_\*`/);
+  assert.match(readme, /read bounded source with truncation\s+warnings/i);
 });

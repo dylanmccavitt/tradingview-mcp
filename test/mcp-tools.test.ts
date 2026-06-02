@@ -937,6 +937,188 @@ void test("raw MCP drawing macro tools call injected handlers when enabled", asy
   }
 });
 
+void test("raw MCP Pine editor tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawPineOpenEditor: (options) => {
+        calls.push(`open:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "pine-open-editor",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            ready: true,
+            opened: true
+          },
+          warnings: []
+        });
+      },
+      runRawPineSetSource: (options) => {
+        calls.push(`set:${options.source.split("\n").length}`);
+        return Promise.resolve({
+          ok: true,
+          action: "pine-set-source",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            linesSet: 2,
+            charCount: options.source.length
+          },
+          warnings: []
+        });
+      },
+      runRawPineGetSource: (options) => {
+        calls.push(`source:${options.maxSourceChars ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "pine-get-source",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            source: "//@version=6",
+            charCount: 12,
+            lineCount: 1,
+            truncated: false,
+            maxSourceChars: options.maxSourceChars
+          },
+          warnings: []
+        });
+      },
+      runRawPineGetErrors: () => {
+        calls.push("errors");
+        return Promise.resolve({
+          ok: true,
+          action: "pine-get-errors",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            hasErrors: false,
+            errorCount: 0,
+            errors: []
+          },
+          warnings: []
+        });
+      },
+      runRawPineGetConsole: () => {
+        calls.push("console");
+        return Promise.resolve({
+          ok: true,
+          action: "pine-get-console",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            entryCount: 1,
+            entries: [
+              {
+                type: "compile",
+                message: "Compiled"
+              }
+            ]
+          },
+          warnings: []
+        });
+      },
+      runRawPineCompile: (options) => {
+        calls.push(`compile:${options.settleMs ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "pine-compile",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            buttonClicked: "Update on chart",
+            hasErrors: false,
+            errorCount: 0,
+            errors: []
+          },
+          warnings: []
+        });
+      },
+      runRawPineSave: (options) => {
+        calls.push(`save:${options.settleMs ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "pine-save",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          value: {
+            method: "Save"
+          },
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const open = await client.callTool({
+      name: "tradingview_pine_open_editor",
+      arguments: {
+        port: 9223
+      }
+    });
+    const set = await client.callTool({
+      name: "tradingview_pine_set_source",
+      arguments: {
+        source: "//@version=6\nindicator(\"Test\")"
+      }
+    });
+    const getSource = await client.callTool({
+      name: "tradingview_pine_get_source",
+      arguments: {
+        maxSourceChars: 1000
+      }
+    });
+    const errors = await client.callTool({
+      name: "tradingview_pine_get_errors",
+      arguments: {}
+    });
+    const pineConsole = await client.callTool({
+      name: "tradingview_pine_get_console",
+      arguments: {}
+    });
+    const compile = await client.callTool({
+      name: "tradingview_pine_compile",
+      arguments: {
+        settleMs: 0
+      }
+    });
+    const save = await client.callTool({
+      name: "tradingview_pine_save",
+      arguments: {
+        settleMs: 0
+      }
+    });
+
+    assert.equal(callResult(open).structuredContent?.action, "pine-open-editor");
+    assert.equal(callResult(set).structuredContent?.action, "pine-set-source");
+    assert.equal(callResult(getSource).structuredContent?.action, "pine-get-source");
+    assert.equal(callResult(errors).structuredContent?.action, "pine-get-errors");
+    assert.equal(
+      callResult(pineConsole).structuredContent?.action,
+      "pine-get-console"
+    );
+    assert.equal(callResult(compile).structuredContent?.action, "pine-compile");
+    assert.equal(callResult(save).structuredContent?.action, "pine-save");
+    assert.deepEqual(calls, [
+      "open:9223",
+      "set:2",
+      "source:1000",
+      "errors",
+      "console",
+      "compile:0",
+      "save:0"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
 void test("profile-aware MCP tools expose accepted review profile schema", async () => {
   const { client, close } = await connectClient();
 
@@ -1255,6 +1437,78 @@ void test("raw drawing macro validation rejects invalid MCP requests before hand
     assert.match(contentText(badProjection), /Input validation error/i);
     assert.equal(callResult(tooManyRangeLevels).isError, true);
     assert.match(contentText(tooManyRangeLevels), /emits 18 levels/i);
+  } finally {
+    await close();
+  }
+});
+
+void test("raw Pine editor validation rejects invalid MCP requests before handlers run", async () => {
+  let called = false;
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawPineSetSource: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "pine-set-source",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawPineGetSource: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "pine-get-source",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawPineCompile: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "pine-compile",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T18:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const emptySource = await client.callTool({
+      name: "tradingview_pine_set_source",
+      arguments: {
+        source: ""
+      }
+    });
+    const tooMuchSource = await client.callTool({
+      name: "tradingview_pine_get_source",
+      arguments: {
+        maxSourceChars: 100_001
+      }
+    });
+    const badSettle = await client.callTool({
+      name: "tradingview_pine_compile",
+      arguments: {
+        settleMs: 20_000
+      }
+    });
+
+    assert.equal(called, false);
+    assert.equal(callResult(emptySource).isError, true);
+    assert.match(contentText(emptySource), /Input validation error/i);
+    assert.equal(callResult(tooMuchSource).isError, true);
+    assert.match(contentText(tooMuchSource), /Input validation error/i);
+    assert.equal(callResult(badSettle).isError, true);
+    assert.match(contentText(badSettle), /Input validation error/i);
   } finally {
     await close();
   }

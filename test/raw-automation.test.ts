@@ -18,6 +18,13 @@ import {
   runRawEvaluate,
   runRawFindElement,
   runRawKeypress,
+  runRawPineCompile,
+  runRawPineGetConsole,
+  runRawPineGetErrors,
+  runRawPineGetSource,
+  runRawPineOpenEditor,
+  runRawPineSave,
+  runRawPineSetSource,
   runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
@@ -309,6 +316,117 @@ function installFakeWidget(chart: FakeChartApi): () => void {
 
   return () => {
     globalRecord.tvWidget = previous;
+  };
+}
+
+interface FakePineMarker {
+  startLineNumber: number;
+  startColumn: number;
+  endLineNumber: number;
+  endColumn: number;
+  severity: number;
+  message: string;
+}
+
+function installFakePineEditor(options: {
+  source?: string;
+  markers?: FakePineMarker[];
+  consoleMessages?: string[];
+  buttons?: string[];
+} = {}): {
+  restore: () => void;
+  clicked: string[];
+  source: () => string;
+} {
+  const globalRecord = globalThis as unknown as {
+    monaco?: unknown;
+    document?: unknown;
+    getComputedStyle?: unknown;
+    TradingView?: unknown;
+  };
+  const previousMonaco = globalRecord.monaco;
+  const previousDocument = globalRecord.document;
+  const previousComputedStyle = globalRecord.getComputedStyle;
+  const previousTradingView = globalRecord.TradingView;
+  let source = options.source ?? "//@version=6\nindicator(\"Before\")";
+  const clicked: string[] = [];
+  const markers = options.markers ?? [];
+
+  const editor = {
+    getValue: () => source,
+    setValue: (nextSource: string) => {
+      source = nextSource;
+    },
+    getModel: () => ({
+      uri: "inmemory://pine/current.pine"
+    })
+  };
+  const monacoEditor = {
+    getEditors: () => [editor],
+    getModelMarkers: () => markers
+  };
+
+  globalRecord.monaco = {
+    editor: monacoEditor
+  };
+  globalRecord.TradingView = {
+    bottomWidgetBar: {
+      activateScriptEditorTab: () => {
+        clicked.push("activateScriptEditorTab");
+      }
+    }
+  };
+  globalRecord.getComputedStyle = () => ({
+    display: "block",
+    visibility: "visible"
+  });
+  globalRecord.document = {
+    querySelector: () => null,
+    dispatchEvent: () => {
+      clicked.push("keyboard-save-shortcut");
+      return true;
+    },
+    querySelectorAll: (selector: string) => {
+      if (selector === "button") {
+        return (options.buttons ?? []).map((label) => ({
+          textContent: label,
+          innerText: label,
+          className: "",
+          getAttribute: (name: string) => name === "aria-label" ? label : null,
+          getBoundingClientRect: () => ({
+            width: 80,
+            height: 24
+          }),
+          click: () => {
+            clicked.push(label);
+          }
+        }));
+      }
+
+      if (selector.includes("console") || selector.includes("message")) {
+        return (options.consoleMessages ?? []).map((message) => ({
+          textContent: message,
+          className: /error/i.test(message) ? "consoleRow error" : "consoleRow",
+          getBoundingClientRect: () => ({
+            width: 80,
+            height: 24
+          })
+        }));
+      }
+
+      return [];
+    }
+  };
+
+  return {
+    restore: () => {
+      globalRecord.monaco = previousMonaco;
+      globalRecord.document = previousDocument;
+      globalRecord.getComputedStyle = previousComputedStyle;
+      globalRecord.TradingView = previousTradingView;
+    },
+    clicked,
+    source: () => source
   };
 }
 
@@ -1181,6 +1299,198 @@ void test("raw drawing macro validation and missing API failures are explicit", 
     );
   } finally {
     restore();
+  }
+});
+
+void test("raw Pine editor tools open, set, read, compile, save, and shape compact output", async () => {
+  const pine = installFakePineEditor({
+    source:
+      "//@version=6\nindicator(\"Before\")\nplot(close)\n// this line will be truncated",
+    markers: [
+      {
+        startLineNumber: 2,
+        startColumn: 1,
+        endLineNumber: 2,
+        endColumn: 10,
+        severity: 8,
+        message: "Undeclared identifier"
+      }
+    ],
+    consoleMessages: [
+      "Compiled with 1 error",
+      "log.info: source loaded"
+    ],
+    buttons: ["Update on chart", "Save"]
+  });
+
+  try {
+    const makeClient = () => Promise.resolve(new EvaluatingRawPageClient());
+    const common = {
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: makeClient,
+      now: () => new Date("2026-06-02T18:00:00.000Z")
+    };
+    const open = await runRawPineOpenEditor(common);
+    const set = await runRawPineSetSource({
+      ...common,
+      source: "//@version=6\nindicator(\"After\")\nplot(close)"
+    });
+    const getSource = await runRawPineGetSource({
+      ...common,
+      maxSourceChars: 20
+    });
+    const errors = await runRawPineGetErrors(common);
+    const pineConsole = await runRawPineGetConsole(common);
+    const compile = await runRawPineCompile({
+      ...common,
+      settleMs: 0
+    });
+    const save = await runRawPineSave({
+      ...common,
+      settleMs: 0
+    });
+
+    assert.equal(open.ok, true);
+    assert.equal(open.action, "pine-open-editor");
+    assert.equal(set.ok, true);
+    assert.equal(set.action, "pine-set-source");
+    assert.equal(pine.source(), "//@version=6\nindicator(\"After\")\nplot(close)");
+    assert.equal((set.value as { linesSet: number }).linesSet, 3);
+    assert.equal(getSource.ok, true);
+    assert.equal(getSource.action, "pine-get-source");
+    assert.equal((getSource.value as { source: string }).source.length, 20);
+    assert.equal((getSource.value as { truncated: boolean }).truncated, true);
+    assert.match(getSource.warnings.join(" "), /truncated/i);
+    assert.equal(errors.ok, true);
+    assert.equal((errors.value as { hasErrors: boolean }).hasErrors, true);
+    assert.equal((errors.value as { errorCount: number }).errorCount, 1);
+    assert.deepEqual(
+      (errors.value as { errors: { line: number; severity: string }[] }).errors.map(
+        (error) => ({
+          line: error.line,
+          severity: error.severity
+        })
+      ),
+      [
+        {
+          line: 2,
+          severity: "error"
+        }
+      ]
+    );
+    assert.equal(pineConsole.ok, true);
+    assert.equal(
+      (pineConsole.value as { entries: { message: string }[] }).entries.length,
+      2
+    );
+    assert.equal(compile.ok, true);
+    assert.equal((compile.value as { buttonClicked: string }).buttonClicked, "Update on chart");
+    assert.equal(save.ok, true);
+    assert.equal((save.value as { method: string }).method, "Save");
+    assert.deepEqual(pine.clicked, ["Update on chart", "Save"]);
+  } finally {
+    pine.restore();
+  }
+});
+
+void test("raw Pine editor validation and missing editor failures are explicit", async () => {
+  let pageClientCalled = false;
+  const invalidSource = await runRawPineSetSource({
+    source: "",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+  const invalidGetLimit = await runRawPineGetSource({
+    maxSourceChars: 100_001,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+  const invalidSettle = await runRawPineCompile({
+    settleMs: 20_000,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(invalidSource.ok, false);
+  assert.match(invalidSource.error ?? "", /source is required/i);
+  assert.equal(invalidGetLimit.ok, false);
+  assert.match(invalidGetLimit.error ?? "", /maxSourceChars/i);
+  assert.equal(invalidSettle.ok, false);
+  assert.match(invalidSettle.error ?? "", /settleMs/i);
+  assert.equal(pageClientCalled, false);
+
+  const globalRecord = globalThis as unknown as {
+    monaco?: unknown;
+    document?: unknown;
+    TradingView?: unknown;
+  };
+  const previousMonaco = globalRecord.monaco;
+  const previousDocument = globalRecord.document;
+  const previousTradingView = globalRecord.TradingView;
+  globalRecord.monaco = undefined;
+  globalRecord.document = undefined;
+  globalRecord.TradingView = undefined;
+
+  try {
+    const missingEditor = await runRawPineOpenEditor({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(missingEditor.ok, false);
+    assert.match(missingEditor.error ?? "", /Pine Editor|Monaco/i);
+    assert.match(missingEditor.warnings.join(" "), /open the Pine Editor/i);
+  } finally {
+    globalRecord.monaco = previousMonaco;
+    globalRecord.document = previousDocument;
+    globalRecord.TradingView = previousTradingView;
+  }
+});
+
+void test("raw Pine compile and save do not blur explicit action boundaries", async () => {
+  const saveAndAddOnly = installFakePineEditor({
+    buttons: ["Save and add to chart"]
+  });
+
+  try {
+    const compile = await runRawPineCompile({
+      settleMs: 0,
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(compile.ok, false);
+    assert.match(compile.error ?? "", /compile|add-to-chart|update/i);
+    assert.deepEqual(saveAndAddOnly.clicked, []);
+  } finally {
+    saveAndAddOnly.restore();
+  }
+
+  const noSaveButton = installFakePineEditor({
+    buttons: []
+  });
+
+  try {
+    const save = await runRawPineSave({
+      settleMs: 0,
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(save.ok, false);
+    assert.match(save.error ?? "", /save button/i);
+    assert.deepEqual(noSaveButton.clicked, []);
+  } finally {
+    noSaveButton.restore();
   }
 });
 
