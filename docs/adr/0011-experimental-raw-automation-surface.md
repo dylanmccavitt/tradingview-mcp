@@ -20,7 +20,7 @@ TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1
 Raw tools must use clear namespaces:
 
 - `tradingview_raw_*` for CDP/page evaluation, input, element discovery, and
-  direct chart controls
+  direct chart controls/data extraction
 - `tradingview_draw_*` for native TradingView drawing creation, inspection, and
   removal
 - `tradingview_pine_*` for explicit Pine Editor source, compile, save, errors,
@@ -82,6 +82,13 @@ issues must port reference behavior in small slices.
   state, set symbol, set timeframe, set chart type, set visible range, add
   indicator, and remove entity by id when TradingView exposes the required
   chart API.
+- The compact chart data slice adds MCP-only
+  `tradingview_raw_chart_data_summary`, `tradingview_raw_quote_snapshot`, and
+  `tradingview_raw_study_values` behind the same gate. These tools read bounded
+  OHLCV summary stats, active-chart quote/current-bar fields, and compact
+  visible study values only when TradingView exposes them. Their output is
+  review context only, not scanner/ranking output, market-data service output,
+  alerts, generated candidates, recommendations, or advice.
 - The native drawing slice adds MCP-only `tradingview_draw_shape`,
   `tradingview_draw_list`, `tradingview_draw_properties`,
   `tradingview_draw_remove`, and `tradingview_draw_clear_all` tools behind the

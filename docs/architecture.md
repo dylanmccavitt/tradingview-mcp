@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, native drawing tools, and Pine Editor tools against the active chart target
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, compact chart data extraction, native drawing tools, and Pine Editor tools against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -63,6 +63,9 @@ The current gated raw MCP tools are:
 - `tradingview_raw_selector_hover`
 - `tradingview_raw_scroll`
 - `tradingview_raw_chart_state`
+- `tradingview_raw_chart_data_summary`
+- `tradingview_raw_quote_snapshot`
+- `tradingview_raw_study_values`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -134,6 +137,15 @@ chart type, set visible range, add indicator, and remove entity. If TradingView
 does not expose the needed chart API, the tools fail with a clear reason rather
 than scraping broader internals.
 
+The same gated MCP surface exposes compact chart data extraction tools when the
+active chart API exposes the needed data. `tradingview_raw_chart_data_summary`
+returns bounded recent OHLCV summary stats only. `tradingview_raw_quote_snapshot`
+returns the active symbol plus latest exposed current-bar/quote fields.
+`tradingview_raw_study_values` returns compact visible indicator/study values
+with explicit study/value caps. These outputs are local chart-review context
+only and must not be presented as scans, rankings, alerts, recommendations,
+generated candidates, market-data service output, or financial advice.
+
 The same gated MCP surface exposes native drawing tools through supported
 TradingView chart/drawing APIs when available. `tradingview_draw_shape` creates
 horizontal line, trend line, rectangle, and text drawings from explicit
@@ -166,9 +178,10 @@ surfaces only and report unsupported editor/API paths clearly.
 `src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
 `raw type-text`, `raw find-element`, `raw selector-click`,
 `raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
-matching input/selector tools plus the direct chart state/control
-`tradingview_raw_*`, `tradingview_draw_*`, and `tradingview_pine_*` MCP tools only when
-`TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
+matching input/selector tools plus direct chart state/control, compact data,
+drawing, and Pine MCP tools under `tradingview_raw_*`, `tradingview_draw_*`,
+and `tradingview_pine_*` only when `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`
+is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 
 ### One-Symbol Chart Capture

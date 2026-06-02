@@ -6,6 +6,7 @@ import {
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
   runRawAddIndicator,
+  runRawChartDataSummary,
   runRawChartState,
   runRawClick,
   runRawDrawClearAll,
@@ -25,6 +26,7 @@ import {
   runRawPineOpenEditor,
   runRawPineSave,
   runRawPineSetSource,
+  runRawQuoteSnapshot,
   runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
@@ -33,6 +35,7 @@ import {
   runRawSetSymbol,
   runRawSetTimeframe,
   runRawSetVisibleRange,
+  runRawStudyValues,
   runRawTypeText,
   type RawTradingViewPageClient
 } from "../src/tradingview/raw-automation.js";
@@ -177,6 +180,24 @@ class FakeRawPageClient implements RawTradingViewPageClient {
 interface FakeStudy {
   id: string;
   name: string;
+  visible?: boolean;
+  values?: Record<string, string | number | boolean>;
+  dataWindowView?: () => {
+    items: () => {
+      _title: string;
+      _value: string | number | boolean;
+    }[];
+  };
+  isVisible?: () => boolean;
+}
+
+interface FakeBar {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
 interface FakeDrawingPoint {
@@ -212,6 +233,10 @@ interface FakeChartApi {
     to: number;
   };
   getAllStudies(): FakeStudy[];
+  getStudyById?: (entityId: string) => FakeStudy | undefined;
+  exportData?: () => {
+    bars: FakeBar[];
+  };
   setSymbol?: (symbol: string, timeframeOrDone?: unknown, done?: () => void) => void;
   setResolution?: (timeframe: string, done?: () => void) => void;
   setChartType?: (chartType: string | number) => void;
@@ -433,6 +458,8 @@ function installFakePineEditor(options: {
 function fakeChartApi(options: {
   withMutators?: boolean;
   studyCount?: number;
+  withBars?: boolean;
+  withStudyValues?: boolean;
   withDrawingApi?: boolean;
   withClearAll?: boolean;
 } = {}): FakeChartApi {
@@ -447,11 +474,58 @@ function fakeChartApi(options: {
     {
       length: options.studyCount ?? 2
     },
-    (_value, index) => ({
-      id: `study-${index + 1}`,
-      name: index === 0 ? "Volume" : `Study ${index + 1}`
-    })
+    (_value, index) => {
+      const study: FakeStudy = {
+        id: `study-${index + 1}`,
+        name: index === 0 ? "Volume" : `Study ${index + 1}`
+      };
+
+      if (options.withStudyValues) {
+        study.visible = true;
+        study.isVisible = () => study.visible ?? true;
+        study.dataWindowView = () => ({
+          items: () => [
+            {
+              _title: index === 0 ? "Volume" : "Value",
+              _value: index === 0 ? 45_000_000 : 52.25 + index
+            },
+            {
+              _title: "Signal",
+              _value: index === 0 ? "rising" : "neutral"
+            }
+          ]
+        });
+      }
+
+      return study;
+    }
   );
+  const bars: FakeBar[] = [
+    {
+      timestamp: 1_780_000_000,
+      open: 500,
+      high: 512,
+      low: 498,
+      close: 510,
+      volume: 41_000_000
+    },
+    {
+      timestamp: 1_780_086_400,
+      open: 510,
+      high: 525,
+      low: 505,
+      close: 520,
+      volume: 45_000_000
+    },
+    {
+      timestamp: 1_780_172_800,
+      open: 520,
+      high: 531,
+      low: 515,
+      close: 528,
+      volume: 49_000_000
+    }
+  ];
   let drawings: FakeDrawing[] = [
     makeFakeDrawing("shape-1", "horizontal_line", [
       {
@@ -468,6 +542,17 @@ function fakeChartApi(options: {
     getVisibleRange: () => range,
     getAllStudies: () => studies
   };
+
+  if (options.withBars) {
+    chart.exportData = () => ({
+      bars
+    });
+  }
+
+  if (options.withStudyValues) {
+    chart.getStudyById = (entityId: string) =>
+      studies.find((study) => study.id === entityId);
+  }
 
   if (options.withMutators) {
     chart.setSymbol = (
@@ -835,6 +920,185 @@ void test("raw chart state reads compact chart API fields without a live Trading
     assert.equal(fakeClient.calls[0]?.awaitPromise, true);
     assert.equal(fakeClient.calls[0]?.throwOnSideEffect, false);
     assert.equal(fakeClient.closed, true);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw chart data summary returns bounded OHLCV stats without a live TradingView session", async () => {
+  const restore = installFakeWidget(fakeChartApi({ withBars: true }));
+  const fakeClient = new EvaluatingRawPageClient();
+
+  try {
+    const result = await runRawChartDataSummary({
+      barCount: 2,
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(fakeClient)
+    });
+
+    const value = result.value as {
+      requestedBarCount: number;
+      barCount: number;
+      period: {
+        from: number;
+        to: number;
+      };
+      open: number;
+      close: number;
+      high: number;
+      low: number;
+      range: number;
+      change: number;
+      changePct: number;
+      volume: {
+        average: number;
+      };
+      lastBar: {
+        timestamp: number;
+        close: number;
+      };
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "chart-data-summary");
+    assert.equal(value.requestedBarCount, 2);
+    assert.equal(value.barCount, 2);
+    assert.deepEqual(value.period, {
+      from: 1_780_086_400,
+      to: 1_780_172_800
+    });
+    assert.equal(value.open, 510);
+    assert.equal(value.close, 528);
+    assert.equal(value.high, 531);
+    assert.equal(value.low, 505);
+    assert.equal(value.range, 26);
+    assert.equal(value.change, 18);
+    assert.equal(value.changePct, 3.529412);
+    assert.equal(value.volume.average, 47_000_000);
+    assert.equal(value.lastBar.close, 528);
+    assert.equal(fakeClient.closed, true);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw chart data summary validates bar count before opening CDP", async () => {
+  let clientCalled = false;
+
+  const result = await runRawChartDataSummary({
+    barCount: 501,
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      clientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error ?? "", /barCount/i);
+  assert.equal(clientCalled, false);
+});
+
+void test("raw quote snapshot returns symbol and current bar data", async () => {
+  const restore = installFakeWidget(fakeChartApi({ withBars: true }));
+
+  try {
+    const result = await runRawQuoteSnapshot({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    const value = result.value as {
+      symbol: string;
+      timestamp: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      last: number;
+      volume: number;
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "quote-snapshot");
+    assert.equal(value.symbol, "NASDAQ:NVDA");
+    assert.equal(value.timestamp, 1_780_172_800);
+    assert.equal(value.open, 520);
+    assert.equal(value.high, 531);
+    assert.equal(value.low, 515);
+    assert.equal(value.close, 528);
+    assert.equal(value.last, 528);
+    assert.equal(value.volume, 49_000_000);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw study values returns compact visible indicator values and caps studies", async () => {
+  const restore = installFakeWidget(
+    fakeChartApi({ studyCount: 3, withStudyValues: true })
+  );
+
+  try {
+    const result = await runRawStudyValues({
+      maxStudies: 1,
+      maxValuesPerStudy: 1,
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    const value = result.value as {
+      studyCount: number;
+      totalVisibleStudies: number;
+      studies: {
+        id: string;
+        name: string;
+        valueCount: number;
+        values: {
+          label: string;
+          value: string | number | boolean;
+        }[];
+      }[];
+      warnings: string[];
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "study-values");
+    assert.equal(value.studyCount, 1);
+    assert.equal(value.totalVisibleStudies, 3);
+    assert.equal(value.studies[0]?.id, "study-1");
+    assert.equal(value.studies[0]?.name, "Volume");
+    assert.equal(value.studies[0]?.valueCount, 1);
+    assert.deepEqual(value.studies[0]?.values, [
+      {
+        label: "Volume",
+        value: 45_000_000
+      }
+    ]);
+    assert.match(value.warnings.join(" "), /truncated to 1 visible studies/i);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw data extraction reports unsupported chart APIs explicitly", async () => {
+  const restore = installFakeWidget(fakeChartApi());
+
+  try {
+    const summary = await runRawChartDataSummary({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+    const quote = await runRawQuoteSnapshot({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(summary.ok, false);
+    assert.match(summary.error ?? "", /OHLCV data/i);
+    assert.match(summary.warnings.join(" "), /did not expose compact OHLCV/i);
+    assert.equal(quote.ok, false);
+    assert.match(quote.error ?? "", /current bar or quote price/i);
   } finally {
     restore();
   }

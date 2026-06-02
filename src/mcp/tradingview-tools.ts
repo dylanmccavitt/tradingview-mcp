@@ -52,22 +52,29 @@ import {
 import {
   DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
   DEFAULT_RAW_FIND_MAX_MATCHES,
+  DEFAULT_RAW_CHART_DATA_BAR_COUNT,
   DEFAULT_RAW_PINE_COMPILE_SETTLE_MS,
   DEFAULT_RAW_PINE_GET_SOURCE_MAX_CHARS,
   DEFAULT_RAW_PINE_SAVE_SETTLE_MS,
   DEFAULT_RAW_SCROLL_AMOUNT,
+  DEFAULT_RAW_STUDY_VALUES_MAX_STUDIES,
+  DEFAULT_RAW_STUDY_VALUES_MAX_VALUES,
   RAW_DRAWING_MAX_OVERRIDES,
   RAW_DRAWING_TEXT_MAX_CHARS,
+  RAW_CHART_DATA_BAR_COUNT_LIMIT,
   RAW_FIND_MAX_MATCHES_LIMIT,
   RAW_PINE_ACTION_SETTLE_MS_LIMIT,
   RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT,
   RAW_PINE_SOURCE_MAX_CHARS,
   RAW_SCROLL_MAX_AMOUNT,
   RAW_SELECTOR_MAX_CHARS,
+  RAW_STUDY_VALUES_MAX_STUDIES_LIMIT,
+  RAW_STUDY_VALUES_MAX_VALUES_LIMIT,
   type RawAddIndicatorOptions,
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
   runRawAddIndicator,
+  runRawChartDataSummary,
   runRawChartState,
   runRawClick,
   runRawDrawClearAll,
@@ -87,6 +94,7 @@ import {
   runRawPineOpenEditor,
   runRawPineSave,
   runRawPineSetSource,
+  runRawQuoteSnapshot,
   runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
@@ -95,8 +103,10 @@ import {
   runRawSetSymbol,
   runRawSetTimeframe,
   runRawSetVisibleRange,
+  runRawStudyValues,
   runRawTypeText,
   type RawAutomationResult,
+  type RawChartDataSummaryOptions,
   type RawChartStateOptions,
   type RawClickOptions,
   type RawDrawClearAllOptions,
@@ -114,6 +124,7 @@ import {
   type RawPineGetErrorsOptions,
   type RawPineGetSourceOptions,
   type RawPineOpenEditorOptions,
+  type RawQuoteSnapshotOptions,
   type RawPineSaveOptions,
   type RawPineSetSourceOptions,
   type RawRemoveEntityOptions,
@@ -124,6 +135,7 @@ import {
   type RawSetSymbolOptions,
   type RawSetTimeframeOptions,
   type RawSetVisibleRangeOptions,
+  type RawStudyValuesOptions,
   type RawTypeTextOptions
 } from "../tradingview/raw-automation.js";
 import {
@@ -163,6 +175,9 @@ export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_raw_selector_hover",
   "tradingview_raw_scroll",
   "tradingview_raw_chart_state",
+  "tradingview_raw_chart_data_summary",
+  "tradingview_raw_quote_snapshot",
+  "tradingview_raw_study_values",
   "tradingview_raw_set_symbol",
   "tradingview_raw_set_timeframe",
   "tradingview_raw_set_chart_type",
@@ -219,6 +234,15 @@ export interface TradingViewMcpToolHandlers {
   runRawScroll: (options: RawScrollOptions) => Promise<RawAutomationResult>;
   runRawChartState: (
     options: RawChartStateOptions
+  ) => Promise<RawAutomationResult>;
+  runRawChartDataSummary: (
+    options: RawChartDataSummaryOptions
+  ) => Promise<RawAutomationResult>;
+  runRawQuoteSnapshot: (
+    options: RawQuoteSnapshotOptions
+  ) => Promise<RawAutomationResult>;
+  runRawStudyValues: (
+    options: RawStudyValuesOptions
   ) => Promise<RawAutomationResult>;
   runRawSetSymbol: (
     options: RawSetSymbolOptions
@@ -480,6 +504,38 @@ const rawScrollSchema = z.object({
 });
 
 const rawChartStateSchema = z.object(endpointShape);
+
+const rawChartDataSummarySchema = z.object({
+  ...endpointShape,
+  barCount: positiveInteger
+    .max(RAW_CHART_DATA_BAR_COUNT_LIMIT)
+    .optional()
+    .describe(
+      `Recent bar count to summarize. Defaults to ${DEFAULT_RAW_CHART_DATA_BAR_COUNT}; maximum is ${RAW_CHART_DATA_BAR_COUNT_LIMIT}.`
+    )
+});
+
+const rawQuoteSnapshotSchema = z.object(endpointShape);
+
+const rawStudyValuesSchema = z.object({
+  ...endpointShape,
+  studyName: nonEmptyString
+    .max(120)
+    .optional()
+    .describe("Optional visible study name substring filter."),
+  maxStudies: positiveInteger
+    .max(RAW_STUDY_VALUES_MAX_STUDIES_LIMIT)
+    .optional()
+    .describe(
+      `Maximum visible studies to return. Defaults to ${DEFAULT_RAW_STUDY_VALUES_MAX_STUDIES}; maximum is ${RAW_STUDY_VALUES_MAX_STUDIES_LIMIT}.`
+    ),
+  maxValuesPerStudy: positiveInteger
+    .max(RAW_STUDY_VALUES_MAX_VALUES_LIMIT)
+    .optional()
+    .describe(
+      `Maximum compact values per study. Defaults to ${DEFAULT_RAW_STUDY_VALUES_MAX_VALUES}; maximum is ${RAW_STUDY_VALUES_MAX_VALUES_LIMIT}.`
+    )
+});
 
 const rawSetSymbolSchema = z.object({
   ...endpointShape,
@@ -886,6 +942,12 @@ function handlersWithDefaults(
     runRawSelectorHover: handlers?.runRawSelectorHover ?? runRawSelectorHover,
     runRawScroll: handlers?.runRawScroll ?? runRawScroll,
     runRawChartState: handlers?.runRawChartState ?? runRawChartState,
+    runRawChartDataSummary:
+      handlers?.runRawChartDataSummary ?? runRawChartDataSummary,
+    runRawQuoteSnapshot:
+      handlers?.runRawQuoteSnapshot ?? runRawQuoteSnapshot,
+    runRawStudyValues:
+      handlers?.runRawStudyValues ?? runRawStudyValues,
     runRawSetSymbol: handlers?.runRawSetSymbol ?? runRawSetSymbol,
     runRawSetTimeframe: handlers?.runRawSetTimeframe ?? runRawSetTimeframe,
     runRawSetChartType: handlers?.runRawSetChartType ?? runRawSetChartType,
@@ -1622,6 +1684,100 @@ export function registerTradingViewMcpTools(
 
       return textToolResult(
         `Raw chart state: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_chart_data_summary",
+    {
+      title: "Raw Read TradingView Chart Data Summary",
+      description: rawGuardrailedDescription(
+        "Read compact OHLCV summary stats for a bounded recent bar count when the active chart API exposes bars; output is review context only, not a scan, ranking, alert, or recommendation."
+      ),
+      inputSchema: rawChartDataSummarySchema,
+      annotations: {
+        title: "Raw Read TradingView Chart Data Summary",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawChartDataSummaryOptions = {
+        barCount: args.barCount ?? DEFAULT_RAW_CHART_DATA_BAR_COUNT,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawChartDataSummary(rawOptions);
+
+      return textToolResult(
+        `Raw chart data summary: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_quote_snapshot",
+    {
+      title: "Raw Read TradingView Quote Snapshot",
+      description: rawGuardrailedDescription(
+        "Read the active chart symbol and latest exposed OHLCV/current-bar snapshot; output is review context only, not market-data service output, a scan, alert, ranking, or recommendation."
+      ),
+      inputSchema: rawQuoteSnapshotSchema,
+      annotations: {
+        title: "Raw Read TradingView Quote Snapshot",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawQuoteSnapshotOptions = endpointOptions(args);
+      const result = await handlers.runRawQuoteSnapshot(rawOptions);
+
+      return textToolResult(
+        `Raw quote snapshot: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_study_values",
+    {
+      title: "Raw Read TradingView Study Values",
+      description: rawGuardrailedDescription(
+        "Read compact visible indicator/study values from the active chart when TradingView exposes them; output is review context only, not a scan, ranking, alert, generated candidate, or recommendation."
+      ),
+      inputSchema: rawStudyValuesSchema,
+      annotations: {
+        title: "Raw Read TradingView Study Values",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawStudyValuesOptions = {
+        maxStudies: args.maxStudies ?? DEFAULT_RAW_STUDY_VALUES_MAX_STUDIES,
+        maxValuesPerStudy:
+          args.maxValuesPerStudy ?? DEFAULT_RAW_STUDY_VALUES_MAX_VALUES,
+        ...endpointOptions(args)
+      };
+
+      if (args.studyName) {
+        rawOptions.studyName = args.studyName;
+      }
+
+      const result = await handlers.runRawStudyValues(rawOptions);
+
+      return textToolResult(
+        `Raw study values: ${result.ok ? "success" : "failed"}.`,
         asToolData(result)
       );
     }

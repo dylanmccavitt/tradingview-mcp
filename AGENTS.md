@@ -106,7 +106,9 @@ to the active local TradingView chart target. The current raw slice registers
 `tradingview_raw_keypress`, `tradingview_raw_type_text`,
 `tradingview_raw_find_element`, `tradingview_raw_selector_click`,
 `tradingview_raw_selector_hover`, `tradingview_raw_scroll`,
-`tradingview_raw_chart_state`, `tradingview_raw_set_symbol`,
+`tradingview_raw_chart_state`, `tradingview_raw_chart_data_summary`,
+`tradingview_raw_quote_snapshot`, `tradingview_raw_study_values`,
+`tradingview_raw_set_symbol`,
 `tradingview_raw_set_timeframe`, `tradingview_raw_set_chart_type`,
 `tradingview_raw_set_visible_range`, `tradingview_raw_add_indicator`, and
 `tradingview_raw_remove_entity`, plus `tradingview_draw_shape`,
@@ -118,9 +120,11 @@ to the active local TradingView chart target. The current raw slice registers
 `tradingview_pine_get_console`, `tradingview_pine_compile`, and
 `tradingview_pine_save` only when the gate is enabled. Pine source setting,
 compile, and save are explicit separate calls; source retrieval is bounded and
-may return truncation warnings. Quant drawing macros must return review context only:
-created drawing ids, anchors, levels, and warnings, never predictions,
-recommendations, rankings, or advice. `tradingview_draw_clear_all` is
+may return truncation warnings. Compact chart data tools return bounded OHLCV
+summary, quote/current-bar, and visible study values as review context only,
+never scans, rankings, alerts, recommendations, or advice. Quant drawing macros
+must return review context only: created drawing ids, anchors, levels, and warnings,
+never predictions, recommendations, rankings, or advice. `tradingview_draw_clear_all` is
 destructive and must require an explicit clear-all confirmation in its schema
 and caller intent.
 
