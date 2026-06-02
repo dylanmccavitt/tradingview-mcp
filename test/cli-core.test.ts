@@ -134,6 +134,7 @@ function chartbookResultFromOptions(
     profile: options.profile ?? "focus",
     sessionDirectory: `/tmp/chartbooks/${sessionId}`,
     indexPath: `/tmp/chartbooks/${sessionId}/index.md`,
+    indexHtmlPath: `/tmp/chartbooks/${sessionId}/index.html`,
     endpoint: `http://${options.host ?? "127.0.0.1"}:${options.port ?? 9222}`,
     ...(options.selection
       ? {

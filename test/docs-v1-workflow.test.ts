@@ -53,9 +53,11 @@ void test("v1 workflow documents Pine install requirements", () => {
 void test("v1 workflow explains chartbook artifacts", () => {
   assert.match(workflow, /artifacts\/tradingview-chartbooks\/manual-smoke/);
   assert.match(workflow, /index\.md/);
+  assert.match(workflow, /index\.html/);
   assert.match(workflow, /notes\.md/);
   assert.match(workflow, /NASDAQ-NVDA-weekly\.png/);
   assert.match(workflow, /NASDAQ-NVDA-weekly-levels\.json/);
+  assert.match(workflow, /primary local review dashboard/i);
   assert.match(workflow, /horizontal levels, zones from boxes, labels, tables/);
   assert.match(workflow, /Partial failures are recorded/);
 });

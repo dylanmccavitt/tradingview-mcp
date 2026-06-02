@@ -463,7 +463,8 @@ function formatChartbookResult(result: ChartbookResult): string {
     `Profile: ${result.profile}`,
     `Endpoint: ${result.endpoint}`,
     `Output directory: ${result.sessionDirectory}`,
-    `Index: ${result.indexPath}`
+    `Index: ${result.indexPath}`,
+    `Dashboard: ${result.indexHtmlPath}`
   ];
 
   if (result.target) {

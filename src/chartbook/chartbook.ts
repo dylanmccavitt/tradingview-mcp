@@ -113,6 +113,7 @@ export interface ChartbookPlan {
   outputRoot: string;
   sessionDirectory: string;
   indexPath: string;
+  indexHtmlPath: string;
   preset: string;
   profile: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
@@ -207,6 +208,7 @@ export interface ChartbookResult {
   profile: ChartAnalysisProfileName;
   sessionDirectory: string;
   indexPath: string;
+  indexHtmlPath: string;
   endpoint: string;
   selection?: ChartbookSelectionSummary;
   target?: CdpTarget;
@@ -372,6 +374,7 @@ export function buildChartbookPlan(
     outputRoot,
     sessionDirectory,
     indexPath: join(sessionDirectory, "index.md"),
+    indexHtmlPath: join(sessionDirectory, "index.html"),
     preset,
     profile,
     symbols
@@ -527,6 +530,15 @@ function buildLevelsArtifact(
 
 function markdownList(values: readonly string[]): string {
   return values.length > 0 ? values.join(", ") : "none";
+}
+
+function htmlEscape(value: string | number | boolean | undefined): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function displayName(symbol: ChartbookSymbolMetadata): string {
@@ -691,6 +703,241 @@ function warningsSection(result: ChartbookSymbolResult): string[] {
   return warningLines.length > 0
     ? ["", "## Extraction Warnings", "", ...warningLines]
     : [];
+}
+
+function relativeArtifactPath(symbol: ChartbookSymbolResult, path: string): string {
+  return `${symbol.symbolSlug}/${basename(path)}`;
+}
+
+function renderHtmlBadge(label: string, value: string, tone = "neutral"): string {
+  return `<span class="badge badge-${htmlEscape(tone)}"><span>${htmlEscape(label)}</span>${htmlEscape(value)}</span>`;
+}
+
+function renderHtmlLevelList(
+  levels: readonly ChartFactLevel[] | undefined,
+  emptyText = "none extracted"
+): string {
+  if (!levels || levels.length === 0) {
+    return `<span class="muted">${htmlEscape(emptyText)}</span>`;
+  }
+
+  return `<div class="level-list">${levels
+    .map(
+      (level) =>
+        `<span class="level level-${htmlEscape(level.role)}"><strong>${htmlEscape(level.name)}</strong><span>${htmlEscape(formatPrice(level.price))}</span></span>`
+    )
+    .join("")}</div>`;
+}
+
+function renderHtmlNearest(facts: ChartFacts | undefined): string {
+  if (!facts) {
+    return `<span class="muted">unavailable</span>`;
+  }
+
+  const items: string[] = [];
+
+  if (typeof facts.nearest.referencePrice === "number") {
+    items.push(
+      `<span><strong>Reference</strong>${htmlEscape(formatPrice(facts.nearest.referencePrice))}</span>`
+    );
+  }
+
+  if (facts.nearest.support) {
+    items.push(
+      `<span><strong>Support</strong>${htmlEscape(formatLevel(facts.nearest.support))}</span>`
+    );
+  }
+
+  if (facts.nearest.resistance) {
+    items.push(
+      `<span><strong>Resistance</strong>${htmlEscape(formatLevel(facts.nearest.resistance))}</span>`
+    );
+  }
+
+  return items.length > 0
+    ? `<div class="nearest-list">${items.join("")}</div>`
+    : `<span class="muted">unavailable</span>`;
+}
+
+function renderHtmlWarnings(result: ChartbookSymbolResult): string {
+  const warningLines = result.timeframes
+    .filter((timeframe) => timeframe.warnings.length > 0)
+    .map(
+      (timeframe) =>
+        `<li><strong>${htmlEscape(timeframe.label)}:</strong> ${htmlEscape(timeframe.warnings.join("; "))}</li>`
+    );
+
+  if (warningLines.length === 0) {
+    return "";
+  }
+
+  return `<section class="warning-block"><h3>Extraction Warnings</h3><ul>${warningLines.join("")}</ul></section>`;
+}
+
+function renderHtmlReviewFieldset(
+  symbol: ChartbookSymbolResult,
+  profile: ChartAnalysisProfileName
+): string {
+  const keyPrefix = `${symbol.symbolSlug}:${profile}`;
+
+  return `<section class="manual-review" aria-labelledby="${htmlEscape(symbol.symbolSlug)}-manual-review">
+    <h3 id="${htmlEscape(symbol.symbolSlug)}-manual-review">Manual Review</h3>
+    <div class="check-grid">
+      <label><input type="checkbox" data-persist-key="${htmlEscape(keyPrefix)}:weekly-context"> Weekly context checked</label>
+      <label><input type="checkbox" data-persist-key="${htmlEscape(keyPrefix)}:daily-setup"> Daily setup checked</label>
+      <label><input type="checkbox" data-persist-key="${htmlEscape(keyPrefix)}:65m-timing"> 65-minute timing checked</label>
+      <label><input type="checkbox" data-persist-key="${htmlEscape(keyPrefix)}:warnings"> Warnings reviewed</label>
+    </div>
+    <label class="notes-input">Review notes
+      <textarea data-persist-key="${htmlEscape(keyPrefix)}:notes" rows="4" placeholder="Add local notes for this chartbook session"></textarea>
+    </label>
+  </section>`;
+}
+
+function renderBreakoutReviewHtml(result: ChartbookSymbolResult): string {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+
+  return `<section class="review-panel review-breakout" aria-labelledby="${htmlEscape(result.symbolSlug)}-breakout">
+    <h3 id="${htmlEscape(result.symbolSlug)}-breakout">Breakout Review</h3>
+    <div class="review-grid">
+      <article>
+        <h4>Weekly Context</h4>
+        <p class="label">Reference levels</p>
+        ${renderHtmlLevelList(weekly?.breakout.referenceLevels)}
+        <p class="label">Nearest context</p>
+        ${renderHtmlNearest(weekly)}
+      </article>
+      <article>
+        <h4>Daily Setup</h4>
+        <p class="label">Breakout levels</p>
+        ${renderHtmlLevelList(daily?.breakout.referenceLevels)}
+        <p class="label">Nearest context</p>
+        ${renderHtmlNearest(daily)}
+      </article>
+      <article>
+        <h4>65-Minute Timing</h4>
+        <p class="label">Prior day</p>
+        ${renderHtmlLevelList(intraday?.timing.priorDayLevels)}
+        <p class="label">Opening range</p>
+        ${renderHtmlLevelList(intraday?.timing.openingRangeLevels)}
+        <p class="label">Premarket</p>
+        ${renderHtmlLevelList(intraday?.timing.premarketLevels)}
+      </article>
+    </div>
+    <div class="review-grid compact">
+      <article>
+        <h4>Key Extracted Levels</h4>
+        <p><strong>Weekly:</strong> ${htmlEscape(formatLevelList(keyLevels(weekly), "no extracted levels"))}</p>
+        <p><strong>Daily:</strong> ${htmlEscape(formatLevelList(keyLevels(daily), "no extracted levels"))}</p>
+        <p><strong>65-minute:</strong> ${htmlEscape(formatLevelList(keyLevels(intraday), "no extracted levels"))}</p>
+      </article>
+      <article>
+        <h4>Confirmation Fields</h4>
+        <ul class="plain-list">
+          <li>Volume behavior: review visible volume or overlay context if present.</li>
+          <li>Confirmation: record whether chart behavior confirms extracted levels.</li>
+          <li>Invalidation: note which level or condition weakens the setup.</li>
+        </ul>
+      </article>
+    </div>
+  </section>`;
+}
+
+function renderGenericReviewHtml(
+  profile: ChartAnalysisProfileName,
+  result: ChartbookSymbolResult
+): string {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+
+  return `<section class="review-panel" aria-labelledby="${htmlEscape(result.symbolSlug)}-${htmlEscape(profile)}">
+    <h3 id="${htmlEscape(result.symbolSlug)}-${htmlEscape(profile)}">${htmlEscape(profile)} Review</h3>
+    <div class="review-grid compact">
+      <article>
+        <h4>Nearest Context</h4>
+        <p><strong>Weekly:</strong> ${htmlEscape(formatNearest(weekly))}</p>
+        <p><strong>Daily:</strong> ${htmlEscape(formatNearest(daily))}</p>
+        <p><strong>65-minute:</strong> ${htmlEscape(formatNearest(intraday))}</p>
+      </article>
+      <article>
+        <h4>Key Extracted Levels</h4>
+        <p><strong>Weekly:</strong> ${htmlEscape(formatLevelList(keyLevels(weekly), "no extracted levels"))}</p>
+        <p><strong>Daily:</strong> ${htmlEscape(formatLevelList(keyLevels(daily), "no extracted levels"))}</p>
+        <p><strong>65-minute:</strong> ${htmlEscape(formatLevelList(keyLevels(intraday), "no extracted levels"))}</p>
+      </article>
+    </div>
+  </section>`;
+}
+
+function renderProfileReviewHtml(
+  profile: ChartAnalysisProfileName,
+  result: ChartbookSymbolResult
+): string {
+  return profile === "breakout"
+    ? renderBreakoutReviewHtml(result)
+    : renderGenericReviewHtml(profile, result);
+}
+
+function renderTimeframeScreenshotHtml(
+  symbol: ChartbookSymbolResult,
+  timeframe: ChartbookTimeframeResult
+): string {
+  const screenshotPath = relativeArtifactPath(symbol, timeframe.screenshotPath);
+  const levelsPath = relativeArtifactPath(symbol, timeframe.levelsJsonPath);
+  const statusTone = timeframe.ok ? "ok" : "error";
+
+  return `<article class="timeframe-panel">
+    <header>
+      <h3>${htmlEscape(timeframe.label)}</h3>
+      ${renderHtmlBadge("Status", timeframe.ok ? "OK" : "FAILED", statusTone)}
+    </header>
+    <a href="${htmlEscape(screenshotPath)}">
+      <img src="${htmlEscape(screenshotPath)}" alt="${htmlEscape(`${symbol.alias} ${timeframe.label} TradingView screenshot`)}" loading="lazy">
+    </a>
+    <div class="artifact-links">
+      <a href="${htmlEscape(levelsPath)}">levels JSON</a>
+      <a href="${htmlEscape(timeframe.url)}">TradingView URL</a>
+    </div>
+    ${
+      timeframe.error
+        ? `<p class="error-text">${htmlEscape(timeframe.error)}</p>`
+        : ""
+    }
+  </article>`;
+}
+
+function renderSymbolDashboardHtml(
+  symbol: ChartbookSymbolResult,
+  profile: ChartAnalysisProfileName
+): string {
+  const failures = symbol.timeframes.filter((timeframe) => !timeframe.ok);
+  const statusTone = failures.length === 0 ? "ok" : "error";
+  const tags = [...symbol.tags, ...symbol.groups].filter(
+    (value, index, values) => values.indexOf(value) === index
+  );
+
+  return `<section class="symbol-section" id="${htmlEscape(symbol.symbolSlug)}">
+    <header class="symbol-header">
+      <div>
+        <p class="eyebrow">${htmlEscape(symbol.symbol)}</p>
+        <h2>${htmlEscape(displayName(symbol))}</h2>
+      </div>
+      <div class="symbol-actions">
+        ${renderHtmlBadge("Status", failures.length === 0 ? "OK" : `${failures.length} issue${failures.length === 1 ? "" : "s"}`, statusTone)}
+        <a class="button-link" href="${htmlEscape(`${symbol.symbolSlug}/notes.md`)}">notes.md</a>
+      </div>
+    </header>
+    <div class="tag-row">${tags.map((tag) => `<span>${htmlEscape(tag)}</span>`).join("")}</div>
+    ${renderHtmlWarnings(symbol)}
+    ${renderProfileReviewHtml(profile, symbol)}
+    <section class="screenshots-grid" aria-label="${htmlEscape(`${symbol.alias} screenshots`)}">
+      ${symbol.timeframes.map((timeframe) => renderTimeframeScreenshotHtml(symbol, timeframe)).join("")}
+    </section>
+    ${renderHtmlReviewFieldset(symbol, profile)}
+  </section>`;
 }
 
 function renderBreakoutReviewTemplate(
@@ -970,6 +1217,343 @@ export function renderChartbookIndexMarkdown(
   );
 
   return `${lines.join("\n")}`;
+}
+
+function renderSelectionHtml(selection: ChartbookSelectionSummary | undefined): string {
+  if (!selection) {
+    return "";
+  }
+
+  const groups = Array.isArray(selection.groups)
+    ? selection.groups.join(", ")
+    : selection.groups;
+  const config = selection.configPath
+    ? `<span><strong>Config</strong>${htmlEscape(selection.configPath)}</span>`
+    : "";
+
+  return `<div class="meta-grid">
+    <span><strong>Groups</strong>${htmlEscape(groups)}</span>
+    <span><strong>Tier</strong>${htmlEscape(selection.tier)}</span>
+    ${config}
+  </div>`;
+}
+
+function renderDashboardStyles(): string {
+  return `<style>
+    :root {
+      color-scheme: dark;
+      --bg: #111315;
+      --panel: #191d20;
+      --panel-2: #20262a;
+      --text: #eef2f3;
+      --muted: #9da8ad;
+      --line: #343d42;
+      --ok: #44c28a;
+      --warn: #d6a841;
+      --error: #ed6a5e;
+      --accent: #39b7c7;
+      --accent-2: #d8c36a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    a { color: var(--accent); }
+    .page-header {
+      padding: 28px clamp(18px, 4vw, 48px) 20px;
+      border-bottom: 1px solid var(--line);
+      background: #15191b;
+    }
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--accent-2);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      font-weight: 700;
+    }
+    h1, h2, h3, h4, p { margin-top: 0; }
+    h1 { margin-bottom: 14px; font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: 0; }
+    h2 { margin-bottom: 4px; font-size: clamp(1.35rem, 3vw, 2rem); letter-spacing: 0; }
+    h3 { margin-bottom: 12px; font-size: 1.05rem; letter-spacing: 0; }
+    h4 { margin-bottom: 10px; font-size: 0.95rem; color: var(--accent-2); letter-spacing: 0; }
+    main { padding: 24px clamp(18px, 4vw, 48px) 48px; }
+    .meta-grid, .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .meta-grid span, .summary-grid span {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      color: var(--muted);
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .meta-grid strong, .summary-grid strong { color: var(--text); font-size: 0.78rem; text-transform: uppercase; }
+    .boundary {
+      margin-top: 16px;
+      max-width: 980px;
+      color: var(--muted);
+    }
+    .symbol-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 22px;
+    }
+    .button-link, .symbol-nav a {
+      display: inline-flex;
+      min-height: 36px;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .symbol-section {
+      margin-top: 22px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+    }
+    .symbol-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+    .symbol-actions, .tag-row, .artifact-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .tag-row { margin-bottom: 14px; }
+    .tag-row span {
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .badge {
+      display: inline-flex;
+      min-height: 30px;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge span { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; }
+    .badge-ok { border-color: rgba(68, 194, 138, 0.5); }
+    .badge-error { border-color: rgba(237, 106, 94, 0.6); }
+    .warning-block, .review-panel, .manual-review {
+      margin: 14px 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .warning-block { border-color: rgba(214, 168, 65, 0.6); }
+    .review-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .review-grid.compact { margin-top: 12px; }
+    .review-grid article, .timeframe-panel {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      min-width: 0;
+    }
+    .label {
+      margin: 12px 0 6px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .level-list, .nearest-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .level, .nearest-list span {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 7px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #121618;
+    }
+    .level-breakout { border-color: rgba(57, 183, 199, 0.65); }
+    .level-timing { border-color: rgba(216, 195, 106, 0.6); }
+    .level-avwap { border-color: rgba(68, 194, 138, 0.55); }
+    .nearest-list strong { color: var(--muted); margin-right: 2px; }
+    .muted { color: var(--muted); }
+    .plain-list { padding-left: 18px; color: var(--muted); }
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .timeframe-panel header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .timeframe-panel img {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      object-fit: contain;
+      display: block;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #080a0b;
+    }
+    .artifact-links { margin-top: 10px; }
+    .error-text { margin-top: 10px; color: var(--error); overflow-wrap: anywhere; }
+    .check-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .check-grid label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+    }
+    .notes-input {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    textarea {
+      width: 100%;
+      resize: vertical;
+      min-height: 96px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0d1012;
+      color: var(--text);
+      font: inherit;
+    }
+    @media (max-width: 720px) {
+      .symbol-header { flex-direction: column; }
+      .symbol-actions { width: 100%; }
+    }
+  </style>`;
+}
+
+function renderDashboardPersistenceScript(sessionId: string): string {
+  return `<script>
+    (function () {
+      var prefix = "tvmcp-chartbook:${htmlEscape(sessionId)}:";
+      document.querySelectorAll("[data-persist-key]").forEach(function (element) {
+        var key = prefix + element.getAttribute("data-persist-key");
+        var saved = window.localStorage.getItem(key);
+        if (saved !== null) {
+          if (element instanceof HTMLInputElement && element.type === "checkbox") {
+            element.checked = saved === "true";
+          } else if (element instanceof HTMLTextAreaElement) {
+            element.value = saved;
+          }
+        }
+        var eventName = element instanceof HTMLInputElement && element.type === "checkbox" ? "change" : "input";
+        element.addEventListener(eventName, function () {
+          if (element instanceof HTMLInputElement && element.type === "checkbox") {
+            window.localStorage.setItem(key, String(element.checked));
+          } else if (element instanceof HTMLTextAreaElement) {
+            window.localStorage.setItem(key, element.value);
+          }
+        });
+      });
+    }());
+  </script>`;
+}
+
+export function renderChartbookIndexHtml(
+  plan: ChartbookPlan,
+  result: Pick<ChartbookResult, "ok" | "symbols" | "error" | "endpoint">
+): string {
+  const title = `TradingView Chartbook ${plan.sessionId}`;
+  const symbolLinks = result.symbols
+    .map(
+      (symbol) =>
+        `<a href="#${htmlEscape(symbol.symbolSlug)}">${htmlEscape(symbol.alias)}</a>`
+    )
+    .join("");
+  const symbolSections = result.symbols
+    .map((symbol) => renderSymbolDashboardHtml(symbol, plan.profile))
+    .join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${htmlEscape(title)}</title>
+  ${renderDashboardStyles()}
+</head>
+<body>
+  <header class="page-header">
+    <p class="eyebrow">Local TradingView Chartbook</p>
+    <h1>${htmlEscape(title)}</h1>
+    <div class="summary-grid">
+      <span><strong>Status</strong>${htmlEscape(result.ok ? "OK" : "FAILED")}</span>
+      <span><strong>Profile</strong>${htmlEscape(plan.profile)}</span>
+      <span><strong>Preset</strong>${htmlEscape(plan.preset)}</span>
+      <span><strong>Symbols</strong>${htmlEscape(result.symbols.length)}</span>
+      <span><strong>Captured</strong>${htmlEscape(plan.capturedAt)}</span>
+      <span><strong>Endpoint</strong>${htmlEscape(result.endpoint)}</span>
+    </div>
+    ${renderSelectionHtml(plan.selection)}
+    ${
+      result.error
+        ? `<p class="error-text"><strong>Run error:</strong> ${htmlEscape(result.error)}</p>`
+        : ""
+    }
+    <p class="boundary">This dashboard is a local review/prep artifact for Codex and human review. It is not a scanner, ranking, recommendation, broker action, alert, or order workflow.</p>
+  </header>
+  <main>
+    <nav class="symbol-nav" aria-label="Symbols">${symbolLinks}</nav>
+    ${symbolSections}
+  </main>
+  ${renderDashboardPersistenceScript(plan.sessionId)}
+</body>
+</html>
+`;
 }
 
 async function writeJsonArtifact(
@@ -1448,6 +2032,7 @@ export async function runChartbook(
     profile: plan.profile,
     sessionDirectory: plan.sessionDirectory,
     indexPath: plan.indexPath,
+    indexHtmlPath: plan.indexHtmlPath,
     endpoint: health?.endpoint ?? `http://${endpoint.host}:${endpoint.port}`,
     symbols
   };
@@ -1467,6 +2052,10 @@ export async function runChartbook(
   await fileSystem.writeFile(
     plan.indexPath,
     renderChartbookIndexMarkdown(plan, result)
+  );
+  await fileSystem.writeFile(
+    plan.indexHtmlPath,
+    renderChartbookIndexHtml(plan, result)
   );
 
   return result;

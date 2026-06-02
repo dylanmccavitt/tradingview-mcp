@@ -234,6 +234,7 @@ default timeframes, then writes an ignored local chartbook session under:
 ```text
 artifacts/tradingview-chartbooks/manual-smoke/
   index.md
+  index.html
   NASDAQ-NVDA/
     notes.md
     NASDAQ-NVDA-weekly.png
@@ -252,6 +253,10 @@ emphasis.
 
 How to read chartbook artifacts:
 
+- `index.html` is the primary local review dashboard. It shows session metadata,
+  profile/preset, per-symbol warnings, profile-specific review panels,
+  weekly/daily/65-minute screenshots, links to levels JSON, and local manual
+  note fields.
 - `index.md` is the session summary with the selected groups, tier, output
   paths, and per-symbol/timeframe status.
 - Each PNG is the captured TradingView chart screenshot for that symbol and
@@ -266,8 +271,8 @@ How to read chartbook artifacts:
   warnings, and includes a profile-aware human review checklist for the
   selected focus.
 
-Partial failures are recorded in `index.md`, `notes.md`, and the matching
-`*-levels.json` files. Successful captures are kept.
+Partial failures are recorded in `index.html`, `index.md`, `notes.md`, and the
+matching `*-levels.json` files. Successful captures are kept.
 
 Chartbooks are local review/prep artifacts only. They do not rank symbols,
 recommend trades, place orders, use broker APIs, connect to Robinhood, connect
@@ -284,7 +289,8 @@ to Alpaca, or bypass TradingView access controls.
    `TVMCP Objective Drawing Overlay`.
 6. Ask Codex to use the high-level TradingView MCP tools for status, one-symbol
    charting, universe charting, current-chart capture, or chartbook creation.
-7. Review local chartbook outputs under `artifacts/tradingview-chartbooks/`.
+7. Open the generated `index.html` under `artifacts/tradingview-chartbooks/`
+   for review, with Markdown and JSON available beside it.
 
 If a Codex tool reports CDP unreachable, use the CLI health command first. If a
 chartbook has empty or warning-heavy level JSON, confirm the overlay is visible

@@ -15,7 +15,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a compact Pine drawing extraction path for the visible objective overlay study
 - a structured chart-facts layer for objective breakout, squeeze, and momentum review fields
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
-- a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, and an index
+- a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a v1 MCP tool surface made only of high-level charting workflows
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
@@ -120,9 +120,9 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 
 ### Chartbook Output
 
-`src/chartbook/chartbook.ts` builds deterministic local chartbook session plans under `artifacts/tradingview-chartbooks/<session-id>/`. It resolves one directory per selected universe symbol and plans weekly, daily, and 65-minute screenshot plus `*-levels.json` artifact paths.
+`src/chartbook/chartbook.ts` builds deterministic local chartbook session plans under `artifacts/tradingview-chartbooks/<session-id>/`. It resolves one directory per selected universe symbol and plans weekly, daily, and 65-minute screenshot plus `*-levels.json` artifact paths, a session `index.md`, and a session `index.html`.
 
-The chartbook runner uses the existing TradingView Desktop health check, chart page client, and Pine drawing page client. For each symbol/timeframe, it navigates the active chart target, waits for render, captures a screenshot, reads the objective overlay payload, writes compact structured drawing JSON with chart facts, and writes a per-symbol `notes.md` page with screenshot embeds, extraction warnings, and a profile-aware human review checklist. It writes a session `index.md` after the run.
+The chartbook runner uses the existing TradingView Desktop health check, chart page client, and Pine drawing page client. For each symbol/timeframe, it navigates the active chart target, waits for render, captures a screenshot, reads the objective overlay payload, writes compact structured drawing JSON with chart facts, and writes a per-symbol `notes.md` page with screenshot embeds, extraction warnings, and a profile-aware human review checklist. It writes a session `index.md` and `index.html` after the run. The HTML dashboard is the primary local review surface, showing profile/preset metadata, per-symbol warnings, breakout/focus/squeeze/momentum review panels, screenshots, links to JSON/Markdown artifacts, and local manual-note fields.
 
 Partial failures are recorded in-place. A failed timeframe still gets a matching `*-levels.json` with the screenshot/extraction error when the symbol directory can be written, and later timeframes/symbols continue. Existing successful captures are not deleted.
 
@@ -144,7 +144,7 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 
 `test/chart-facts.test.ts` covers fixture-like breakout, squeeze, and momentum facts without scoring, ranking, or recommendation fields.
 
-`test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, chart-facts artifact output, notes/index Markdown output, and partial failure recording with fake clients.
+`test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, chart-facts artifact output, notes/index Markdown output, static HTML dashboard output, and partial failure recording with fake clients.
 
 `test/mcp-tools.test.ts` uses in-memory MCP transports to verify the advertised v1 tool list, guardrail descriptions, server instructions, review-profile schema fields, structured status output, request validation, ordered universe charting, ordered chartbook symbol handoff, and absence of score/rank fields without a live TradingView session.
 
@@ -204,7 +204,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 2. Confirm the manually installed overlay is visible as `TVMCP Objective Drawing Overlay`.
 3. Run `npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222` or omit `--profile` to use `focus`.
 4. The CLI resolves the local universe selection without ranking or scoring symbols.
-5. The runner writes a deterministic local session directory under `artifacts/tradingview-chartbooks/<session-id>/` with `index.md`, one directory per symbol, weekly/daily/65-minute screenshots, matching `*-levels.json` files with drawing extraction plus chart facts, and per-symbol `notes.md` pages with profile-aware review checklists.
+5. The runner writes a deterministic local session directory under `artifacts/tradingview-chartbooks/<session-id>/` with `index.md`, `index.html`, one directory per symbol, weekly/daily/65-minute screenshots, matching `*-levels.json` files with drawing extraction plus chart facts, and per-symbol `notes.md` pages with profile-aware review checklists.
 6. Review failures from the index and notes. Partial failures do not remove successful captures.
 
 ### Universe Selection

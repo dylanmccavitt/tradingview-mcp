@@ -407,6 +407,7 @@ void test("chartbook tool passes profile and ordered symbols without rank fields
           profile: options.profile ?? "focus",
           sessionDirectory: "/tmp/chartbook/session-a",
           indexPath: "/tmp/chartbook/session-a/index.md",
+          indexHtmlPath: "/tmp/chartbook/session-a/index.html",
           endpoint: "http://127.0.0.1:9223",
           ...(options.selection
             ? {

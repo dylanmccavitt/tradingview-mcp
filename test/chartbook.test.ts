@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   buildChartbookPlan,
+  renderChartbookIndexHtml,
   renderSymbolNotesMarkdown,
   runChartbook,
   type ChartbookLevelsArtifact,
@@ -288,6 +289,7 @@ void test("chartbook planning builds deterministic session and symbol artifact p
   assert.equal(plan.capturedAt, "2026-06-01T17:30:00.000Z");
   assert.equal(plan.sessionDirectory, resolve("/tmp/chartbooks/June-1-chartbook"));
   assert.equal(plan.indexPath, resolve("/tmp/chartbooks/June-1-chartbook/index.md"));
+  assert.equal(plan.indexHtmlPath, resolve("/tmp/chartbooks/June-1-chartbook/index.html"));
   assert.equal(plan.symbols[0]?.directory, resolve("/tmp/chartbooks/June-1-chartbook/NASDAQ-NVDA"));
   assert.deepEqual(
     plan.symbols[0]?.timeframes.map((timeframe) => timeframe.screenshotPath),
@@ -410,12 +412,101 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.match(index, /- Profile: `breakout`/);
     assert.match(index, /\[NVDA\]\(\.\/NASDAQ-NVDA\/notes\.md\)/);
     assert.match(index, /not a scanner, ranking, recommendation, broker action, or order workflow/);
+
+    const dashboard = await readFile(
+      join(outputRoot, "session-a", "index.html"),
+      "utf8"
+    );
+    assert.match(dashboard, /<title>TradingView Chartbook session-a<\/title>/);
+    assert.match(dashboard, /Profile<\/strong>breakout/);
+    assert.match(dashboard, /Breakout Review/);
+    assert.match(dashboard, /Weekly Context/);
+    assert.match(dashboard, /Daily Setup/);
+    assert.match(dashboard, /65-Minute Timing/);
+    assert.match(dashboard, /NASDAQ-NVDA\/NASDAQ-NVDA-weekly\.png/);
+    assert.match(dashboard, /NASDAQ-NVDA\/NASDAQ-NVDA-weekly-levels\.json/);
+    assert.match(dashboard, /NASDAQ-NVDA\/notes\.md/);
+    assert.match(dashboard, /Manual Review/);
+    assert.match(dashboard, /data-persist-key="NASDAQ-NVDA:breakout:notes"/);
+    assert.match(dashboard, /not a scanner, ranking, recommendation, broker action, alert, or order workflow/);
   } finally {
     await rm(outputRoot, {
       recursive: true,
       force: true
     });
   }
+});
+
+void test("chartbook HTML dashboard renders breakout facts in scannable sections", () => {
+  const plan = buildChartbookPlan({
+    symbols: [nvdaSymbol],
+    outputRoot: "/tmp/chartbooks",
+    sessionId: "breakout-dashboard",
+    capturedAt: new Date("2026-06-01T17:30:00.000Z"),
+    preset: "focus",
+    profile: "breakout",
+    selection: {
+      configPath: "/tmp/universe.json",
+      groups: ["semis"],
+      tier: "core"
+    }
+  });
+  const symbol = plan.symbols[0] as ChartbookSymbolPlan;
+  const result = resultFromPlan(
+    symbol,
+    {
+      weekly: testFacts("breakout", {
+        referencePrice: 142,
+        referenceLevels: [
+          testLevel("PWH", 147, "prior-week"),
+          testLevel("20D-H", 145, "breakout")
+        ],
+        support: testLevel("PWL", 134, "prior-week"),
+        resistance: testLevel("PWH", 147, "prior-week")
+      }),
+      daily: testFacts("breakout", {
+        referencePrice: 142,
+        referenceLevels: [
+          testLevel("50D-H", 151, "breakout"),
+          testLevel("20D-H", 145, "breakout")
+        ],
+        support: testLevel("AVWAP", 140.2, "avwap"),
+        resistance: testLevel("20D-H", 145, "breakout")
+      }),
+      "65-minute": testFacts("breakout", {
+        priorDayLevels: [
+          testLevel("PDH", 143, "prior-day"),
+          testLevel("PDL", 138, "prior-day")
+        ],
+        openingRangeLevels: [
+          testLevel("OR-H", 142.5, "timing"),
+          testLevel("OR-L", 139.5, "timing")
+        ]
+      })
+    },
+    {
+      daily: ["Legend-only extraction fallback was used."]
+    }
+  );
+
+  const dashboard = renderChartbookIndexHtml(plan, {
+    ok: true,
+    endpoint: "http://127.0.0.1:9222",
+    symbols: [result]
+  });
+
+  assert.match(dashboard, /Local TradingView Chartbook/);
+  assert.match(dashboard, /Groups<\/strong>semis/);
+  assert.match(dashboard, /Preset<\/strong>focus/);
+  assert.match(dashboard, /Breakout Review/);
+  assert.match(dashboard, /<strong>PWH<\/strong><span>147<\/span>/);
+  assert.match(dashboard, /<strong>50D-H<\/strong><span>151<\/span>/);
+  assert.match(dashboard, /<strong>OR-H<\/strong><span>142.5<\/span>/);
+  assert.match(dashboard, /Legend-only extraction fallback was used/);
+  assert.match(dashboard, /NASDAQ-NVDA\/NASDAQ-NVDA-daily\.png/);
+  assert.match(dashboard, /NASDAQ-NVDA\/NASDAQ-NVDA-daily-levels\.json/);
+  assert.match(dashboard, /localStorage/);
+  assert.doesNotMatch(dashboard, /broker action to take|order workflow to place|recommendation to buy/i);
 });
 
 void test("breakout notes render profile-aware review checklist and extraction warnings", () => {
