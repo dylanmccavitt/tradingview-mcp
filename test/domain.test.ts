@@ -6,7 +6,8 @@ import {
   CHART_ANALYSIS_PROFILE_OUTPUT,
   CHART_ANALYSIS_PROFILES,
   getProjectInfo,
-  PROJECT_GUARDRAILS
+  PROJECT_GUARDRAILS,
+  RAW_AUTOMATION_BOUNDARY
 } from "../src/domain.js";
 
 void test("project info documents the manual-only boundary", () => {
@@ -22,6 +23,7 @@ void test("project info documents the manual-only boundary", () => {
     "squeeze",
     "momentum"
   ]);
+  assert.equal(info.rawAutomation.status, "future_opt_in_experimental");
 });
 
 void test("guardrails do not include trade execution behavior", () => {
@@ -30,6 +32,35 @@ void test("guardrails do not include trade execution behavior", () => {
   assert.match(guardrailText, /No broker connections/i);
   assert.match(guardrailText, /No unattended scanners/i);
   assert.doesNotMatch(guardrailText, /place orders automatically/i);
+});
+
+void test("raw automation boundary is experimental and opt-in", () => {
+  assert.equal(
+    RAW_AUTOMATION_BOUNDARY.gateEnv,
+    "TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION"
+  );
+  assert.deepEqual([...RAW_AUTOMATION_BOUNDARY.toolPrefixes], [
+    "tradingview_raw_",
+    "tradingview_draw_"
+  ]);
+  assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("native_tradingview_drawings"));
+  assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("direct_chart_manipulation"));
+  assert.ok(RAW_AUTOMATION_BOUNDARY.constraints.includes("disabled_by_default"));
+  assert.ok(
+    RAW_AUTOMATION_BOUNDARY.constraints.includes(
+      "active_tradingview_chart_target_only"
+    )
+  );
+  assert.ok(
+    RAW_AUTOMATION_BOUNDARY.constraints.includes(
+      "no_broker_order_or_account_automation"
+    )
+  );
+  assert.ok(
+    RAW_AUTOMATION_BOUNDARY.constraints.includes(
+      "no_scanner_ranking_or_unattended_alerts"
+    )
+  );
 });
 
 void test("chart-analysis profiles are stable user-selected review modes", () => {

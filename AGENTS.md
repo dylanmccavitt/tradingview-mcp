@@ -81,11 +81,13 @@ startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```
 
-The v1 MCP server advertises only high-level charting tools for connecting to
+The v1 MCP server advertises high-level charting tools by default for connecting to
 TradingView, checking status, listing the local universe, charting one symbol,
 charting a configured universe selection, capturing the current chart, and
-building a chartbook. It must not expose raw click, type, or evaluate browser
-control tools.
+building a chartbook. Experimental raw automation tools, if implemented later,
+must be opt-in only, gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`,
+namespaced as `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the
+active local TradingView chart target.
 
 ## Test, Lint, And Typecheck
 
@@ -109,6 +111,9 @@ npm run test:pine
 - Keep MCP tool schemas small, explicit, and documented near the tool implementation.
 - Keep MCP tool descriptions concise and guardrailed so Codex chooses charting
   workflows without scanner/ranking or broker/order behavior.
+- Keep default MCP tools high-level. Any raw automation tool must be
+  experimental, opt-in, clearly namespaced, compact by default, and restricted
+  to the active local TradingView chart target.
 - Prefer small modules with domain names over generic utility files.
 - Keep screenshot output paths deterministic and under ignored local artifact directories unless a later issue documents an export format.
 - Treat local universe config files as the v1 source of truth for chart symbol lists; do not depend on TradingView watchlists for universe resolution.
@@ -123,6 +128,8 @@ npm run test:pine
 - Do not add scanners, rankings, alerts, or unattended candidate generation.
 - Do not represent chart output as financial advice.
 - Do not bypass TradingView access controls, paywalls, or licensing requirements.
+- Do not let raw automation operate on broker/order pages, TradingView account
+  or security settings, non-TradingView targets, or arbitrary browser pages.
 - Keep all chart interaction local to the user's machine unless a later issue explicitly documents a safe export path.
 
 ## Definition Of Done

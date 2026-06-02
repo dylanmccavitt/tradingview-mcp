@@ -16,7 +16,12 @@ Expose v1 TradingView workflows through a small set of high-level MCP tools:
 - `tradingview_capture_current_chart`
 - `tradingview_build_chartbook`
 
-Do not expose raw click, type, evaluate, or generic browser-control tools in v1.
+Do not expose raw click, type, evaluate, or generic browser-control tools in
+the default v1 surface.
+
+ADR 0011 allows a separate experimental raw automation surface in later issues,
+but only when explicitly enabled and clearly namespaced outside the default
+high-level charting tools.
 
 ## Why
 
@@ -37,4 +42,7 @@ High-level tools require small wrapper code around the existing runners, but the
 - MCP tool descriptions must include charting-only guardrails.
 - Tool schemas must stay concise and explicit.
 - Tests must cover tool registration and request validation without requiring a live TradingView session.
-- Future MCP work should add new high-level charting outcomes or extend existing schemas, not expose generic browser micromanagement.
+- Future default MCP work should add new high-level charting outcomes or extend
+  existing schemas, not expose generic browser micromanagement.
+- Future raw automation work must follow ADR 0011 and stay opt-in, namespaced,
+  local-chart-target scoped, and guardrailed.

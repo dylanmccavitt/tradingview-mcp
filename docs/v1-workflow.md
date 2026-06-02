@@ -75,7 +75,7 @@ relative to the repo. Restart Codex, reload MCP settings, or start a new Codex
 thread after changing the config. OpenAI's Codex MCP docs are at
 <https://developers.openai.com/codex/mcp>.
 
-The v1 MCP server exposes only high-level charting tools:
+The v1 MCP server exposes high-level charting tools by default:
 
 - `tradingview_connect`
 - `tradingview_status`
@@ -85,8 +85,37 @@ The v1 MCP server exposes only high-level charting tools:
 - `tradingview_capture_current_chart`
 - `tradingview_build_chartbook`
 
-It does not expose raw click, type, page-evaluate, or generic browser-control
-tools.
+The default surface does not expose raw click, type, page-evaluate, or generic
+browser-control tools.
+
+## Experimental Raw Automation Boundary
+
+Later issues may add experimental raw automation tools for native TradingView
+drawings, direct chart manipulation, selector-oriented UI actions, and bounded
+CDP/page evaluation. Raw automation is not part of the default high-level
+chartbook workflow.
+
+Raw automation tools must be explicitly enabled with:
+
+```text
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1
+```
+
+Raw tool names must use clear namespaces:
+
+- `tradingview_raw_*` for raw CDP/page evaluation, input, UI discovery, and
+  direct chart controls
+- `tradingview_draw_*` for native TradingView drawing creation, inspection, and
+  removal
+
+Raw tools must target only the active local `tradingview.com/chart` page found
+by the repo's CDP health flow. They must not operate on arbitrary browser
+pages, broker/order pages, TradingView account or security settings, or any
+non-TradingView target. Raw outputs should stay compact by default.
+
+Raw automation does not change the core guardrails: no broker actions, no order
+placement, no scanner/ranking behavior, no financial advice, no unattended
+alerts, and no generated candidates.
 
 The review-producing MCP tools expose the accepted profile enum
 `focus|breakout|squeeze|momentum`:
@@ -300,6 +329,11 @@ to Alpaca, or bypass TradingView access controls.
    charting, universe charting, current-chart capture, or chartbook creation.
 7. Open the generated `index.html` under `artifacts/tradingview-chartbooks/`
    for review, with Markdown and JSON available beside it.
+
+If a later raw automation issue has been implemented and you want to use those
+tools, start a separate session with `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`
+in the MCP server environment. Keep the high-level workflow as the default when
+you only need chartbooks, captures, and extraction artifacts.
 
 If a Codex tool reports CDP unreachable, use the CLI health command first. If a
 chartbook has empty or warning-heavy level JSON, confirm the overlay is visible
