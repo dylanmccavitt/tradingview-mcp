@@ -63,6 +63,8 @@ function contentText(result: Awaited<ReturnType<Client["callTool"]>>): string {
 interface JsonSchemaProperty {
   enum?: unknown[];
   description?: string;
+  minimum?: number;
+  maximum?: number;
 }
 
 interface JsonSchemaObject {
@@ -1480,6 +1482,231 @@ void test("raw MCP Pine editor tools call injected handlers when enabled", async
       "compile:0",
       "save:0"
     ]);
+  } finally {
+    await close();
+  }
+});
+
+void test("raw MCP replay tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const replayValue = {
+    action: "open",
+    before: {
+      supported: true,
+      source: "fixture",
+      active: false,
+      playing: false,
+      speed: 1,
+      warnings: []
+    },
+    after: {
+      supported: true,
+      source: "fixture",
+      active: true,
+      playing: false,
+      speed: 2,
+      warnings: []
+    },
+    warnings: [
+      "Replay controls are chart-practice/review controls only; they do not score performance, scan, rank, recommend, alert, trade, or place orders."
+    ]
+  };
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawReplayOpen: (options) => {
+        calls.push(`open:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "replay-open",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T19:30:00.000Z",
+          value: replayValue,
+          warnings: []
+        });
+      },
+      runRawReplayPlayPause: (options) => {
+        calls.push(`play-pause:${options.mode ?? "play"}`);
+        return Promise.resolve({
+          ok: true,
+          action: "replay-play-pause",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T19:30:00.000Z",
+          value: {
+            ...replayValue,
+            action: options.mode ?? "play"
+          },
+          warnings: []
+        });
+      },
+      runRawReplayStep: (options) => {
+        calls.push(`step:${options.direction}:${options.steps ?? 1}`);
+        return Promise.resolve({
+          ok: true,
+          action: "replay-step",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T19:30:00.000Z",
+          value: {
+            ...replayValue,
+            action: "step",
+            direction: options.direction,
+            steps: options.steps ?? 1
+          },
+          warnings: []
+        });
+      },
+      runRawReplaySetSpeed: (options) => {
+        calls.push(`speed:${options.speed}`);
+        return Promise.resolve({
+          ok: true,
+          action: "replay-set-speed",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T19:30:00.000Z",
+          value: {
+            ...replayValue,
+            action: "set-speed",
+            speed: options.speed
+          },
+          warnings: []
+        });
+      },
+      runRawReplayExit: (options) => {
+        calls.push(`exit:${options.timeoutMs ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "replay-exit",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T19:30:00.000Z",
+          value: {
+            ...replayValue,
+            action: "exit"
+          },
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const open = await client.callTool({
+      name: "tradingview_raw_replay_open",
+      arguments: {
+        port: 9223
+      }
+    });
+    const playPause = await client.callTool({
+      name: "tradingview_raw_replay_play_pause",
+      arguments: {}
+    });
+    const step = await client.callTool({
+      name: "tradingview_raw_replay_step",
+      arguments: {
+        direction: "forward",
+        steps: 2
+      }
+    });
+    const speed = await client.callTool({
+      name: "tradingview_raw_replay_set_speed",
+      arguments: {
+        speed: 2
+      }
+    });
+    const exit = await client.callTool({
+      name: "tradingview_raw_replay_exit",
+      arguments: {
+        timeoutMs: 5000
+      }
+    });
+
+    assert.equal(callResult(open).structuredContent?.action, "replay-open");
+    assert.equal(
+      callResult(playPause).structuredContent?.action,
+      "replay-play-pause"
+    );
+    assert.equal(callResult(step).structuredContent?.action, "replay-step");
+    assert.equal(
+      (callResult(step).structuredContent?.value as { steps?: number }).steps,
+      2
+    );
+    assert.equal(
+      callResult(speed).structuredContent?.action,
+      "replay-set-speed"
+    );
+    assert.equal(callResult(exit).structuredContent?.action, "replay-exit");
+    assert.deepEqual(calls, [
+      "open:9223",
+      "play-pause:play",
+      "step:forward:2",
+      "speed:2",
+      "exit:5000"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
+void test("raw MCP replay tool descriptions and schemas keep the chart-practice boundary", async () => {
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    }
+  });
+
+  try {
+    const listed = await client.listTools();
+    const replayTools = listed.tools.filter((tool) =>
+      tool.name.startsWith("tradingview_raw_replay_")
+    );
+
+    assert.deepEqual(
+      replayTools.map((tool) => tool.name),
+      [
+        "tradingview_raw_replay_open",
+        "tradingview_raw_replay_play_pause",
+        "tradingview_raw_replay_step",
+        "tradingview_raw_replay_set_speed",
+        "tradingview_raw_replay_exit"
+      ]
+    );
+
+    for (const tool of replayTools) {
+      const description = tool.description ?? "";
+      assert.match(description, /chart-practice\/review|chart-practice|practice\/review/i);
+      assert.match(description, /active chart target/i);
+      assert.match(description, /no scanner\/ranking behavior/i);
+      assert.match(description, /no broker\/order actions/i);
+      assert.doesNotMatch(
+        description,
+        /watchlist read|watchlist write|morning brief|candidate generation/i
+      );
+    }
+
+    const stepSchema = replayTools.find(
+      (tool) => tool.name === "tradingview_raw_replay_step"
+    )?.inputSchema as JsonSchemaObject;
+    const speedSchema = replayTools.find(
+      (tool) => tool.name === "tradingview_raw_replay_set_speed"
+    )?.inputSchema as JsonSchemaObject;
+
+    assert.deepEqual(stepSchema.properties?.direction?.enum, [
+      "forward",
+      "back"
+    ]);
+    assert.equal(stepSchema.properties?.steps?.maximum, 100);
+    assert.equal(speedSchema.properties?.speed?.minimum, 0.1);
+    assert.equal(speedSchema.properties?.speed?.maximum, 20);
+
+    const invalid = await client.callTool({
+      name: "tradingview_raw_replay_set_speed",
+      arguments: {
+        speed: 0
+      }
+    });
+
+    assert.equal(callResult(invalid).isError, true);
+    assert.match(contentText(invalid), /speed/i);
   } finally {
     await close();
   }

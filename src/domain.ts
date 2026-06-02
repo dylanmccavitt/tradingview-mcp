@@ -26,7 +26,8 @@ export const RAW_AUTOMATION_BOUNDARY = {
     "compact_chart_data_extraction",
     "explicit_pine_editor_actions",
     "workspace_tab_pane_layout_controls",
-    "bounded_explicit_batch_chart_actions"
+    "bounded_explicit_batch_chart_actions",
+    "explicit_chart_replay_practice_controls"
   ],
   constraints: [
     "disabled_by_default",

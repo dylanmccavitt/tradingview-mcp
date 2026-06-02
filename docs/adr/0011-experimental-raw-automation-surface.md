@@ -99,6 +99,15 @@ issues must port reference behavior in small slices.
   chart/widget APIs. The batch tool applies bounded explicit symbol/timeframe
   actions in caller-provided order and reports per-step results; it must not
   scan, rank, score, alert, recommend, or generate candidates.
+- The replay-control slice adds MCP-only `tradingview_raw_replay_open`,
+  `tradingview_raw_replay_play_pause`, `tradingview_raw_replay_step`,
+  `tradingview_raw_replay_set_speed`, and `tradingview_raw_replay_exit` behind
+  the same gate. These tools are explicit chart-practice/review controls only.
+  They use exposed local TradingView replay APIs and report unsupported-control
+  errors when reliable replay controls are unavailable. They return compact
+  action/status context only and must not start unattended replay sessions,
+  score performance, scan, rank, alert, recommend, generate candidates, provide
+  financial advice, or touch broker/order/account workflows.
 - The native drawing slice adds MCP-only `tradingview_draw_shape`,
   `tradingview_draw_list`, `tradingview_draw_properties`,
   `tradingview_draw_remove`, and `tradingview_draw_clear_all` tools behind the
@@ -122,5 +131,6 @@ issues must port reference behavior in small slices.
   retrieval is bounded by default and reports truncation warnings for larger
   scripts. These tools use the active local chart target and exposed
   TradingView/Monaco Pine Editor surfaces only.
-- Future native drawing, chart manipulation, workspace-control, Pine editor,
-  data extraction, and quant macro issues should build behind this boundary.
+- Future native drawing, chart manipulation, workspace-control, replay-control,
+  Pine editor, data extraction, and quant macro issues should build behind this
+  boundary.

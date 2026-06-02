@@ -112,6 +112,9 @@ to the active local TradingView chart target. The current raw slice registers
 `tradingview_raw_list_panes`, `tradingview_raw_focus_pane`,
 `tradingview_raw_set_pane_layout`, `tradingview_raw_list_layouts`,
 `tradingview_raw_switch_layout`, `tradingview_raw_batch_chart`,
+`tradingview_raw_replay_open`, `tradingview_raw_replay_play_pause`,
+`tradingview_raw_replay_step`, `tradingview_raw_replay_set_speed`,
+`tradingview_raw_replay_exit`,
 `tradingview_raw_set_symbol`,
 `tradingview_raw_set_timeframe`, `tradingview_raw_set_chart_type`,
 `tradingview_raw_set_visible_range`, `tradingview_raw_add_indicator`, and
@@ -134,7 +137,12 @@ and caller intent. Workspace tools may list/focus local chart tabs, list/focus
 panes, set common pane layouts, list/switch saved layouts when TradingView
 exposes the APIs, and run bounded explicit symbol/timeframe batch chart actions
 in caller-provided order only. Batch tools must not scan, rank, score, alert,
-recommend, or generate candidates.
+recommend, or generate candidates. Replay tools are explicit chart-practice
+controls only; they must use exposed local replay APIs, return compact
+action/status context, and fail with unsupported-control errors when reliable
+replay controls are unavailable. Replay tools must not start unattended replay
+sessions, score performance, scan, rank, alert, recommend, generate candidates,
+provide financial advice, or touch broker/order/account workflows.
 
 ## Test, Lint, And Typecheck
 
