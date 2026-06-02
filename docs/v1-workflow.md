@@ -98,7 +98,8 @@ TradingView chart target. It also supports MCP-only direct chart controls and
 compact chart data extraction when the active chart exposes the needed
 chart APIs, native TradingView drawing tools when chart/drawing APIs are
 available, plus quant drawing macros for Fib-style levels, measured-move
-projections, range projections, and MCP-only Pine Editor tools.
+projections, range projections, MCP-only workspace tab/pane/layout controls,
+bounded explicit batch chart actions, and MCP-only Pine Editor tools.
 Raw automation is not part of the default high-level chartbook workflow.
 
 Raw automation tools must be explicitly enabled with:
@@ -130,6 +131,14 @@ Current enabled MCP raw tools are:
 - `tradingview_raw_chart_data_summary`
 - `tradingview_raw_quote_snapshot`
 - `tradingview_raw_study_values`
+- `tradingview_raw_list_tabs`
+- `tradingview_raw_focus_tab`
+- `tradingview_raw_list_panes`
+- `tradingview_raw_focus_pane`
+- `tradingview_raw_set_pane_layout`
+- `tradingview_raw_list_layouts`
+- `tradingview_raw_switch_layout`
+- `tradingview_raw_batch_chart`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -196,6 +205,13 @@ OHLCV summary stats, active-chart quote/current-bar snapshots, and compact
 visible study values when TradingView exposes them. Data extraction output is
 local chart-review context only; it is not a scan, ranking, alert,
 recommendation, generated candidate, or market-data service replacement.
+
+Workspace tools are MCP-only in this slice. They list/focus local chart tabs,
+list/focus panes, set common pane layouts, and list/switch saved layouts only
+when TradingView exposes the required APIs. The batch chart tool applies
+bounded explicit symbol/timeframe actions in caller-provided order and reports
+per-step results; it does not scan, rank, score, recommend, alert, or generate
+candidates.
 
 Raw automation does not change the core guardrails: no broker actions, no order
 placement, no scanner/ranking behavior, no financial advice, no unattended

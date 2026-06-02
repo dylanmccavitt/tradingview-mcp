@@ -24,7 +24,9 @@ export const RAW_AUTOMATION_BOUNDARY = {
     "native_tradingview_drawings",
     "direct_chart_manipulation",
     "compact_chart_data_extraction",
-    "explicit_pine_editor_actions"
+    "explicit_pine_editor_actions",
+    "workspace_tab_pane_layout_controls",
+    "bounded_explicit_batch_chart_actions"
   ],
   constraints: [
     "disabled_by_default",
