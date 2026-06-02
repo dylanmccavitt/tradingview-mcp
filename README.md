@@ -37,6 +37,7 @@ npm run tv:chart -- --symbol NASDAQ:NVDA --port 9222
 npm run tv:chart-universe -- --group semis --tier core --port 9222
 npm run tv:chartbook -- --group semis --tier core --port 9222
 npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222
+npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
 npm run tv:drawings -- --port 9222 --json
 npm run tv:universe -- list
 npm run tv:universe -- resolve --group semis --tier core
@@ -184,6 +185,16 @@ artifacts/tradingview-chartbooks/<session-id>/
 Use `--session <id>` for a deterministic session name, `--output-dir <path>` for a different local artifact root, `--preset <name>` to record the manually selected overlay preset, `--profile focus|breakout|squeeze|momentum` to choose the chart-facts emphasis, and the same `--group`, `--tier`, and `--config` options as universe resolution. Open `index.html` for the scannable local dashboard with screenshots, warnings, generated Codex Analysis briefs, profile-specific review panels, links to JSON artifacts, and local manual-note fields. Each `notes.md` remains a per-symbol Markdown fallback with the same profile-aware checklist. Partial failures remain recorded in `index.html`, `index.md`, `notes.md`, and the matching `*-levels.json` files without deleting successful screenshots.
 
 Chartbooks are local review/prep artifacts only. They do not rank symbols, recommend trades, place orders, use broker APIs, or bypass TradingView access controls.
+
+For the common Codex breakout-review path, use the shortcut command:
+
+```bash
+npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
+```
+
+It runs chartbook with `--profile breakout`, `--preset focus`, a longer render
+timeout, and a longer settle delay, then prints the generated `index.html`
+dashboard path.
 
 ## Review Profiles
 

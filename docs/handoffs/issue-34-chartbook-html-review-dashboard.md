@@ -16,6 +16,13 @@ dashboard.
 
 The CLI human output now prints the dashboard path as `Dashboard: ...`.
 
+Follow-up command ergonomics:
+
+- Added `npm run tv:breakout-dashboard`, which wraps chartbook with
+  `--profile breakout`, `--preset focus`, `--render-timeout-ms 30000`, and
+  `--render-settle-ms 3000`. Pass `--group`, `--tier`, `--session`, and
+  `--port` after `--`.
+
 ## Next
 
 Open a PR for issue #34. If desired, run a live chartbook after TradingView
@@ -36,6 +43,8 @@ Desktop is relaunched with CDP and inspect the generated `index.html` visually.
 
 - `src/chartbook/chartbook.ts`
 - `src/cli.ts`
+- `package.json`
+- `AGENTS.md`
 - `test/chartbook.test.ts`
 - `test/cli-core.test.ts`
 - `test/docs-v1-workflow.test.ts`

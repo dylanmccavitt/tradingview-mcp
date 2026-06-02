@@ -226,6 +226,7 @@ visible, run:
 ```bash
 npm run tv:chartbook -- --group semis --tier core --session manual-smoke --port 9222
 npm run tv:chartbook -- --group semis --tier core --profile breakout --session manual-breakout --port 9222
+npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
 ```
 
 The command navigates the active chart target through the selected symbols and
@@ -250,6 +251,12 @@ different artifact root, `--preset <name>` to record the manually selected
 overlay preset in the chartbook metadata, and
 `--profile focus|breakout|squeeze|momentum` to choose the objective chart-facts
 emphasis.
+
+For the common Codex breakout dashboard workflow, prefer
+`npm run tv:breakout-dashboard -- --group <group> --tier <tier> --session <id>
+--port <port>`. It fixes the chartbook profile to `breakout`, records the
+overlay preset as `focus`, and uses longer render timing defaults for more
+stable screenshot capture.
 
 How to read chartbook artifacts:
 

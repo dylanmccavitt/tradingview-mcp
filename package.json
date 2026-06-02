@@ -17,6 +17,7 @@
     "tv:chart": "tsx src/cli.ts chart",
     "tv:chart-universe": "tsx src/cli.ts chart-universe",
     "tv:chartbook": "tsx src/cli.ts chartbook",
+    "tv:breakout-dashboard": "tsx src/cli.ts chartbook --profile breakout --preset focus --render-timeout-ms 30000 --render-settle-ms 3000",
     "test:pine": "npm run build && node --test \"dist/test/pine-overlay.test.js\"",
     "test": "npm run build && node --test \"dist/test/**/*.test.js\"",
     "tv:drawings": "tsx src/cli.ts drawings",

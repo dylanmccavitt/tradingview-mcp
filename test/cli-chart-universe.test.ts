@@ -83,6 +83,7 @@ void test("CLI exposes chart-universe in help output", async () => {
   assert.equal(stderr.join(""), "");
   assert.match(stdout.join(""), /tradingview-mcp-cli chart-universe/);
   assert.match(stdout.join(""), /npm run tv:chart-universe/);
+  assert.match(stdout.join(""), /npm run tv:breakout-dashboard/);
 });
 
 void test("CLI parses chart-universe arguments and formats human output", async () => {

@@ -105,6 +105,7 @@ npm scripts:
   npm run tv:chart-universe -- --group semis --tier core --port 9222
   npm run tv:chartbook -- --group semis --tier core --port 9222
   npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222
+  npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
   npm run tv:drawings -- --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
