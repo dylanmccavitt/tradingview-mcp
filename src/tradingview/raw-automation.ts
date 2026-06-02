@@ -54,6 +54,9 @@ export const RAW_TARGET_ID_MAX_CHARS = 200;
 export const RAW_PANE_ID_MAX_CHARS = 120;
 export const RAW_LAYOUT_ID_MAX_CHARS = 200;
 export const RAW_BATCH_MAX_STEPS = 50;
+export const RAW_REPLAY_MAX_STEPS = 100;
+export const RAW_REPLAY_MIN_SPEED = 0.1;
+export const RAW_REPLAY_MAX_SPEED = 20;
 export const RAW_DRAWING_TEXT_MAX_CHARS = 500;
 export const RAW_DRAWING_MAX_POINTS = 2;
 export const RAW_DRAWING_MAX_OVERRIDES = 40;
@@ -122,6 +125,11 @@ export type RawAutomationAction =
   | "list-layouts"
   | "switch-layout"
   | "batch-chart"
+  | "replay-open"
+  | "replay-play-pause"
+  | "replay-step"
+  | "replay-set-speed"
+  | "replay-exit"
   | "set-symbol"
   | "set-timeframe"
   | "set-chart-type"
@@ -345,6 +353,26 @@ export interface RawBatchChartOptions extends RawAutomationBaseOptions {
   steps: RawBatchChartStep[];
   stopOnError?: boolean;
 }
+
+export type RawReplayPlayPauseMode = "play" | "pause" | "toggle";
+export type RawReplayStepDirection = "forward" | "back";
+
+export type RawReplayOpenOptions = RawAutomationBaseOptions;
+
+export interface RawReplayPlayPauseOptions extends RawAutomationBaseOptions {
+  mode?: RawReplayPlayPauseMode;
+}
+
+export interface RawReplayStepOptions extends RawAutomationBaseOptions {
+  direction: RawReplayStepDirection;
+  steps?: number;
+}
+
+export interface RawReplaySetSpeedOptions extends RawAutomationBaseOptions {
+  speed: number;
+}
+
+export type RawReplayExitOptions = RawAutomationBaseOptions;
 
 export interface RawSetSymbolOptions extends RawAutomationBaseOptions {
   symbol: string;
@@ -887,6 +915,46 @@ function invalidBatchChartMessage(
         return `Raw batch chart step ${index + 1}: ${invalidTimeframe}`;
       }
     }
+  }
+
+  return null;
+}
+
+function invalidReplayPlayPauseModeMessage(
+  mode: RawReplayPlayPauseMode
+): string | null {
+  if (mode !== "play" && mode !== "pause" && mode !== "toggle") {
+    return "Raw replay play/pause mode must be play, pause, or toggle.";
+  }
+
+  return null;
+}
+
+function invalidReplayStepMessage(options: RawReplayStepOptions): string | null {
+  if (options.direction !== "forward" && options.direction !== "back") {
+    return "Raw replay step direction must be forward or back.";
+  }
+
+  const steps = options.steps ?? 1;
+
+  if (
+    !Number.isInteger(steps) ||
+    steps <= 0 ||
+    steps > RAW_REPLAY_MAX_STEPS
+  ) {
+    return `Raw replay steps must be an integer from 1 to ${RAW_REPLAY_MAX_STEPS}.`;
+  }
+
+  return null;
+}
+
+function invalidReplaySpeedMessage(speed: number): string | null {
+  if (
+    !Number.isFinite(speed) ||
+    speed < RAW_REPLAY_MIN_SPEED ||
+    speed > RAW_REPLAY_MAX_SPEED
+  ) {
+    return `Raw replay speed must be a finite number from ${RAW_REPLAY_MIN_SPEED} to ${RAW_REPLAY_MAX_SPEED}.`;
   }
 
   return null;
@@ -2496,6 +2564,309 @@ async (command, args) => {
     };
   }
 
+  function replayUnsupportedMessage() {
+    return "TradingView replay control API is unsupported on the active chart target: no reliable replay controller or UI control API was exposed.";
+  }
+
+  function methodTarget(target, names) {
+    for (const name of names) {
+      if (target && typeof target[name] === "function") {
+        return { target, name };
+      }
+    }
+    return undefined;
+  }
+
+  function replayController(chart) {
+    const widget = findWidget();
+    const direct = root.__TVMCP_REPLAY__;
+    if (direct && typeof direct === "object") {
+      return { controller: direct, source: "fixture" };
+    }
+
+    const candidates = [
+      {
+        value: valueFrom(chart, ["replay", "replayController", "barReplay", "replayMode"]),
+        source: "chart-replay-api",
+        allowGenericMethods: true
+      },
+      {
+        value: valueFrom(widget, ["replay", "replayController", "barReplay", "replayMode"]),
+        source: "widget-replay-api",
+        allowGenericMethods: true
+      },
+      {
+        value: chart,
+        source: "chart-api",
+        allowGenericMethods: false
+      },
+      {
+        value: widget,
+        source: "widget-api",
+        allowGenericMethods: false
+      }
+    ];
+
+    for (const candidateData of candidates) {
+      const candidate = candidateData.value;
+      if (!candidate || typeof candidate !== "object") {
+        continue;
+      }
+      const explicitReplayMethod = methodTarget(candidate, [
+        "openReplayMode",
+        "enterReplayMode",
+        "startReplayMode",
+        "enableReplayMode",
+        "setReplaySpeed",
+        "getReplaySpeed",
+        "isReplayMode",
+        "isReplayPlaying",
+        "exitReplayMode"
+      ]);
+      const genericReplayMethod = candidateData.allowGenericMethods
+        ? methodTarget(candidate, [
+            "play",
+            "pause",
+            "stepForward",
+            "stepBack",
+            "setSpeed",
+            "exit"
+          ])
+        : undefined;
+      if (explicitReplayMethod || genericReplayMethod) {
+        return {
+          controller: candidate,
+          source: candidateData.source
+        };
+      }
+    }
+
+    return undefined;
+  }
+
+  function replayStatus(controllerResult) {
+    if (!controllerResult) {
+      return {
+        supported: false,
+        source: "unsupported",
+        warnings: [replayUnsupportedMessage()]
+      };
+    }
+
+    const controller = controllerResult.controller;
+    const status = {
+      supported: true,
+      source: controllerResult.source,
+      warnings: []
+    };
+    const active = valueFrom(controller, [
+      "isReplayMode",
+      "inReplayMode",
+      "isReplayActive",
+      "isActive",
+      "active",
+      "enabled"
+    ]);
+    const playing = valueFrom(controller, [
+      "isPlaying",
+      "playing",
+      "isReplayPlaying"
+    ]);
+    const speed = finiteNumber(valueFrom(controller, [
+      "getReplaySpeed",
+      "getSpeed",
+      "speed",
+      "replaySpeed",
+      "playbackSpeed"
+    ]));
+    const position = finiteNumber(valueFrom(controller, [
+      "getPosition",
+      "position",
+      "barIndex",
+      "currentIndex"
+    ]));
+
+    if (typeof active === "boolean") {
+      status.active = active;
+    }
+    if (typeof playing === "boolean") {
+      status.playing = playing;
+    }
+    if (typeof speed === "number") {
+      status.speed = compactNumber(speed);
+    }
+    if (typeof position === "number") {
+      status.position = Math.trunc(position);
+    }
+
+    return status;
+  }
+
+  async function callReplayMethod(controllerResult, names, args = []) {
+    if (!controllerResult) {
+      return undefined;
+    }
+
+    const match = methodTarget(controllerResult.controller, names);
+    if (!match) {
+      return undefined;
+    }
+
+    await awaitMaybe(match.target[match.name](...args));
+    return match.name;
+  }
+
+  async function replayOpen(chart) {
+    const controllerResult = replayController(chart);
+    const before = replayStatus(controllerResult);
+    const method = await callReplayMethod(controllerResult, [
+      "openReplayMode",
+      "enterReplayMode",
+      "startReplayMode",
+      "enableReplayMode",
+      "open",
+      "enable",
+      "start"
+    ]);
+    if (!method) {
+      return { ok: false, before, error: replayUnsupportedMessage(), warnings: before.warnings ?? [] };
+    }
+    return {
+      ok: true,
+      value: {
+        action: "open",
+        method,
+        before,
+        after: replayStatus(controllerResult),
+        warnings: [
+          "Replay controls are chart-practice/review controls only; they do not score performance, scan, rank, recommend, alert, trade, or place orders."
+        ]
+      }
+    };
+  }
+
+  async function replayPlayPause(chart, mode) {
+    const controllerResult = replayController(chart);
+    const before = replayStatus(controllerResult);
+    let method;
+    if (mode === "play") {
+      method = await callReplayMethod(controllerResult, ["play", "resume", "startPlayback"]);
+    } else if (mode === "pause") {
+      method = await callReplayMethod(controllerResult, ["pause", "stopPlayback"]);
+    } else {
+      method = await callReplayMethod(controllerResult, [
+        "togglePlayPause",
+        "togglePlayback",
+        "toggle"
+      ]);
+      if (!method && before.playing === true) {
+        method = await callReplayMethod(controllerResult, ["pause", "stopPlayback"]);
+      } else if (!method && before.playing === false) {
+        method = await callReplayMethod(controllerResult, ["play", "resume", "startPlayback"]);
+      }
+    }
+    if (!method) {
+      return { ok: false, before, error: replayUnsupportedMessage(), warnings: before.warnings ?? [] };
+    }
+    return {
+      ok: true,
+      value: {
+        action: mode,
+        method,
+        before,
+        after: replayStatus(controllerResult),
+        warnings: [
+          "Replay controls are explicit caller-directed chart-practice/review actions only; no unattended replay session is started."
+        ]
+      }
+    };
+  }
+
+  async function replayStep(chart, direction, steps) {
+    const controllerResult = replayController(chart);
+    const before = replayStatus(controllerResult);
+    const methodNames = direction === "forward"
+      ? ["stepForward", "forward", "next", "nextBar"]
+      : ["stepBack", "back", "previous", "previousBar"];
+    const methods = [];
+    for (let index = 0; index < steps; index += 1) {
+      const method = await callReplayMethod(controllerResult, methodNames);
+      if (!method) {
+        return { ok: false, before, error: replayUnsupportedMessage(), warnings: before.warnings ?? [] };
+      }
+      methods.push(method);
+    }
+    return {
+      ok: true,
+      value: {
+        action: "step",
+        direction,
+        steps,
+        methods,
+        before,
+        after: replayStatus(controllerResult),
+        warnings: [
+          "Replay step output is compact action/status context only, not a score, ranking, recommendation, alert, or advice."
+        ]
+      }
+    };
+  }
+
+  async function replaySetSpeed(chart, speed) {
+    const controllerResult = replayController(chart);
+    const before = replayStatus(controllerResult);
+    const method = await callReplayMethod(controllerResult, [
+      "setReplaySpeed",
+      "setPlaybackSpeed",
+      "setSpeed"
+    ], [speed]);
+    if (!method) {
+      return { ok: false, before, error: replayUnsupportedMessage(), warnings: before.warnings ?? [] };
+    }
+    return {
+      ok: true,
+      value: {
+        action: "set-speed",
+        speed,
+        method,
+        before,
+        after: replayStatus(controllerResult),
+        warnings: [
+          "Replay speed controls chart-practice playback only; it is not performance scoring or trading advice."
+        ]
+      }
+    };
+  }
+
+  async function replayExit(chart) {
+    const controllerResult = replayController(chart);
+    const before = replayStatus(controllerResult);
+    const method = await callReplayMethod(controllerResult, [
+      "exitReplayMode",
+      "leaveReplayMode",
+      "stopReplayMode",
+      "closeReplayMode",
+      "exit",
+      "close",
+      "disable"
+    ]);
+    if (!method) {
+      return { ok: false, before, error: replayUnsupportedMessage(), warnings: before.warnings ?? [] };
+    }
+    return {
+      ok: true,
+      value: {
+        action: "exit",
+        method,
+        before,
+        after: replayStatus(controllerResult),
+        warnings: [
+          "Replay exit is an explicit chart-practice/review control only; no broker, order, alert, scan, or recommendation workflow is involved."
+        ]
+      }
+    };
+  }
+
   function waitForCallback(invoke) {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -2669,6 +3040,21 @@ async (command, args) => {
     }
     if (command === "batchChart") {
       return { ok: true, value: await batchChart(chart, args) };
+    }
+    if (command === "replayOpen") {
+      return await replayOpen(chart);
+    }
+    if (command === "replayPlayPause") {
+      return await replayPlayPause(chart, args.mode);
+    }
+    if (command === "replayStep") {
+      return await replayStep(chart, args.direction, args.steps);
+    }
+    if (command === "replaySetSpeed") {
+      return await replaySetSpeed(chart, args.speed);
+    }
+    if (command === "replayExit") {
+      return await replayExit(chart);
     }
     if (command === "setSymbol") {
       if (typeof chart.setSymbol !== "function") {
@@ -4473,6 +4859,61 @@ export function runRawBatchChart(
     options,
     invalidBatchChartMessage(options)
   );
+}
+
+export function runRawReplayOpen(
+  options: RawReplayOpenOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("replay-open", "replayOpen", {}, options);
+}
+
+export function runRawReplayPlayPause(
+  options: RawReplayPlayPauseOptions
+): Promise<RawAutomationResult> {
+  const mode = options.mode ?? "play";
+
+  return runRawChartControl(
+    "replay-play-pause",
+    "replayPlayPause",
+    { mode },
+    options,
+    invalidReplayPlayPauseModeMessage(mode)
+  );
+}
+
+export function runRawReplayStep(
+  options: RawReplayStepOptions
+): Promise<RawAutomationResult> {
+  const steps = options.steps ?? 1;
+
+  return runRawChartControl(
+    "replay-step",
+    "replayStep",
+    {
+      direction: options.direction,
+      steps
+    },
+    options,
+    invalidReplayStepMessage(options)
+  );
+}
+
+export function runRawReplaySetSpeed(
+  options: RawReplaySetSpeedOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl(
+    "replay-set-speed",
+    "replaySetSpeed",
+    { speed: options.speed },
+    options,
+    invalidReplaySpeedMessage(options.speed)
+  );
+}
+
+export function runRawReplayExit(
+  options: RawReplayExitOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("replay-exit", "replayExit", {}, options);
 }
 
 export function runRawSetSymbol(

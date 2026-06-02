@@ -139,6 +139,11 @@ Current enabled MCP raw tools are:
 - `tradingview_raw_list_layouts`
 - `tradingview_raw_switch_layout`
 - `tradingview_raw_batch_chart`
+- `tradingview_raw_replay_open`
+- `tradingview_raw_replay_play_pause`
+- `tradingview_raw_replay_step`
+- `tradingview_raw_replay_set_speed`
+- `tradingview_raw_replay_exit`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -174,6 +179,13 @@ Pine Editor tools can open or focus the editor, set bounded source without
 compiling or saving, read bounded source with truncation warnings, read compact
 compile markers and console/output rows, and run explicit compile or save calls
 as separate user-directed actions.
+Replay tools are MCP-only chart-practice/review controls. They open, play or
+pause, step, set speed, and exit replay mode only when TradingView exposes
+reliable local replay APIs. If those controls are unavailable, they return
+unsupported-control errors rather than scraping unrelated UI. Replay output is
+compact action/status context only; it is not performance scoring, a scan,
+ranking, alert, generated candidate, recommendation, financial advice, broker
+action, order workflow, or unattended replay session.
 
 The matching CLI commands are:
 
@@ -211,6 +223,11 @@ list/focus panes, set common pane layouts, and list/switch saved layouts only
 when TradingView exposes the required APIs. The batch chart tool applies
 bounded explicit symbol/timeframe actions in caller-provided order and reports
 per-step results; it does not scan, rank, score, recommend, alert, or generate
+candidates.
+
+Replay tools are also MCP-only in this slice. They are explicit
+caller-directed chart-practice controls and do not start unattended replay
+sessions, score performance, scan, rank, recommend, alert, or generate
 candidates.
 
 Raw automation does not change the core guardrails: no broker actions, no order

@@ -74,6 +74,11 @@ The current gated raw MCP tools are:
 - `tradingview_raw_list_layouts`
 - `tradingview_raw_switch_layout`
 - `tradingview_raw_batch_chart`
+- `tradingview_raw_replay_open`
+- `tradingview_raw_replay_play_pause`
+- `tradingview_raw_replay_step`
+- `tradingview_raw_replay_set_speed`
+- `tradingview_raw_replay_exit`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -167,6 +172,18 @@ switch saved layouts only when saved-layout APIs are exposed.
 in caller-provided order and reports per-step results. It must not scan, rank,
 score, alert, recommend, or generate candidates.
 
+The same gated MCP surface exposes replay controls for explicit
+chart-practice/review workflows when TradingView exposes reliable local replay
+APIs. `tradingview_raw_replay_open` opens replay mode,
+`tradingview_raw_replay_play_pause` plays, pauses, or toggles replay,
+`tradingview_raw_replay_step` steps forward or back by a bounded explicit bar
+count, `tradingview_raw_replay_set_speed` sets bounded replay speed, and
+`tradingview_raw_replay_exit` exits replay mode. Replay tools return compact
+action/status context only and fail with unsupported-control errors when
+reliable replay controls are unavailable. They must not score performance,
+start unattended replay sessions, scan, rank, alert, recommend, generate
+candidates, provide financial advice, or touch broker/order/account workflows.
+
 The same gated MCP surface exposes native drawing tools through supported
 TradingView chart/drawing APIs when available. `tradingview_draw_shape` creates
 horizontal line, trend line, rectangle, and text drawings from explicit
@@ -200,10 +217,10 @@ surfaces only and report unsupported editor/API paths clearly.
 `raw type-text`, `raw find-element`, `raw selector-click`,
 `raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
 matching input/selector tools plus direct chart state/control, compact data,
-workspace controls, bounded batch chart actions, drawing, and Pine MCP tools
-under `tradingview_raw_*`, `tradingview_draw_*`, and `tradingview_pine_*` only
-when `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server
-environment.
+workspace controls, bounded batch chart actions, replay controls, drawing, and
+Pine MCP tools under `tradingview_raw_*`, `tradingview_draw_*`, and
+`tradingview_pine_*` only when
+`TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 
 ### One-Symbol Chart Capture

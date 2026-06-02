@@ -33,6 +33,11 @@ import {
   runRawPineSave,
   runRawPineSetSource,
   runRawQuoteSnapshot,
+  runRawReplayExit,
+  runRawReplayOpen,
+  runRawReplayPlayPause,
+  runRawReplaySetSpeed,
+  runRawReplayStep,
   runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
@@ -254,6 +259,24 @@ interface FakeLayout {
   modifiedAt: string;
 }
 
+interface FakeReplayApi {
+  active: boolean;
+  playing: boolean;
+  speed: number;
+  position: number;
+  openReplayMode(): void;
+  play(): void;
+  pause(): void;
+  stepForward(): void;
+  stepBack(): void;
+  setReplaySpeed(speed: number): void;
+  exitReplayMode(): void;
+  isReplayMode(): boolean;
+  isPlaying(): boolean;
+  getReplaySpeed(): number;
+  getPosition(): number;
+}
+
 interface FakeChartApi {
   symbol(): string;
   resolution(): string;
@@ -272,6 +295,8 @@ interface FakeChartApi {
   setPaneLayout?: (layout: string) => void;
   getLayouts?: () => FakeLayout[];
   switchLayout?: (layoutId: string) => void;
+  replay?: () => FakeReplayApi;
+  play?: () => void;
   setSymbol?: (symbol: string, timeframeOrDone?: unknown, done?: () => void) => void;
   setResolution?: (timeframe: string, done?: () => void) => void;
   setChartType?: (chartType: string | number) => void;
@@ -501,6 +526,7 @@ function fakeChartApi(options: {
   withStudyValues?: boolean;
   withPanes?: boolean;
   withLayouts?: boolean;
+  withReplay?: boolean;
   withDrawingApi?: boolean;
   withClearAll?: boolean;
 } = {}): FakeChartApi {
@@ -591,6 +617,42 @@ function fakeChartApi(options: {
       modifiedAt: "2026-06-01T14:00:00.000Z"
     }
   ];
+  const replay: FakeReplayApi = {
+    active: false,
+    playing: false,
+    speed: 1,
+    position: 10,
+    openReplayMode: () => {
+      replay.active = true;
+      replay.playing = false;
+    },
+    play: () => {
+      replay.active = true;
+      replay.playing = true;
+    },
+    pause: () => {
+      replay.playing = false;
+    },
+    stepForward: () => {
+      replay.active = true;
+      replay.position += 1;
+    },
+    stepBack: () => {
+      replay.active = true;
+      replay.position -= 1;
+    },
+    setReplaySpeed: (nextSpeed: number) => {
+      replay.speed = nextSpeed;
+    },
+    exitReplayMode: () => {
+      replay.active = false;
+      replay.playing = false;
+    },
+    isReplayMode: () => replay.active,
+    isPlaying: () => replay.playing,
+    getReplaySpeed: () => replay.speed,
+    getPosition: () => replay.position
+  };
 
   const chart: FakeChartApi = {
     symbol: () => symbol,
@@ -624,6 +686,10 @@ function fakeChartApi(options: {
   if (options.withLayouts) {
     chart.getLayouts = () => layouts;
     chart.switchLayout = () => {};
+  }
+
+  if (options.withReplay) {
+    chart.replay = () => replay;
   }
 
   if (options.withMutators) {
@@ -1589,6 +1655,182 @@ void test("raw batch chart validates bounds and reports per-step failures", asyn
     assert.equal(value.failedCount, 1);
     assert.equal(value.results[0]?.ok, false);
     assert.match(value.results[0]?.error ?? "", /setSymbol/i);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw replay controls use exposed chart replay APIs for explicit practice actions", async () => {
+  const restore = installFakeWidget(fakeChartApi({ withReplay: true }));
+
+  try {
+    const makeClient = () => Promise.resolve(new EvaluatingRawPageClient());
+    const common = {
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: makeClient
+    };
+    const opened = await runRawReplayOpen(common);
+    const played = await runRawReplayPlayPause({
+      ...common,
+      mode: "play"
+    });
+    const stepped = await runRawReplayStep({
+      ...common,
+      direction: "forward",
+      steps: 2
+    });
+    const speed = await runRawReplaySetSpeed({
+      ...common,
+      speed: 2.5
+    });
+    const paused = await runRawReplayPlayPause({
+      ...common,
+      mode: "pause"
+    });
+    const exited = await runRawReplayExit(common);
+
+    const openedValue = opened.value as {
+      action: string;
+      after: { active: boolean; playing: boolean };
+      warnings: string[];
+    };
+    const steppedValue = stepped.value as {
+      action: string;
+      direction: string;
+      steps: number;
+      after: { position: number };
+      warnings: string[];
+    };
+    const speedValue = speed.value as {
+      speed: number;
+      after: { speed: number };
+    };
+
+    assert.equal(opened.ok, true);
+    assert.equal(opened.action, "replay-open");
+    assert.equal(openedValue.action, "open");
+    assert.equal(openedValue.after.active, true);
+    assert.equal(openedValue.after.playing, false);
+    assert.match(openedValue.warnings.join(" "), /chart-practice\/review/i);
+    assert.equal(played.ok, true);
+    assert.equal(
+      (played.value as { after: { playing: boolean } }).after.playing,
+      true
+    );
+    assert.equal(stepped.ok, true);
+    assert.equal(steppedValue.action, "step");
+    assert.equal(steppedValue.direction, "forward");
+    assert.equal(steppedValue.steps, 2);
+    assert.equal(steppedValue.after.position, 12);
+    assert.match(steppedValue.warnings.join(" "), /not a score, ranking/i);
+    assert.equal(speed.ok, true);
+    assert.equal(speedValue.speed, 2.5);
+    assert.equal(speedValue.after.speed, 2.5);
+    assert.equal(paused.ok, true);
+    assert.equal(
+      (paused.value as { after: { playing: boolean } }).after.playing,
+      false
+    );
+    assert.equal(exited.ok, true);
+    assert.equal(
+      (exited.value as { after: { active: boolean } }).after.active,
+      false
+    );
+  } finally {
+    restore();
+  }
+});
+
+void test("raw replay play/pause defaults to deterministic play mode", async () => {
+  const restore = installFakeWidget(fakeChartApi({ withReplay: true }));
+
+  try {
+    const result = await runRawReplayPlayPause({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    const value = result.value as {
+      action: string;
+      after: { playing: boolean };
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "replay-play-pause");
+    assert.equal(value.action, "play");
+    assert.equal(value.after.playing, true);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw replay controls validate input before opening CDP", async () => {
+  let pageClientCalled = false;
+  const common = {
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  };
+  const invalidStep = await runRawReplayStep({
+    ...common,
+    direction: "forward",
+    steps: 101
+  });
+  const invalidSpeed = await runRawReplaySetSpeed({
+    ...common,
+    speed: 0
+  });
+
+  assert.equal(invalidStep.ok, false);
+  assert.match(invalidStep.error ?? "", /steps/i);
+  assert.equal(invalidSpeed.ok, false);
+  assert.match(invalidSpeed.error ?? "", /speed/i);
+  assert.equal(pageClientCalled, false);
+});
+
+void test("raw replay controls report unsupported-control errors without scraping UI", async () => {
+  const restore = installFakeWidget(fakeChartApi());
+
+  try {
+    const unsupported = await runRawReplayOpen({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(unsupported.ok, false);
+    assert.equal(unsupported.action, "replay-open");
+    assert.match(unsupported.error ?? "", /replay control API is unsupported/i);
+    assert.match(unsupported.error ?? "", /reliable replay controller/i);
+    assert.match(
+      unsupported.warnings.join(" "),
+      /replay control API is unsupported/i
+    );
+    assert.doesNotMatch(JSON.stringify(unsupported), /broker|order|watchlist/i);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw replay detection rejects generic chart play methods without replay namespace", async () => {
+  const genericChart = fakeChartApi();
+  let genericPlayCalled = false;
+  genericChart.play = () => {
+    genericPlayCalled = true;
+  };
+  const restore = installFakeWidget(genericChart);
+
+  try {
+    const unsupported = await runRawReplayPlayPause({
+      mode: "play",
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(unsupported.ok, false);
+    assert.match(unsupported.error ?? "", /replay control API is unsupported/i);
+    assert.equal(genericPlayCalled, false);
   } finally {
     restore();
   }
