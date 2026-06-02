@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, and scroll primitives against the active chart target
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, and direct chart state/control primitives against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -61,6 +61,13 @@ active local TradingView chart target. The current gated raw MCP tools are:
 - `tradingview_raw_selector_click`
 - `tradingview_raw_selector_hover`
 - `tradingview_raw_scroll`
+- `tradingview_raw_chart_state`
+- `tradingview_raw_set_symbol`
+- `tradingview_raw_set_timeframe`
+- `tradingview_raw_set_chart_type`
+- `tradingview_raw_set_visible_range`
+- `tradingview_raw_add_indicator`
+- `tradingview_raw_remove_entity`
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -104,10 +111,19 @@ uses CDP `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, and
 `Input.insertText`; selector actions first resolve compact visible element
 positions and fail clearly when selectors are missing or ambiguous.
 
+The gated MCP raw surface also exposes direct chart state/control tools through
+the active TradingView widget chart API when available. These read compact
+symbol, timeframe, chart type, visible range, and visible study identifiers;
+mutating tools return before/after state for set symbol, set timeframe, set
+chart type, set visible range, add indicator, and remove entity. If TradingView
+does not expose the needed chart API, the tools fail with a clear reason rather
+than scraping broader internals.
+
 `src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
 `raw type-text`, `raw find-element`, `raw selector-click`,
 `raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
-matching `tradingview_raw_*` MCP tools only when
+matching input/selector tools plus the direct chart state/control
+`tradingview_raw_*` MCP tools only when
 `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 

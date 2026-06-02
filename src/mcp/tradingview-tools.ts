@@ -46,24 +46,38 @@ import {
   RAW_FIND_MAX_MATCHES_LIMIT,
   RAW_SCROLL_MAX_AMOUNT,
   RAW_SELECTOR_MAX_CHARS,
+  type RawAddIndicatorOptions,
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
+  runRawAddIndicator,
+  runRawChartState,
   runRawClick,
   runRawEvaluate,
   runRawFindElement,
   runRawKeypress,
+  runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
   runRawSelectorHover,
+  runRawSetChartType,
+  runRawSetSymbol,
+  runRawSetTimeframe,
+  runRawSetVisibleRange,
   runRawTypeText,
   type RawAutomationResult,
+  type RawChartStateOptions,
   type RawClickOptions,
   type RawFindElementOptions,
   type RawEvaluateOptions,
   type RawKeypressOptions,
+  type RawRemoveEntityOptions,
   type RawScrollOptions,
   type RawSelectorClickOptions,
   type RawSelectorHoverOptions,
+  type RawSetChartTypeOptions,
+  type RawSetSymbolOptions,
+  type RawSetTimeframeOptions,
+  type RawSetVisibleRangeOptions,
   type RawTypeTextOptions
 } from "../tradingview/raw-automation.js";
 import {
@@ -101,7 +115,14 @@ export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_raw_find_element",
   "tradingview_raw_selector_click",
   "tradingview_raw_selector_hover",
-  "tradingview_raw_scroll"
+  "tradingview_raw_scroll",
+  "tradingview_raw_chart_state",
+  "tradingview_raw_set_symbol",
+  "tradingview_raw_set_timeframe",
+  "tradingview_raw_set_chart_type",
+  "tradingview_raw_set_visible_range",
+  "tradingview_raw_add_indicator",
+  "tradingview_raw_remove_entity"
 ] as const;
 
 export type RawTradingViewMcpToolName =
@@ -136,6 +157,27 @@ export interface TradingViewMcpToolHandlers {
     options: RawSelectorHoverOptions
   ) => Promise<RawAutomationResult>;
   runRawScroll: (options: RawScrollOptions) => Promise<RawAutomationResult>;
+  runRawChartState: (
+    options: RawChartStateOptions
+  ) => Promise<RawAutomationResult>;
+  runRawSetSymbol: (
+    options: RawSetSymbolOptions
+  ) => Promise<RawAutomationResult>;
+  runRawSetTimeframe: (
+    options: RawSetTimeframeOptions
+  ) => Promise<RawAutomationResult>;
+  runRawSetChartType: (
+    options: RawSetChartTypeOptions
+  ) => Promise<RawAutomationResult>;
+  runRawSetVisibleRange: (
+    options: RawSetVisibleRangeOptions
+  ) => Promise<RawAutomationResult>;
+  runRawAddIndicator: (
+    options: RawAddIndicatorOptions
+  ) => Promise<RawAutomationResult>;
+  runRawRemoveEntity: (
+    options: RawRemoveEntityOptions
+  ) => Promise<RawAutomationResult>;
 }
 
 export interface RegisterTradingViewMcpToolsOptions {
@@ -298,6 +340,47 @@ const rawScrollSchema = z.object({
   y: nonNegativeNumber.optional()
 });
 
+const rawChartStateSchema = z.object(endpointShape);
+
+const rawSetSymbolSchema = z.object({
+  ...endpointShape,
+  symbol: exchangeQualifiedSymbol
+});
+
+const rawSetTimeframeSchema = z.object({
+  ...endpointShape,
+  timeframe: nonEmptyString
+    .max(32)
+    .regex(/^[A-Za-z0-9]+$/, "Timeframe must contain only letters and numbers.")
+});
+
+const rawSetChartTypeSchema = z.object({
+  ...endpointShape,
+  chartType: z.union([
+    nonEmptyString.max(64),
+    z.number().int().min(0).max(100)
+  ])
+});
+
+const rawSetVisibleRangeSchema = z.object({
+  ...endpointShape,
+  from: z.number().int().nonnegative(),
+  to: z.number().int().nonnegative()
+}).refine((value) => value.from < value.to, {
+  message: "Visible range from must be earlier than to.",
+  path: ["to"]
+});
+
+const rawAddIndicatorSchema = z.object({
+  ...endpointShape,
+  name: nonEmptyString.max(120)
+});
+
+const rawRemoveEntitySchema = z.object({
+  ...endpointShape,
+  entityId: nonEmptyString.max(200)
+});
+
 function handlersWithDefaults(
   handlers: Partial<TradingViewMcpToolHandlers> | undefined
 ): TradingViewMcpToolHandlers {
@@ -316,7 +399,15 @@ function handlersWithDefaults(
     runRawFindElement: handlers?.runRawFindElement ?? runRawFindElement,
     runRawSelectorClick: handlers?.runRawSelectorClick ?? runRawSelectorClick,
     runRawSelectorHover: handlers?.runRawSelectorHover ?? runRawSelectorHover,
-    runRawScroll: handlers?.runRawScroll ?? runRawScroll
+    runRawScroll: handlers?.runRawScroll ?? runRawScroll,
+    runRawChartState: handlers?.runRawChartState ?? runRawChartState,
+    runRawSetSymbol: handlers?.runRawSetSymbol ?? runRawSetSymbol,
+    runRawSetTimeframe: handlers?.runRawSetTimeframe ?? runRawSetTimeframe,
+    runRawSetChartType: handlers?.runRawSetChartType ?? runRawSetChartType,
+    runRawSetVisibleRange:
+      handlers?.runRawSetVisibleRange ?? runRawSetVisibleRange,
+    runRawAddIndicator: handlers?.runRawAddIndicator ?? runRawAddIndicator,
+    runRawRemoveEntity: handlers?.runRawRemoveEntity ?? runRawRemoveEntity
   };
 }
 
@@ -985,6 +1076,210 @@ export function registerTradingViewMcpTools(
 
       return textToolResult(
         `Raw scroll: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_chart_state",
+    {
+      title: "Raw Read TradingView Chart State",
+      description: rawGuardrailedDescription(
+        "Read current symbol, timeframe, chart type, visible range, and visible studies when the chart API exposes them."
+      ),
+      inputSchema: rawChartStateSchema,
+      annotations: {
+        title: "Raw Read TradingView Chart State",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawChartStateOptions = endpointOptions(args);
+      const result = await handlers.runRawChartState(rawOptions);
+
+      return textToolResult(
+        `Raw chart state: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_set_symbol",
+    {
+      title: "Raw Set TradingView Symbol",
+      description: rawGuardrailedDescription(
+        "Set the active chart to one exchange-qualified symbol and return before/after chart state."
+      ),
+      inputSchema: rawSetSymbolSchema,
+      annotations: {
+        title: "Raw Set TradingView Symbol",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawSetSymbolOptions = {
+        symbol: args.symbol,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawSetSymbol(rawOptions);
+
+      return textToolResult(
+        `Raw set symbol: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_set_timeframe",
+    {
+      title: "Raw Set TradingView Timeframe",
+      description: rawGuardrailedDescription(
+        "Set the active chart timeframe/resolution and return before/after chart state."
+      ),
+      inputSchema: rawSetTimeframeSchema,
+      annotations: {
+        title: "Raw Set TradingView Timeframe",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawSetTimeframeOptions = {
+        timeframe: args.timeframe,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawSetTimeframe(rawOptions);
+
+      return textToolResult(
+        `Raw set timeframe: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_set_chart_type",
+    {
+      title: "Raw Set TradingView Chart Type",
+      description: rawGuardrailedDescription(
+        "Set the active chart type when the chart API exposes setChartType and return before/after chart state."
+      ),
+      inputSchema: rawSetChartTypeSchema,
+      annotations: {
+        title: "Raw Set TradingView Chart Type",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawSetChartTypeOptions = {
+        chartType: args.chartType,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawSetChartType(rawOptions);
+
+      return textToolResult(
+        `Raw set chart type: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_set_visible_range",
+    {
+      title: "Raw Set TradingView Visible Range",
+      description: rawGuardrailedDescription(
+        "Set the active chart visible Unix-time range and return before/after chart state."
+      ),
+      inputSchema: rawSetVisibleRangeSchema,
+      annotations: {
+        title: "Raw Set TradingView Visible Range",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawSetVisibleRangeOptions = {
+        range: {
+          from: args.from,
+          to: args.to
+        },
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawSetVisibleRange(rawOptions);
+
+      return textToolResult(
+        `Raw set visible range: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_add_indicator",
+    {
+      title: "Raw Add TradingView Indicator",
+      description: rawGuardrailedDescription(
+        "Add one named indicator through createStudy when exposed and return before/after chart state."
+      ),
+      inputSchema: rawAddIndicatorSchema,
+      annotations: {
+        title: "Raw Add TradingView Indicator",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawAddIndicatorOptions = {
+        name: args.name,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawAddIndicator(rawOptions);
+
+      return textToolResult(
+        `Raw add indicator: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_remove_entity",
+    {
+      title: "Raw Remove TradingView Entity",
+      description: rawGuardrailedDescription(
+        "Remove one visible chart entity by id through removeEntity when exposed and return before/after chart state."
+      ),
+      inputSchema: rawRemoveEntitySchema,
+      annotations: {
+        title: "Raw Remove TradingView Entity",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawRemoveEntityOptions = {
+        entityId: args.entityId,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawRemoveEntity(rawOptions);
+
+      return textToolResult(
+        `Raw remove entity: ${result.ok ? "success" : "failed"}.`,
         asToolData(result)
       );
     }

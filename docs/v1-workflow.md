@@ -120,6 +120,13 @@ Current enabled MCP raw tools are:
 - `tradingview_raw_selector_click`
 - `tradingview_raw_selector_hover`
 - `tradingview_raw_scroll`
+- `tradingview_raw_chart_state`
+- `tradingview_raw_set_symbol`
+- `tradingview_raw_set_timeframe`
+- `tradingview_raw_set_chart_type`
+- `tradingview_raw_set_visible_range`
+- `tradingview_raw_add_indicator`
+- `tradingview_raw_remove_entity`
 
 The matching CLI commands are:
 
@@ -140,6 +147,11 @@ pages, broker/order pages, TradingView account or security settings, or any
 non-TradingView target. Raw evaluate output stays compact by default and should
 return purpose-built structured values, not broad DOM dumps.
 Raw outputs should stay compact by default.
+
+The direct chart state/control tools are MCP-only in this slice. They return
+compact before/after chart state or a clear failure when TradingView does not
+expose the required chart API for chart type, visible range, study creation, or
+entity removal.
 
 Raw automation does not change the core guardrails: no broker actions, no order
 placement, no scanner/ranking behavior, no financial advice, no unattended

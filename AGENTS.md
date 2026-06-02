@@ -105,8 +105,11 @@ TradingView chart target. The current raw slice registers
 `tradingview_raw_evaluate`, `tradingview_raw_click`,
 `tradingview_raw_keypress`, `tradingview_raw_type_text`,
 `tradingview_raw_find_element`, `tradingview_raw_selector_click`,
-`tradingview_raw_selector_hover`, and `tradingview_raw_scroll` only when the
-gate is enabled.
+`tradingview_raw_selector_hover`, `tradingview_raw_scroll`,
+`tradingview_raw_chart_state`, `tradingview_raw_set_symbol`,
+`tradingview_raw_set_timeframe`, `tradingview_raw_set_chart_type`,
+`tradingview_raw_set_visible_range`, `tradingview_raw_add_indicator`, and
+`tradingview_raw_remove_entity` only when the gate is enabled.
 
 ## Test, Lint, And Typecheck
 

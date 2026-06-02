@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { runInThisContext } from "node:vm";
 
 import {
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
+  runRawAddIndicator,
+  runRawChartState,
   runRawClick,
   runRawEvaluate,
   runRawFindElement,
   runRawKeypress,
+  runRawRemoveEntity,
   runRawScroll,
   runRawSelectorClick,
   runRawSelectorHover,
+  runRawSetChartType,
+  runRawSetSymbol,
+  runRawSetTimeframe,
+  runRawSetVisibleRange,
   runRawTypeText,
   type RawTradingViewPageClient
 } from "../src/tradingview/raw-automation.js";
@@ -41,6 +49,10 @@ const healthyResult: TradingViewHealthResult = {
   target: chartTarget,
   targetCount: 1
 };
+
+const runExpressionInThisContext = runInThisContext as unknown as (
+  expression: string
+) => Promise<unknown>;
 
 function closedChartResult(): TradingViewHealthResult {
   return {
@@ -78,6 +90,7 @@ class FakeRawPageClient implements RawTradingViewPageClient {
   evaluate(
     expression: string,
     options?: {
+      awaitPromise?: boolean;
       throwOnSideEffect?: boolean;
     }
   ): Promise<unknown> {
@@ -145,6 +158,179 @@ class FakeRawPageClient implements RawTradingViewPageClient {
     this.closed = true;
     return Promise.resolve();
   }
+}
+
+interface FakeStudy {
+  id: string;
+  name: string;
+}
+
+interface FakeChartApi {
+  symbol(): string;
+  resolution(): string;
+  chartType(): string | number;
+  getVisibleRange(): {
+    from: number;
+    to: number;
+  };
+  getAllStudies(): FakeStudy[];
+  setSymbol?: (symbol: string, timeframeOrDone?: unknown, done?: () => void) => void;
+  setResolution?: (timeframe: string, done?: () => void) => void;
+  setChartType?: (chartType: string | number) => void;
+  setVisibleRange?: (range: { from: number; to: number }) => void;
+  createStudy?: (name: string) => string;
+  removeEntity?: (entityId: string) => void;
+}
+
+class EvaluatingRawPageClient implements RawTradingViewPageClient {
+  closed = false;
+  calls: {
+    expression: string;
+    awaitPromise?: boolean;
+    throwOnSideEffect?: boolean;
+  }[] = [];
+
+  async evaluate(
+    expression: string,
+    options?: {
+      awaitPromise?: boolean;
+      throwOnSideEffect?: boolean;
+    }
+  ): Promise<unknown> {
+    const call: {
+      expression: string;
+      awaitPromise?: boolean;
+      throwOnSideEffect?: boolean;
+    } = {
+      expression
+    };
+
+    if (typeof options?.awaitPromise === "boolean") {
+      call.awaitPromise = options.awaitPromise;
+    }
+
+    if (typeof options?.throwOnSideEffect === "boolean") {
+      call.throwOnSideEffect = options.throwOnSideEffect;
+    }
+
+    this.calls.push(call);
+
+    return await runExpressionInThisContext(expression);
+  }
+
+  click(): Promise<void> {
+    throw new Error("not implemented");
+  }
+
+  keypress(): Promise<void> {
+    throw new Error("not implemented");
+  }
+
+  typeText(): Promise<void> {
+    throw new Error("not implemented");
+  }
+
+  hover(): Promise<void> {
+    throw new Error("not implemented");
+  }
+
+  scroll(): Promise<void> {
+    throw new Error("not implemented");
+  }
+
+  close(): Promise<void> {
+    this.closed = true;
+    return Promise.resolve();
+  }
+}
+
+function installFakeWidget(chart: FakeChartApi): () => void {
+  const globalRecord = globalThis as typeof globalThis & {
+    tvWidget?: unknown;
+  };
+  const previous = globalRecord.tvWidget;
+
+  globalRecord.tvWidget = {
+    activeChart: () => chart
+  };
+
+  return () => {
+    globalRecord.tvWidget = previous;
+  };
+}
+
+function fakeChartApi(options: {
+  withMutators?: boolean;
+  studyCount?: number;
+} = {}): FakeChartApi {
+  let symbol = "NASDAQ:NVDA";
+  let timeframe = "65";
+  let chartType: string | number = "candles";
+  let range = {
+    from: 1_780_000_000,
+    to: 1_780_086_400
+  };
+  let studies: FakeStudy[] = Array.from(
+    {
+      length: options.studyCount ?? 2
+    },
+    (_value, index) => ({
+      id: `study-${index + 1}`,
+      name: index === 0 ? "Volume" : `Study ${index + 1}`
+    })
+  );
+
+  const chart: FakeChartApi = {
+    symbol: () => symbol,
+    resolution: () => timeframe,
+    chartType: () => chartType,
+    getVisibleRange: () => range,
+    getAllStudies: () => studies
+  };
+
+  if (options.withMutators) {
+    chart.setSymbol = (
+      nextSymbol: string,
+      timeframeOrDone?: unknown,
+      done?: () => void
+    ) => {
+      symbol = nextSymbol;
+      if (typeof timeframeOrDone === "string") {
+        timeframe = timeframeOrDone;
+      }
+      if (typeof timeframeOrDone === "function") {
+        const doneCallback = timeframeOrDone as () => void;
+        doneCallback();
+      }
+      done?.();
+    };
+    chart.setResolution = (nextTimeframe: string, done?: () => void) => {
+      timeframe = nextTimeframe;
+      done?.();
+    };
+    chart.setChartType = (nextChartType: string | number) => {
+      chartType = nextChartType;
+    };
+    chart.setVisibleRange = (nextRange: { from: number; to: number }) => {
+      range = nextRange;
+    };
+    chart.createStudy = (name: string) => {
+      const id = `study-${studies.length + 1}`;
+      studies = [
+        ...studies,
+        {
+          id,
+          name
+        }
+      ];
+      return id;
+    };
+    chart.removeEntity = (entityId: string) => {
+      studies = studies.filter((study) => study.id !== entityId);
+    };
+  }
+
+  return chart;
 }
 
 void test("raw automation env gate is enabled only by the exact stable value", () => {
@@ -310,6 +496,167 @@ void test("raw input primitives validate payloads and dispatch click, keypress, 
       args: ["NVDA"]
     }
   ]);
+});
+
+void test("raw chart state reads compact chart API fields without a live TradingView session", async () => {
+  const restore = installFakeWidget(fakeChartApi({ studyCount: 55 }));
+  const fakeClient = new EvaluatingRawPageClient();
+
+  try {
+    const result = await runRawChartState({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(fakeClient),
+      now: () => new Date("2026-06-02T15:00:00.000Z")
+    });
+
+    const value = result.value as {
+      before: {
+        symbol: string;
+        timeframe: string;
+        chartType: string;
+        visibleRange: {
+          from: number;
+          to: number;
+        };
+        studies: FakeStudy[];
+        warnings: string[];
+      };
+      after: {
+        studies: FakeStudy[];
+      };
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "chart-state");
+    assert.equal(result.executedAt, "2026-06-02T15:00:00.000Z");
+    assert.equal(value.before.symbol, "NASDAQ:NVDA");
+    assert.equal(value.before.timeframe, "65");
+    assert.equal(value.before.chartType, "candles");
+    assert.deepEqual(value.before.visibleRange, {
+      from: 1_780_000_000,
+      to: 1_780_086_400
+    });
+    assert.equal(value.before.studies.length, 50);
+    assert.equal(value.after.studies.length, 50);
+    assert.match(value.before.warnings.join(" "), /truncated to 50/i);
+    assert.equal(fakeClient.calls[0]?.awaitPromise, true);
+    assert.equal(fakeClient.calls[0]?.throwOnSideEffect, false);
+    assert.equal(fakeClient.closed, true);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw chart control tools return before and after state for supported chart APIs", async () => {
+  const restore = installFakeWidget(fakeChartApi({ withMutators: true }));
+
+  try {
+    const makeClient = () => Promise.resolve(new EvaluatingRawPageClient());
+    const common = {
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: makeClient
+    };
+    const setSymbol = await runRawSetSymbol({
+      ...common,
+      symbol: "NASDAQ:AMD"
+    });
+    const setTimeframe = await runRawSetTimeframe({
+      ...common,
+      timeframe: "1D"
+    });
+    const setChartType = await runRawSetChartType({
+      ...common,
+      chartType: 1
+    });
+    const setVisibleRange = await runRawSetVisibleRange({
+      ...common,
+      range: {
+        from: 1_780_100_000,
+        to: 1_780_200_000
+      }
+    });
+    const addIndicator = await runRawAddIndicator({
+      ...common,
+      name: "Relative Strength Index"
+    });
+    const removeEntity = await runRawRemoveEntity({
+      ...common,
+      entityId: "study-1"
+    });
+
+    assert.equal(setSymbol.ok, true);
+    assert.equal(setSymbol.action, "set-symbol");
+    assert.equal(
+      (setSymbol.value as { after: { symbol: string } }).after.symbol,
+      "NASDAQ:AMD"
+    );
+    assert.equal(
+      (setTimeframe.value as { after: { timeframe: string } }).after.timeframe,
+      "1D"
+    );
+    assert.equal(
+      (setChartType.value as { after: { chartType: number } }).after.chartType,
+      1
+    );
+    assert.deepEqual(
+      (setVisibleRange.value as { after: { visibleRange: unknown } }).after
+        .visibleRange,
+      {
+        from: 1_780_100_000,
+        to: 1_780_200_000
+      }
+    );
+    assert.equal(
+      (addIndicator.value as { entityId: string }).entityId,
+      "study-3"
+    );
+    assert.equal(removeEntity.ok, true);
+    assert.doesNotMatch(
+      JSON.stringify(
+        (removeEntity.value as { after: { studies: FakeStudy[] } }).after.studies
+      ),
+      /"id":"study-1"/
+    );
+  } finally {
+    restore();
+  }
+});
+
+void test("raw chart control validation and missing API failures are explicit", async () => {
+  let pageClientCalled = false;
+  const invalidSymbol = await runRawSetSymbol({
+    symbol: "NVDA",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(invalidSymbol.ok, false);
+  assert.match(invalidSymbol.error ?? "", /exchange-qualified/i);
+  assert.equal(pageClientCalled, false);
+
+  const restore = installFakeWidget(fakeChartApi());
+  const fakeClient = new EvaluatingRawPageClient();
+
+  try {
+    const missingApi = await runRawAddIndicator({
+      name: "MACD",
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(fakeClient)
+    });
+
+    assert.equal(missingApi.ok, false);
+    assert.match(missingApi.error ?? "", /createStudy/i);
+    assert.equal(
+      (missingApi.value as { before: { symbol: string } }).before.symbol,
+      "NASDAQ:NVDA"
+    );
+    assert.equal(fakeClient.closed, true);
+  } finally {
+    restore();
+  }
 });
 
 void test("raw find-element returns compact visible element metadata", async () => {
