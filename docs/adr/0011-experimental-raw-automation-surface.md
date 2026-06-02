@@ -87,5 +87,13 @@ issues must port reference behavior in small slices.
   return compact native drawing ids and properties when available, and report
   unsupported API paths clearly. The clear-all tool requires explicit
   confirmation because it removes every native drawing on the active chart.
+- The first quant macro slice adds MCP-only `tradingview_draw_fib_levels` and
+  `tradingview_draw_projection` behind the same gate. These tools build native
+  drawing sets for Fib-style retracement/extension levels, measured moves, and
+  range projections from explicit anchors or caller-selected extracted range
+  facts. They return created drawing ids, anchors, levels, and warnings as
+  review context only; they must not output predictions, recommendations,
+  rankings, or advice. Current-chart and chartbook artifact requests may record
+  returned macro metadata through an explicit `macroMetadata` field.
 - Future native drawing, chart manipulation, Pine editor, data extraction, and
   quant macro issues should build behind this boundary.

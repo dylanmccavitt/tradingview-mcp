@@ -73,6 +73,8 @@ active local TradingView chart target. The current gated raw MCP tools are:
 - `tradingview_draw_properties`
 - `tradingview_draw_remove`
 - `tradingview_draw_clear_all`
+- `tradingview_draw_fib_levels`
+- `tradingview_draw_projection`
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -133,7 +135,15 @@ returns compact drawing ids, types, and names when exposed.
 lock, and selectability when exposed. `tradingview_draw_remove` removes one
 drawing by id. `tradingview_draw_clear_all` is explicitly destructive and
 requires `confirmClearAll` before removing every native drawing on the active
-chart.
+chart. `tradingview_draw_fib_levels` and `tradingview_draw_projection` are
+MCP-only macro tools that create native drawing sets for Fib-style
+retracement/extension levels, measured moves, and range projections from
+explicit anchors or caller-selected extracted range facts. They return compact
+macro metadata with created drawing ids, anchors, levels, and warnings. Macro
+metadata can be copied into current-chart or chartbook artifact requests so the
+local JSON records which macro context was associated with the capture.
+Projected macro levels are mechanical chart-review context only and must not be
+presented as predictions, recommendations, rankings, or financial advice.
 
 `src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
 `raw type-text`, `raw find-element`, `raw selector-click`,

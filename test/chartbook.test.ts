@@ -63,6 +63,28 @@ const healthyResult: TradingViewHealthResult = {
   targetCount: 1
 };
 
+const macroMetadata = [
+  {
+    schemaVersion: 1 as const,
+    kind: "projection" as const,
+    source: "extracted-range",
+    anchors: {
+      mode: "range-projection"
+    },
+    levels: [
+      {
+        label: "Range +1x",
+        price: 580,
+        role: "projection" as const,
+        source: "extracted-range" as const,
+        multiplier: 1
+      }
+    ],
+    drawingIds: ["shape-9"],
+    warnings: ["Review context only."]
+  }
+];
+
 class FakeChartPageClient implements TradingViewChartPageClient {
   readonly navigatedUrls: string[] = [];
   readonly waitedTimeframes: string[] = [];
@@ -337,10 +359,12 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
       checkHealth: () => Promise.resolve(healthyResult),
       chartClientFactory: () => Promise.resolve(fakeChartClient),
       drawingClientFactory: () => Promise.resolve(fakeDrawingClient),
+      macroMetadata,
       now: () => new Date("2026-06-01T17:30:00.000Z")
     });
 
     assert.equal(result.ok, false);
+    assert.equal(result.macros?.[0]?.drawingIds[0], "shape-9");
     assert.equal(fakeChartClient.closed, true);
     assert.equal(fakeDrawingClient.closed, true);
     assert.deepEqual(
@@ -383,6 +407,7 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.equal(weekly.symbol.symbol, "NASDAQ:NVDA");
     assert.equal(weekly.timeframe.id, "weekly");
     assert.equal(weekly.profile, "breakout");
+    assert.equal(weekly.macros?.[0]?.levels[0]?.label, "Range +1x");
     assert.equal(weekly.paths.screenshot, "NASDAQ-NVDA-weekly.png");
     assert.equal(weekly.extraction.drawings.levels[0]?.name, "weekly-level");
     assert.equal(weekly.extraction.facts.profile, "breakout");

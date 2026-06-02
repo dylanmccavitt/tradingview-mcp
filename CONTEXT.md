@@ -42,7 +42,11 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   symbol, timeframe, chart type, visible range, visible studies, indicator
   creation, and entity removal when TradingView exposes the needed chart API,
   plus MCP-only native drawing creation, listing, inspection, one-drawing
-  removal, and explicit clear-all tools when TradingView exposes drawing APIs.
+  removal, explicit clear-all, and quant drawing macro tools when TradingView
+  exposes drawing APIs. Macro output is mechanical review context: created
+  drawing ids, anchors, levels, and warnings for Fib-style levels, measured
+  moves, and range projections. It must not be presented as predictions,
+  recommendations, rankings, or advice.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.

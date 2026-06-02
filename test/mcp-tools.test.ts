@@ -166,6 +166,28 @@ function currentCaptureResult(captureId: string): CurrentChartCaptureResult {
   };
 }
 
+const macroMetadata = [
+  {
+    schemaVersion: 1,
+    kind: "fib-levels" as const,
+    source: "explicit-anchors",
+    anchors: {
+      direction: "low-to-high"
+    },
+    levels: [
+      {
+        label: "Fib 50%",
+        price: 520,
+        role: "retracement" as const,
+        source: "explicit-anchors" as const,
+        ratio: 0.5
+      }
+    ],
+    drawingIds: ["shape-1"],
+    warnings: ["Review context only."]
+  }
+];
+
 void test("MCP server advertises only high-level v1 charting tools with guardrails", async () => {
   const { client, close } = await connectClient();
 
@@ -823,6 +845,98 @@ void test("raw MCP native drawing tools call injected handlers when enabled", as
   }
 });
 
+void test("raw MCP drawing macro tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawDrawFibLevels: (options) => {
+        calls.push(
+          `fib:${options.low.price}-${options.high.price}:${options.ratios?.join(",") ?? "default"}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "draw-fib-levels",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T17:30:00.000Z",
+          value: {
+            drawingIds: ["shape-1"],
+            macro: macroMetadata[0]
+          },
+          warnings: []
+        });
+      },
+      runRawDrawProjection: (options) => {
+        calls.push(`projection:${options.mode}:${options.direction ?? "default"}`);
+        return Promise.resolve({
+          ok: true,
+          action: "draw-projection",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T17:30:00.000Z",
+          value: {
+            drawingIds: ["shape-2"],
+            macro: {
+              ...macroMetadata[0],
+              kind: "projection"
+            }
+          },
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const fib = await client.callTool({
+      name: "tradingview_draw_fib_levels",
+      arguments: {
+        low: {
+          time: 1_780_000_000,
+          price: 500
+        },
+        high: {
+          time: 1_780_086_400,
+          price: 540
+        },
+        ratios: [0, 0.5, 1],
+        port: 9223
+      }
+    });
+    const projection = await client.callTool({
+      name: "tradingview_draw_projection",
+      arguments: {
+        mode: "range-projection",
+        base: {
+          time: 1_780_100_000,
+          price: 520
+        },
+        range: {
+          high: 540,
+          low: 500,
+          source: "extracted-range",
+          label: "daily compression"
+        },
+        direction: "up",
+        multipliers: [1]
+      }
+    });
+
+    assert.equal(callResult(fib).structuredContent?.action, "draw-fib-levels");
+    assert.equal(
+      callResult(projection).structuredContent?.action,
+      "draw-projection"
+    );
+    assert.deepEqual(calls, [
+      "fib:500-540:0,0.5,1",
+      "projection:range-projection:up"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
 void test("profile-aware MCP tools expose accepted review profile schema", async () => {
   const { client, close } = await connectClient();
 
@@ -1059,6 +1173,93 @@ void test("raw native drawing validation rejects invalid MCP requests before han
   }
 });
 
+void test("raw drawing macro validation rejects invalid MCP requests before handlers run", async () => {
+  let called = false;
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawDrawFibLevels: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "draw-fib-levels",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T17:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawDrawProjection: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "draw-projection",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T17:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const badFib = await client.callTool({
+      name: "tradingview_draw_fib_levels",
+      arguments: {
+        low: {
+          time: 1_780_000_000,
+          price: 540
+        },
+        high: {
+          time: 1_780_086_400,
+          price: 500
+        }
+      }
+    });
+    const badProjection = await client.callTool({
+      name: "tradingview_draw_projection",
+      arguments: {
+        mode: "measured-move",
+        base: {
+          time: 1_780_086_400,
+          price: 520
+        },
+        end: {
+          time: 1_780_100_000,
+          price: 540
+        }
+      }
+    });
+    const tooManyRangeLevels = await client.callTool({
+      name: "tradingview_draw_projection",
+      arguments: {
+        mode: "range-projection",
+        base: {
+          time: 1_780_086_400,
+          price: 520
+        },
+        range: {
+          high: 540,
+          low: 500
+        },
+        direction: "both",
+        multipliers: [1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75]
+      }
+    });
+
+    assert.equal(called, false);
+    assert.equal(callResult(badFib).isError, true);
+    assert.match(contentText(badFib), /Input validation error/i);
+    assert.equal(callResult(badProjection).isError, true);
+    assert.match(contentText(badProjection), /Input validation error/i);
+    assert.equal(callResult(tooManyRangeLevels).isError, true);
+    assert.match(contentText(tooManyRangeLevels), /emits 18 levels/i);
+  } finally {
+    await close();
+  }
+});
+
 void test("universe charting resolves local config order without ranking", async () => {
   const chartedSymbols: string[] = [];
   const { client, close } = await connectClient({
@@ -1104,12 +1305,14 @@ void test("current-chart capture tool uses the injected capture workflow", async
   let requestedCaptureId = "";
   let requestedOutputRoot = "";
   let requestedProfile = "";
+  let requestedMacroCount = 0;
   const { client, close } = await connectClient({
     handlers: {
       captureCurrentChart: (options) => {
         requestedCaptureId = options.captureId ?? "";
         requestedOutputRoot = options.outputRoot ?? "";
         requestedProfile = options.profile ?? "";
+        requestedMacroCount = options.macroMetadata?.length ?? 0;
         return Promise.resolve(currentCaptureResult(requestedCaptureId));
       }
     }
@@ -1122,6 +1325,7 @@ void test("current-chart capture tool uses the injected capture workflow", async
         captureId: "manual-review",
         outputDir: "/tmp/current-chart",
         profile: "momentum",
+        macroMetadata,
         port: 9223
       }
     });
@@ -1131,6 +1335,7 @@ void test("current-chart capture tool uses the injected capture workflow", async
     assert.equal(requestedCaptureId, "manual-review");
     assert.equal(requestedOutputRoot, "/tmp/current-chart");
     assert.equal(requestedProfile, "momentum");
+    assert.equal(requestedMacroCount, 1);
     assert.equal(typedResult.structuredContent?.ok, true);
     assert.equal(typedResult.structuredContent?.screenshotOk, true);
   } finally {
@@ -1142,6 +1347,7 @@ void test("chartbook tool passes profile and ordered symbols without rank fields
   let requestedProfile = "";
   let requestedSymbols: string[] = [];
   let requestedSelection: unknown;
+  let requestedMacroCount = 0;
   const { client, close } = await connectClient({
     handlers: {
       loadUniverseConfig: () => Promise.resolve(universeConfig),
@@ -1149,6 +1355,7 @@ void test("chartbook tool passes profile and ordered symbols without rank fields
         requestedProfile = options.profile ?? "";
         requestedSymbols = options.symbols.map((symbol) => symbol.symbol);
         requestedSelection = options.selection;
+        requestedMacroCount = options.macroMetadata?.length ?? 0;
         return Promise.resolve({
           ok: true,
           schemaVersion: 2,
@@ -1198,6 +1405,7 @@ void test("chartbook tool passes profile and ordered symbols without rank fields
       arguments: {
         groups: ["semis"],
         profile: "squeeze",
+        macroMetadata,
         port: 9223
       }
     });
@@ -1211,6 +1419,7 @@ void test("chartbook tool passes profile and ordered symbols without rank fields
       groups: ["semis"],
       tier: "core"
     });
+    assert.equal(requestedMacroCount, 1);
     assert.equal(typedResult.structuredContent?.profile, "squeeze");
     assert.doesNotMatch(
       JSON.stringify(typedResult.structuredContent),

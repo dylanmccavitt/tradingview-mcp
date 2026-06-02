@@ -37,6 +37,28 @@ const healthyResult: TradingViewHealthResult = {
   targetCount: 1
 };
 
+const macroMetadata = [
+  {
+    schemaVersion: 1 as const,
+    kind: "fib-levels" as const,
+    source: "explicit-anchors",
+    anchors: {
+      direction: "low-to-high"
+    },
+    levels: [
+      {
+        label: "Fib 50%",
+        price: 520,
+        role: "retracement" as const,
+        source: "explicit-anchors" as const,
+        ratio: 0.5
+      }
+    ],
+    drawingIds: ["shape-1"],
+    warnings: ["Review context only."]
+  }
+];
+
 void test("current-chart capture surfaces chart-facts warnings in result output", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "tvmcp-current-chart-"));
 
@@ -73,10 +95,12 @@ void test("current-chart capture surfaces chart-facts warnings in result output"
             }),
           close: () => Promise.resolve()
         }),
+      macroMetadata,
       now: () => new Date("2026-06-01T17:30:00.000Z")
     });
 
     assert.equal(result.ok, true);
+    assert.equal(result.macros?.[0]?.drawingIds[0], "shape-1");
     assert.equal(result.facts.profile, "momentum");
     assert.match(
       result.warnings.join(" "),
@@ -91,6 +115,7 @@ void test("current-chart capture surfaces chart-facts warnings in result output"
     ) as CurrentChartCaptureArtifact;
 
     assert.equal(artifact.profile, "momentum");
+    assert.equal(artifact.macros?.[0]?.levels[0]?.label, "Fib 50%");
     assert.equal(artifact.extraction.facts.timing.openingRangeLevels[0]?.name, "OR-H");
   } finally {
     await rm(outputRoot, {

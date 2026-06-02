@@ -9,7 +9,9 @@ import {
   runRawChartState,
   runRawClick,
   runRawDrawClearAll,
+  runRawDrawFibLevels,
   runRawDrawList,
+  runRawDrawProjection,
   runRawDrawRemove,
   runRawDrawShape,
   runRawDrawingProperties,
@@ -951,6 +953,101 @@ void test("raw native drawing tools create, list, inspect, remove, and clear sha
   }
 });
 
+void test("raw drawing macros create Fib and projection drawings with metadata", async () => {
+  const restore = installFakeWidget(
+    fakeChartApi({
+      withMutators: true,
+      withDrawingApi: true
+    })
+  );
+
+  try {
+    const makeClient = () => Promise.resolve(new EvaluatingRawPageClient());
+    const common = {
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: makeClient
+    };
+    const fib = await runRawDrawFibLevels({
+      ...common,
+      low: {
+        time: 1_780_000_000,
+        price: 500
+      },
+      high: {
+        time: 1_780_086_400,
+        price: 540
+      },
+      ratios: [0, 0.5, 1, 1.5],
+      lock: true
+    });
+    const projection = await runRawDrawProjection({
+      ...common,
+      mode: "range-projection",
+      base: {
+        time: 1_780_100_000,
+        price: 520
+      },
+      range: {
+        high: 540,
+        low: 500,
+        source: "extracted-range",
+        label: "daily compression"
+      },
+      direction: "up",
+      multipliers: [1]
+    });
+
+    assert.equal(fib.ok, true);
+    assert.equal(fib.action, "draw-fib-levels");
+    assert.equal(
+      (fib.value as { drawingIds: string[] }).drawingIds.length,
+      5
+    );
+    assert.deepEqual(
+      (fib.value as { macro: { levels: { price: number }[] } }).macro.levels.map(
+        (level) => level.price
+      ),
+      [500, 520, 540, 560]
+    );
+    assert.match(
+      (
+        fib.value as {
+          macro: {
+            warnings: string[];
+          };
+        }
+      ).macro.warnings.join(" "),
+      /not predictions/i
+    );
+    assert.equal(projection.ok, true);
+    assert.equal(projection.action, "draw-projection");
+    assert.equal(
+      (
+        projection.value as {
+          macro: {
+            source: string;
+            drawingIds: string[];
+            levels: { price: number }[];
+          };
+        }
+      ).macro.source,
+      "extracted-range"
+    );
+    assert.deepEqual(
+      (
+        projection.value as {
+          macro: {
+            levels: { price: number }[];
+          };
+        }
+      ).macro.levels.map((level) => level.price),
+      [540, 500, 580]
+    );
+  } finally {
+    restore();
+  }
+});
+
 void test("raw native drawing validation and missing API failures are explicit", async () => {
   let pageClientCalled = false;
   const invalidShape = await runRawDrawShape({
@@ -1008,6 +1105,79 @@ void test("raw native drawing validation and missing API failures are explicit",
     assert.match(
       missingClearAllApi.error ?? "",
       /did not expose native drawing identifiers/i
+    );
+  } finally {
+    restore();
+  }
+});
+
+void test("raw drawing macro validation and missing API failures are explicit", async () => {
+  let pageClientCalled = false;
+  const invalidFib = await runRawDrawFibLevels({
+    high: {
+      time: 1_780_000_000,
+      price: 100
+    },
+    low: {
+      time: 1_780_086_400,
+      price: 100
+    },
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+  const invalidProjection = await runRawDrawProjection({
+    mode: "measured-move",
+    base: {
+      time: 1_780_086_400,
+      price: 100
+    },
+    start: {
+      time: 1_780_000_000,
+      price: 100
+    },
+    end: {
+      time: 1_780_010_000,
+      price: 100
+    },
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(invalidFib.ok, false);
+  assert.match(invalidFib.error ?? "", /greater than low/i);
+  assert.equal(invalidProjection.ok, false);
+  assert.match(invalidProjection.error ?? "", /different/i);
+  assert.equal(pageClientCalled, false);
+
+  const restore = installFakeWidget(fakeChartApi());
+
+  try {
+    const missingApi = await runRawDrawFibLevels({
+      high: {
+        time: 1_780_000_000,
+        price: 120
+      },
+      low: {
+        time: 1_780_086_400,
+        price: 100
+      },
+      includeAnchorLine: false,
+      ratios: [0.5],
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(missingApi.ok, false);
+    assert.match(missingApi.error ?? "", /createShape/i);
+    assert.equal(
+      (missingApi.value as { before: { count: number } }).before.count,
+      0
     );
   } finally {
     restore();

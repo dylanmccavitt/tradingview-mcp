@@ -40,6 +40,7 @@ import {
   type PineDrawingTable,
   type PineDrawingZone
 } from "./pine-drawings.js";
+import type { DrawingMacroArtifact } from "./drawing-macros.js";
 import type { CdpTarget } from "./targets.js";
 
 export const CURRENT_CHART_CAPTURE_SCHEMA_VERSION = 2;
@@ -106,6 +107,7 @@ export interface CurrentChartCaptureArtifact {
     error?: string;
   };
   extraction: CurrentChartCaptureExtraction;
+  macros?: DrawingMacroArtifact[];
 }
 
 export interface CurrentChartCaptureResult {
@@ -122,6 +124,7 @@ export interface CurrentChartCaptureResult {
   levelsJsonOk: boolean;
   facts: ChartFacts;
   target?: CdpTarget;
+  macros?: DrawingMacroArtifact[];
   error?: string;
   warnings: string[];
 }
@@ -136,6 +139,7 @@ export interface CaptureCurrentChartOptions {
   timeoutMs?: number;
   appPath?: string;
   debug?: boolean;
+  macroMetadata?: DrawingMacroArtifact[];
   now?: () => Date;
   checkHealth?: (
     options: CheckTradingViewHealthOptions
@@ -294,12 +298,31 @@ function combinedExtractionWarnings(
   return [...new Set([...extraction.warnings, ...extraction.facts.warnings])];
 }
 
+function macroMetadataCopy(
+  macroMetadata: readonly DrawingMacroArtifact[] | undefined
+): DrawingMacroArtifact[] | undefined {
+  return macroMetadata && macroMetadata.length > 0
+    ? macroMetadata.map((macro) => ({
+        ...macro,
+        anchors: {
+          ...macro.anchors
+        },
+        levels: macro.levels.map((level) => ({
+          ...level
+        })),
+        drawingIds: [...macro.drawingIds],
+        warnings: [...macro.warnings]
+      }))
+    : undefined;
+}
+
 function buildArtifact(options: {
   plan: CurrentChartCapturePlan;
   target?: CdpTarget | undefined;
   screenshotOk: boolean;
   screenshotError?: string | undefined;
   extraction: CurrentChartCaptureExtraction;
+  macroMetadata?: DrawingMacroArtifact[] | undefined;
 }): CurrentChartCaptureArtifact {
   const screenshot = options.screenshotOk
     ? {
@@ -322,6 +345,11 @@ function buildArtifact(options: {
     screenshot,
     extraction: options.extraction
   };
+
+  const macros = macroMetadataCopy(options.macroMetadata);
+  if (macros) {
+    artifact.macros = macros;
+  }
 
   if (options.target) {
     artifact.target = options.target;
@@ -370,6 +398,11 @@ function resultFromArtifact(options: {
 
   if (options.target) {
     result.target = options.target;
+  }
+
+  const macros = macroMetadataCopy(options.artifact.macros);
+  if (macros) {
+    result.macros = macros;
   }
 
   if (errors.length > 0) {
@@ -551,7 +584,8 @@ export async function captureCurrentChart(
     target,
     screenshotOk,
     screenshotError,
-    extraction
+    extraction,
+    macroMetadata: options.macroMetadata
   });
   const levelsWrite = await writeLevelsArtifact(
     fileSystem,
