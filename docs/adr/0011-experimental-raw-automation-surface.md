@@ -7,11 +7,11 @@ Accepted
 ## Decision
 
 Keep the existing high-level charting tools as the default MCP surface, and
-allow future issues to add an explicitly opt-in experimental raw automation
-surface for local TradingView Desktop chart work.
+allow an explicitly opt-in experimental raw automation surface for local
+TradingView Desktop chart work.
 
-Raw automation tools must be disabled by default. They may be registered only
-when the user explicitly enables the raw surface, using the stable gate:
+Raw automation tools must be disabled by default. They may be registered or run
+only when the user explicitly enables the raw surface, using the stable gate:
 
 ```text
 TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1
@@ -70,5 +70,9 @@ issues must port reference behavior in small slices.
 - Raw tools must not automate broker/order workflows, TradingView account or
   security settings, scanner/ranking behavior, financial advice, unattended
   alerts, or generated candidates.
+- The first accepted raw slice exposes `tradingview_raw_evaluate`,
+  `tradingview_raw_click`, `tradingview_raw_keypress`, and
+  `tradingview_raw_type_text` as gated tracer-bullet primitives for the active
+  chart target only.
 - Future native drawing, chart manipulation, Pine editor, data extraction, and
   quant macro issues should build behind this boundary.

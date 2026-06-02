@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- a documented opt-in boundary for future experimental raw automation tools
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text primitives against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -48,10 +48,15 @@ The server instructions and every tool description state the charting-only
 guardrails. The default v1 server does not expose raw click, type, page
 evaluate, or generic browser-control tools.
 
-ADR 0011 documents a future experimental raw automation surface. Raw tools must
-be disabled by default, gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`,
+ADR 0011 documents the experimental raw automation surface. Raw tools are
+disabled by default, gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`,
 namespaced as `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the
-active local TradingView chart target.
+active local TradingView chart target. The current gated raw MCP tools are:
+
+- `tradingview_raw_evaluate`
+- `tradingview_raw_click`
+- `tradingview_raw_keypress`
+- `tradingview_raw_type_text`
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -78,6 +83,25 @@ charting-only boundary.
 `src/tradingview/health.ts` combines app discovery, CDP reachability, browser metadata, and chart-target discovery into a typed status result.
 
 `src/cli.ts` exposes local commands for launch, launch-command, and health checks.
+
+### Experimental Raw Automation
+
+`src/tradingview/raw-automation.ts` provides the first raw automation slice. It
+uses `checkTradingViewHealth` to require a healthy active
+`tradingview.com/chart` target, opens the target WebSocket through the existing
+CDP session client, and dispatches bounded primitives only to that page.
+
+The current raw primitives are compact JavaScript evaluation, coordinate mouse
+click, keyboard keypress, and bounded text insertion. Raw evaluate uses
+`Runtime.evaluate` with by-value return data and rejects oversized expressions
+or compact-output overflows. Raw input uses CDP `Input.dispatchMouseEvent`,
+`Input.dispatchKeyEvent`, and `Input.insertText`.
+
+`src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`, and
+`raw type-text`; `src/mcp/tradingview-tools.ts` exposes matching
+`tradingview_raw_*` MCP tools only when
+`TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
+The default high-level MCP surface remains unchanged when the gate is absent.
 
 ### One-Symbol Chart Capture
 
@@ -236,9 +260,10 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 1. Build with `npm run build`.
 2. Configure Codex to run `node dist/src/index.js` as a stdio MCP server.
 3. Codex starts the local server process when the MCP server is enabled.
-4. Codex sees only the default high-level v1 charting tools; raw
-   browser-control tools are not registered unless a future raw tool slice is
-   implemented and explicitly enabled through the ADR 0011 gate.
+4. Codex sees only the default high-level v1 charting tools unless the server
+   process is intentionally started with
+   `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, which also registers the gated
+   `tradingview_raw_*` primitives.
 
 ## Important Invariants
 

@@ -53,6 +53,16 @@ the visible chart:
 npm run tv:drawings -- --port 9222 --json
 ```
 
+Run the explicitly gated raw automation CLI against the active local
+TradingView chart target:
+
+```bash
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- evaluate --expression "document.title" --port 9222 --json
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- click --x 100 --y 200 --button left --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- keypress --key Escape --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- type-text --text "NASDAQ:NVDA" --port 9222
+```
+
 Create a local chartbook for a selected universe group and tier:
 
 ```bash
@@ -81,13 +91,16 @@ startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```
 
-The v1 MCP server advertises high-level charting tools by default for connecting to
-TradingView, checking status, listing the local universe, charting one symbol,
-charting a configured universe selection, capturing the current chart, and
-building a chartbook. Experimental raw automation tools, if implemented later,
-must be opt-in only, gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`,
-namespaced as `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the
-active local TradingView chart target.
+The v1 MCP server advertises high-level charting tools by default for connecting
+to TradingView, checking status, listing the local universe, charting one
+symbol, charting a configured universe selection, capturing the current chart,
+and building a chartbook. Experimental raw automation tools are opt-in only,
+gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, namespaced as
+`tradingview_raw_*` or `tradingview_draw_*`, and scoped to the active local
+TradingView chart target. The current raw slice registers
+`tradingview_raw_evaluate`, `tradingview_raw_click`,
+`tradingview_raw_keypress`, and `tradingview_raw_type_text` only when the gate
+is enabled.
 
 ## Test, Lint, And Typecheck
 

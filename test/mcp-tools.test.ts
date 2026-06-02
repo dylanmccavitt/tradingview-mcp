@@ -9,8 +9,10 @@ import { CHART_ANALYSIS_PROFILE_NAMES } from "../src/domain.js";
 import { createServer, type CreateServerOptions } from "../src/server.js";
 import {
   MCP_SERVER_INSTRUCTIONS,
+  RAW_TRADINGVIEW_MCP_TOOL_NAMES,
   TRADINGVIEW_MCP_TOOL_NAMES
 } from "../src/mcp/tradingview-tools.js";
+import { RAW_AUTOMATION_ENV } from "../src/tradingview/raw-automation.js";
 import type { CurrentChartCaptureResult } from "../src/tradingview/current-chart-capture.js";
 import type { ChartOneSymbolResult } from "../src/tradingview/chart-runner.js";
 import type { TradingViewHealthResult } from "../src/tradingview/health.js";
@@ -182,6 +184,152 @@ void test("MCP server advertises only high-level v1 charting tools with guardrai
       assert.doesNotMatch(tool.description ?? "", /raw .*browser/i);
       assert.equal(tool.inputSchema.type, "object");
     }
+  } finally {
+    await close();
+  }
+});
+
+void test("MCP server advertises raw tools only when the explicit env gate is enabled", async () => {
+  const defaultConnection = await connectClient({
+    env: {}
+  });
+
+  try {
+    const listed = await defaultConnection.client.listTools();
+    assert.deepEqual(
+      listed.tools.map((tool) => tool.name),
+      TRADINGVIEW_MCP_TOOL_NAMES
+    );
+  } finally {
+    await defaultConnection.close();
+  }
+
+  const rawConnection = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    }
+  });
+
+  try {
+    const listed = await rawConnection.client.listTools();
+    const names = listed.tools.map((tool) => tool.name);
+
+    assert.deepEqual(names, [
+      ...TRADINGVIEW_MCP_TOOL_NAMES,
+      ...RAW_TRADINGVIEW_MCP_TOOL_NAMES
+    ]);
+
+    for (const rawTool of listed.tools.filter((tool) =>
+      RAW_TRADINGVIEW_MCP_TOOL_NAMES.includes(
+        tool.name as (typeof RAW_TRADINGVIEW_MCP_TOOL_NAMES)[number]
+      )
+    )) {
+      assert.match(rawTool.description ?? "", /experimental local TradingView/i);
+      assert.match(rawTool.description ?? "", /active chart target/i);
+      assert.match(rawTool.description ?? "", /no scanner\/ranking behavior/i);
+      assert.match(rawTool.description ?? "", /no broker\/order actions/i);
+    }
+  } finally {
+    await rawConnection.close();
+  }
+});
+
+void test("raw MCP evaluate and input tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawEvaluate: (options) => {
+        calls.push(`evaluate:${options.expression}:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "evaluate",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          value: {
+            title: "NVDA Chart"
+          },
+          warnings: []
+        });
+      },
+      runRawClick: (options) => {
+        calls.push(`click:${options.x},${options.y}:${options.button ?? "left"}`);
+        return Promise.resolve({
+          ok: true,
+          action: "click",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawKeypress: (options) => {
+        calls.push(`keypress:${options.key}`);
+        return Promise.resolve({
+          ok: true,
+          action: "keypress",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawTypeText: (options) => {
+        calls.push(`type-text:${options.text}`);
+        return Promise.resolve({
+          ok: true,
+          action: "type-text",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const evaluate = await client.callTool({
+      name: "tradingview_raw_evaluate",
+      arguments: {
+        expression: "document.title",
+        port: 9223
+      }
+    });
+    const click = await client.callTool({
+      name: "tradingview_raw_click",
+      arguments: {
+        x: 120,
+        y: 240,
+        button: "middle"
+      }
+    });
+    const keypress = await client.callTool({
+      name: "tradingview_raw_keypress",
+      arguments: {
+        key: "Escape"
+      }
+    });
+    const typeText = await client.callTool({
+      name: "tradingview_raw_type_text",
+      arguments: {
+        text: "NASDAQ:NVDA"
+      }
+    });
+
+    assert.equal(callResult(evaluate).isError, undefined);
+    assert.equal(callResult(evaluate).structuredContent?.action, "evaluate");
+    assert.deepEqual(callResult(evaluate).structuredContent?.value, {
+      title: "NVDA Chart"
+    });
+    assert.equal(callResult(click).isError, undefined);
+    assert.equal(callResult(keypress).isError, undefined);
+    assert.equal(callResult(typeText).isError, undefined);
+    assert.deepEqual(calls, [
+      "evaluate:document.title:9223",
+      "click:120,240:middle",
+      "keypress:Escape",
+      "type-text:NASDAQ:NVDA"
+    ]);
   } finally {
     await close();
   }

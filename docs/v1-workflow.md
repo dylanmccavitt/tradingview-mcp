@@ -14,7 +14,8 @@ If the repo is cloned somewhere else, replace that path in the examples below.
 V1 is a manual TradingView Desktop charting assistant. It can launch and check
 the local TradingView Desktop CDP connection, chart user-selected symbols or
 configured universe groups, capture screenshots, extract objective overlay
-levels, and write local chartbooks.
+levels, write local chartbooks, and, when explicitly enabled, run bounded raw
+CDP primitives against the active local TradingView chart target.
 
 V1 is not a scanner, ranking engine, broker integration, signal service, or
 trade execution system. It must not place orders, connect to Robinhood, connect
@@ -90,9 +91,9 @@ browser-control tools.
 
 ## Experimental Raw Automation Boundary
 
-Later issues may add experimental raw automation tools for native TradingView
-drawings, direct chart manipulation, selector-oriented UI actions, and bounded
-CDP/page evaluation. Raw automation is not part of the default high-level
+The first experimental raw automation slice supports bounded CDP/page
+evaluation plus basic mouse, keyboard, and text input against the active local
+TradingView chart target. Raw automation is not part of the default high-level
 chartbook workflow.
 
 Raw automation tools must be explicitly enabled with:
@@ -108,10 +109,28 @@ Raw tool names must use clear namespaces:
 - `tradingview_draw_*` for native TradingView drawing creation, inspection, and
   removal
 
+Current enabled MCP raw tools are:
+
+- `tradingview_raw_evaluate`
+- `tradingview_raw_click`
+- `tradingview_raw_keypress`
+- `tradingview_raw_type_text`
+
+The matching CLI commands are:
+
+```bash
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- evaluate --expression "document.title" --port 9222 --json
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- click --x 100 --y 200 --button left --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- keypress --key Escape --port 9222
+TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- type-text --text "NASDAQ:NVDA" --port 9222
+```
+
 Raw tools must target only the active local `tradingview.com/chart` page found
 by the repo's CDP health flow. They must not operate on arbitrary browser
 pages, broker/order pages, TradingView account or security settings, or any
-non-TradingView target. Raw outputs should stay compact by default.
+non-TradingView target. Raw evaluate output stays compact by default and should
+return purpose-built structured values, not broad DOM dumps.
+Raw outputs should stay compact by default.
 
 Raw automation does not change the core guardrails: no broker actions, no order
 placement, no scanner/ranking behavior, no financial advice, no unattended
@@ -330,10 +349,10 @@ to Alpaca, or bypass TradingView access controls.
 7. Open the generated `index.html` under `artifacts/tradingview-chartbooks/`
    for review, with Markdown and JSON available beside it.
 
-If a later raw automation issue has been implemented and you want to use those
-tools, start a separate session with `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`
-in the MCP server environment. Keep the high-level workflow as the default when
-you only need chartbooks, captures, and extraction artifacts.
+If you want to use raw automation tools, start a separate session with
+`TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` in the MCP server environment. Keep
+the high-level workflow as the default when you only need chartbooks, captures,
+and extraction artifacts.
 
 If a Codex tool reports CDP unreachable, use the CLI health command first. If a
 chartbook has empty or warning-heavy level JSON, confirm the overlay is visible
