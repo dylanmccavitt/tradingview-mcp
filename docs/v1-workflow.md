@@ -96,8 +96,8 @@ basic mouse, keyboard, and text input, visible UI element discovery,
 selector-based click/hover, and bounded scroll against the active local
 TradingView chart target. It also supports MCP-only direct chart controls and
 native TradingView drawing tools when the active chart exposes the needed
-chart/drawing APIs. Raw automation is not part of the default high-level
-chartbook workflow.
+chart/drawing APIs, plus quant drawing macros for Fib-style levels,
+measured-move projections, and range projections. Raw automation is not part of the default high-level chartbook workflow.
 
 Raw automation tools must be explicitly enabled with:
 
@@ -134,13 +134,19 @@ Current enabled MCP raw tools are:
 - `tradingview_draw_properties`
 - `tradingview_draw_remove`
 - `tradingview_draw_clear_all`
+- `tradingview_draw_fib_levels`
+- `tradingview_draw_projection`
 
 Native drawing tools create supported shapes from explicit price/time anchors,
 list drawing ids/types/names when available, inspect drawing points and
 properties when exposed, remove one drawing by id, and clear all native drawings
 only when `confirmClearAll` is explicitly true. They fail with clear
 unsupported-API reasons when TradingView does not expose the required chart
-API.
+API. Macro drawing tools use those same native drawing APIs to create
+mechanical Fib-style, measured-move, and range-projection review levels from
+explicit anchors or caller-selected extracted range facts. They return created
+drawing ids, anchor metadata, levels used, and warnings; outputs are review
+context only, not predictions, recommendations, rankings, or advice.
 
 The matching CLI commands are:
 

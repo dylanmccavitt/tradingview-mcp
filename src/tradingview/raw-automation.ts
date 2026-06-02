@@ -14,6 +14,14 @@ import {
   type TradingViewHealthResult
 } from "./health.js";
 import {
+  buildFibLevelsMacroPlan,
+  buildProjectionMacroPlan,
+  invalidFibLevelsMacroMessage,
+  invalidProjectionMacroMessage,
+  type BuildFibLevelsMacroOptions,
+  type BuildProjectionMacroOptions
+} from "./drawing-macros.js";
+import {
   isTradingViewChartTarget,
   type CdpTarget
 } from "./targets.js";
@@ -95,7 +103,9 @@ export type RawAutomationAction =
   | "draw-list"
   | "draw-properties"
   | "draw-remove"
-  | "draw-clear-all";
+  | "draw-clear-all"
+  | "draw-fib-levels"
+  | "draw-projection";
 
 export interface RawElementSummary {
   index: number;
@@ -293,6 +303,14 @@ export interface RawDrawRemoveOptions extends RawAutomationBaseOptions {
 export interface RawDrawClearAllOptions extends RawAutomationBaseOptions {
   confirmClearAll: boolean;
 }
+
+export interface RawDrawFibLevelsOptions
+  extends RawAutomationBaseOptions,
+    BuildFibLevelsMacroOptions {}
+
+export interface RawDrawProjectionOptions
+  extends RawAutomationBaseOptions,
+    BuildProjectionMacroOptions {}
 
 export interface RawAutomationResult {
   ok: boolean;
@@ -1127,6 +1145,30 @@ async (command, args) => {
     return options;
   }
 
+  async function createNativeDrawing(chart, args) {
+    const options = drawingCreateOptions(args);
+    let entityId;
+    if (args.shapeType === "horizontal-line" || args.shapeType === "text") {
+      if (typeof chart.createShape !== "function") {
+        return { error: "TradingView chart API does not expose createShape() for single-anchor native drawings." };
+      }
+      entityId = await awaitMaybe(chart.createShape(args.points[0], options));
+    } else {
+      if (typeof chart.createMultipointShape !== "function") {
+        return { error: "TradingView chart API does not expose createMultipointShape() for multi-anchor native drawings." };
+      }
+      entityId = await awaitMaybe(chart.createMultipointShape(args.points, options));
+    }
+    const id =
+      typeof entityId === "string" || typeof entityId === "number"
+        ? String(entityId)
+        : compactText(String(valueFrom(entityId, ["id", "entityId", "shapeId"]) ?? ""));
+    if (!id) {
+      return { error: "TradingView native drawing API did not return a drawing entity id." };
+    }
+    return { id };
+  }
+
   function findWidget() {
     const direct = [
       root.tvWidget,
@@ -1288,32 +1330,19 @@ async (command, args) => {
     }
     if (command === "drawShape") {
       const drawingBefore = readDrawings(chart);
-      const options = drawingCreateOptions(args);
-      let entityId;
-      if (args.shapeType === "horizontal-line" || args.shapeType === "text") {
-        if (typeof chart.createShape !== "function") {
-          return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose createShape() for single-anchor native drawings." };
-        }
-        entityId = await awaitMaybe(chart.createShape(args.points[0], options));
-      } else {
-        if (typeof chart.createMultipointShape !== "function") {
-          return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose createMultipointShape() for multi-anchor native drawings." };
-        }
-        entityId = await awaitMaybe(chart.createMultipointShape(args.points, options));
+      const created = await createNativeDrawing(chart, args);
+      if (created.error) {
+        return { ok: false, before: drawingBefore, after: readDrawings(chart), error: created.error };
       }
-      const id =
-        typeof entityId === "string" || typeof entityId === "number"
-          ? String(entityId)
-          : compactText(String(valueFrom(entityId, ["id", "entityId", "shapeId"]) ?? ""));
-      if (!id) {
+      if (!created.id) {
         return { ok: false, before: drawingBefore, after: readDrawings(chart), error: "TradingView native drawing API did not return a drawing entity id." };
       }
       return {
         ok: true,
         before: drawingBefore,
-        entityId: id,
+        entityId: created.id,
         drawing: {
-          id,
+          id: created.id,
           type: args.shapeType,
           points: args.points,
           ...(args.text ? { text: args.text } : {})
@@ -1362,6 +1391,49 @@ async (command, args) => {
       }
       return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose removeAllShapes(), or removable drawing ids were unavailable." };
     }
+    if (command === "drawMacro") {
+      const drawingBefore = readDrawings(chart);
+      const macro = args.macro;
+      if (!macro || typeof macro !== "object" || !Array.isArray(macro.drawings)) {
+        return { ok: false, before: drawingBefore, error: "TradingView drawing macro request did not include drawable macro instructions." };
+      }
+      const createdDrawings = [];
+      for (const drawing of macro.drawings) {
+        const created = await createNativeDrawing(chart, drawing);
+        if (created.error || !created.id) {
+          const label = compactText(String(drawing?.label ?? drawing?.role ?? "macro drawing"));
+          return {
+            ok: false,
+            before: drawingBefore,
+            after: readDrawings(chart),
+            error: "TradingView drawing macro failed while creating " + label + ": " + (created.error ?? "TradingView native drawing API did not return a drawing entity id.")
+          };
+        }
+        createdDrawings.push({
+          id: created.id,
+          role: drawing.role,
+          label: drawing.label,
+          type: drawing.shapeType,
+          points: drawing.points
+        });
+      }
+      const drawingIds = createdDrawings.map((drawing) => drawing.id);
+      return {
+        ok: true,
+        before: drawingBefore,
+        drawingIds,
+        drawings: createdDrawings,
+        macro: {
+          schemaVersion: macro.schemaVersion,
+          kind: macro.kind,
+          source: macro.source,
+          anchors: macro.anchors,
+          levels: macro.levels,
+          drawingIds,
+          warnings: Array.isArray(macro.warnings) ? macro.warnings : []
+        }
+      };
+    }
     return { ok: false, before, error: "Unknown chart command: " + command };
   }
 
@@ -1389,6 +1461,15 @@ async (command, args) => {
   }
   if (mutation.drawing) {
     value.drawing = mutation.drawing;
+  }
+  if (mutation.drawingIds) {
+    value.drawingIds = mutation.drawingIds;
+  }
+  if (mutation.drawings) {
+    value.drawings = mutation.drawings;
+  }
+  if (mutation.macro) {
+    value.macro = mutation.macro;
   }
   return { ok: true, value };
 }
@@ -2521,6 +2602,40 @@ export function runRawDrawClearAll(
     },
     options,
     invalidClearAllMessage(options.confirmClearAll)
+  );
+}
+
+export function runRawDrawFibLevels(
+  options: RawDrawFibLevelsOptions
+): Promise<RawAutomationResult> {
+  const invalidMessage = invalidFibLevelsMacroMessage(options);
+  const macro = invalidMessage ? undefined : buildFibLevelsMacroPlan(options);
+
+  return runRawChartControl(
+    "draw-fib-levels",
+    "drawMacro",
+    {
+      macro
+    },
+    options,
+    invalidMessage
+  );
+}
+
+export function runRawDrawProjection(
+  options: RawDrawProjectionOptions
+): Promise<RawAutomationResult> {
+  const invalidMessage = invalidProjectionMacroMessage(options);
+  const macro = invalidMessage ? undefined : buildProjectionMacroPlan(options);
+
+  return runRawChartControl(
+    "draw-projection",
+    "drawMacro",
+    {
+      macro
+    },
+    options,
+    invalidMessage
   );
 }
 

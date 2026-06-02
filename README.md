@@ -243,7 +243,12 @@ raw surface also exposes direct chart state/control tools for reading compact
 current chart state, setting symbol/timeframe/chart type/visible range, adding
 a named indicator, and removing a chart entity by id when TradingView exposes
 the required chart API. Those tools return before/after state or an explicit
-API-unavailable failure.
+API-unavailable failure. MCP-only quant drawing macros can also create
+Fib-style retracement/extension levels and measured-move or range-projection
+review levels from explicit anchors or caller-selected extracted range facts
+when native drawing APIs are exposed. Macro output records created drawing ids,
+anchor metadata, levels used, and warnings; it is review context only, not a
+prediction, recommendation, ranking, or advice.
 
 Raw automation remains experimental local chart control. It must not operate on
 arbitrary browser pages, broker/order pages, TradingView account or security
@@ -313,14 +318,18 @@ browser controls. When the server process is started with
 - `tradingview_draw_properties`
 - `tradingview_draw_remove`
 - `tradingview_draw_clear_all`
+- `tradingview_draw_fib_levels`
+- `tradingview_draw_projection`
 
 These raw tools are experimental, scoped only to the active local TradingView
 chart target, compact by default, and still governed by the no broker/order,
 no scanner/ranking, no advice, no unattended-candidate guardrails. Native
 drawing tools use TradingView chart/drawing APIs only when exposed and report
-clear unsupported-API failures otherwise. `tradingview_draw_clear_all` requires
-an explicit `confirmClearAll: true` argument because it removes every native
-drawing on the active chart.
+clear unsupported-API failures otherwise. The macro tools create native
+drawings for mechanical chart-review levels and return metadata that can be
+recorded in current-chart or chartbook artifacts via `macroMetadata`.
+`tradingview_draw_clear_all` requires an explicit `confirmClearAll: true`
+argument because it removes every native drawing on the active chart.
 
 ## V1 Boundary
 

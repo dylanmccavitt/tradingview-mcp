@@ -49,6 +49,7 @@ import {
   type PineDrawingTable,
   type PineDrawingZone
 } from "../tradingview/pine-drawings.js";
+import type { DrawingMacroArtifact } from "../tradingview/drawing-macros.js";
 import type { CdpTarget } from "../tradingview/targets.js";
 import type {
   ResolvedUniverseSymbol,
@@ -117,6 +118,7 @@ export interface ChartbookPlan {
   preset: string;
   profile: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
+  macros?: DrawingMacroArtifact[];
   symbols: ChartbookSymbolPlan[];
 }
 
@@ -128,6 +130,7 @@ export interface BuildChartbookPlanOptions {
   preset?: string;
   profile?: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
+  macroMetadata?: DrawingMacroArtifact[];
   targetUrl?: string;
 }
 
@@ -172,6 +175,7 @@ export interface ChartbookLevelsArtifact {
     error?: string;
   };
   extraction: ChartbookExtractionArtifact;
+  macros?: DrawingMacroArtifact[];
 }
 
 export interface ChartbookTimeframeResult {
@@ -212,6 +216,7 @@ export interface ChartbookResult {
   endpoint: string;
   selection?: ChartbookSelectionSummary;
   target?: CdpTarget;
+  macros?: DrawingMacroArtifact[];
   symbols: ChartbookSymbolResult[];
   error?: string;
 }
@@ -233,6 +238,7 @@ export interface RunChartbookOptions {
   drawingRetryAttempts?: number;
   drawingRetryDelayMs?: number;
   debug?: boolean;
+  macroMetadata?: DrawingMacroArtifact[];
   now?: () => Date;
   checkHealth?: (
     options: CheckTradingViewHealthOptions
@@ -302,6 +308,24 @@ function selectionCopy(
   }
 
   return copied;
+}
+
+function macroMetadataCopy(
+  macroMetadata: readonly DrawingMacroArtifact[] | undefined
+): DrawingMacroArtifact[] | undefined {
+  return macroMetadata && macroMetadata.length > 0
+    ? macroMetadata.map((macro) => ({
+        ...macro,
+        anchors: {
+          ...macro.anchors
+        },
+        levels: macro.levels.map((level) => ({
+          ...level
+        })),
+        drawingIds: [...macro.drawingIds],
+        warnings: [...macro.warnings]
+      }))
+    : undefined;
 }
 
 function symbolMetadata(symbol: ResolvedUniverseSymbol): ChartbookSymbolMetadata {
@@ -383,6 +407,11 @@ export function buildChartbookPlan(
   const selection = selectionCopy(options.selection);
   if (selection) {
     plan.selection = selection;
+  }
+
+  const macros = macroMetadataCopy(options.macroMetadata);
+  if (macros) {
+    plan.macros = macros;
   }
 
   return plan;
@@ -480,7 +509,7 @@ function combinedExtractionWarnings(
 function buildLevelsArtifact(
   symbol: ChartbookSymbolPlan,
   timeframe: ChartbookTimeframeArtifactPlan,
-  plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile">,
+  plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile" | "macros">,
   screenshotOk: boolean,
   screenshotError: string | undefined,
   extraction: ChartbookExtractionArtifact
@@ -506,7 +535,7 @@ function buildLevelsArtifact(
     symbolData.name = symbol.name;
   }
 
-  return {
+  const artifact: ChartbookLevelsArtifact = {
     schemaVersion: CHARTBOOK_SCHEMA_VERSION,
     ok: screenshot.ok && extraction.ok,
     symbol: symbolData,
@@ -526,6 +555,13 @@ function buildLevelsArtifact(
     screenshot,
     extraction
   };
+
+  const macros = macroMetadataCopy(plan.macros);
+  if (macros) {
+    artifact.macros = macros;
+  }
+
+  return artifact;
 }
 
 function markdownList(values: readonly string[]): string {
@@ -1834,7 +1870,7 @@ async function captureTimeframe(
     drawingSetupError: string | undefined;
     endpoint: string | undefined;
     fileSystem: ChartbookFileSystem;
-    plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile">;
+    plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile" | "macros">;
     setupError: string | undefined;
     studyName: string;
     debug: boolean;
@@ -2065,6 +2101,10 @@ export async function runChartbook(
     profile
   };
 
+  if (options.macroMetadata) {
+    planOptions.macroMetadata = options.macroMetadata;
+  }
+
   if (options.preset) {
     planOptions.preset = options.preset;
   }
@@ -2237,6 +2277,11 @@ export async function runChartbook(
 
   if (plan.selection) {
     result.selection = plan.selection;
+  }
+
+  const macros = macroMetadataCopy(plan.macros);
+  if (macros) {
+    result.macros = macros;
   }
 
   if (target) {
