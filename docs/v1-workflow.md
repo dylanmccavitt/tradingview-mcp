@@ -255,8 +255,10 @@ How to read chartbook artifacts:
 
 - `index.html` is the primary local review dashboard. It shows session metadata,
   profile/preset, per-symbol warnings, profile-specific review panels,
+  generated Codex Analysis briefs from extracted chart facts,
   weekly/daily/65-minute screenshots, links to levels JSON, and local manual
-  note fields.
+  note fields. These briefs are review context only; they do not rank, recommend,
+  alert, trade, or call brokers.
 - `index.md` is the session summary with the selected groups, tier, output
   paths, and per-symbol/timeframe status.
 - Each PNG is the captured TradingView chart screenshot for that symbol and

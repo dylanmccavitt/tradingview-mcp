@@ -774,6 +774,203 @@ function renderHtmlWarnings(result: ChartbookSymbolResult): string {
   return `<section class="warning-block"><h3>Extraction Warnings</h3><ul>${warningLines.join("")}</ul></section>`;
 }
 
+function uniqueWarnings(result: ChartbookSymbolResult): string[] {
+  return [
+    ...new Set(
+      result.timeframes.flatMap((timeframe) => timeframe.warnings)
+    )
+  ];
+}
+
+function firstReferencePrice(
+  facts: Array<ChartFacts | undefined>
+): number | undefined {
+  return facts.find(
+    (candidate) => typeof candidate?.nearest.referencePrice === "number"
+  )?.nearest.referencePrice;
+}
+
+function compareReferenceToLevel(
+  facts: ChartFacts | undefined,
+  level: ChartFactLevel
+): string {
+  const referencePrice = facts?.nearest.referencePrice;
+
+  if (typeof referencePrice !== "number") {
+    return `${formatLevel(level)}; current chart price was unavailable in extraction.`;
+  }
+
+  const distance = referencePrice - level.price;
+  const tolerance = Math.max(0.01, Math.abs(level.price) * 0.001);
+
+  if (Math.abs(distance) <= tolerance) {
+    return `${formatLevel(level)}; reference ${formatPrice(referencePrice)} is near this level.`;
+  }
+
+  const percent = Math.abs((distance / level.price) * 100)
+    .toFixed(1)
+    .replace(/\.0$/, "");
+  const direction = distance > 0 ? "above" : "below";
+
+  return `${formatLevel(level)}; reference ${formatPrice(referencePrice)} is ${direction} by ${percent}%.`;
+}
+
+function describeComparedLevels(
+  facts: ChartFacts | undefined,
+  levels: readonly ChartFactLevel[]
+): string {
+  if (levels.length === 0) {
+    return "No extracted levels for this section.";
+  }
+
+  if (typeof facts?.nearest.referencePrice !== "number") {
+    return formatLevelList(levels);
+  }
+
+  return levels.map((level) => compareReferenceToLevel(facts, level)).join(" ");
+}
+
+function describeAvwapContext(
+  factsByLabel: Array<[string, ChartFacts | undefined]>
+): string | undefined {
+  const available = factsByLabel
+    .filter(([, facts]) => facts?.avwap.present && typeof facts.avwap.value === "number")
+    .map(([label, facts]) => `${label} ${formatPrice(facts?.avwap.value as number)}`);
+
+  return available.length > 0
+    ? `Anchored VWAP values exposed: ${available.join(", ")}.`
+    : undefined;
+}
+
+function codexAnalysisObservations(
+  result: ChartbookSymbolResult,
+  profile: ChartAnalysisProfileName
+): string[] {
+  const weekly = timeframeFacts(result, "weekly");
+  const daily = timeframeFacts(result, "daily");
+  const intraday = timeframeFacts(result, "65-minute");
+  const observations: string[] = [];
+
+  if (profile === "breakout") {
+    observations.push(
+      `Daily breakout references: ${describeComparedLevels(daily, daily?.breakout.referenceLevels ?? [])}`
+    );
+    observations.push(
+      `Weekly context references: ${describeComparedLevels(weekly, weekly?.breakout.referenceLevels ?? [])}`
+    );
+
+    if (
+      intraday?.timing.openingRangeLevels.length ||
+      intraday?.timing.priorDayLevels.length
+    ) {
+      observations.push(
+        `65-minute timing levels: opening range ${formatLevelList(intraday.timing.openingRangeLevels)}; prior day ${formatLevelList(intraday.timing.priorDayLevels)}.`
+      );
+    } else {
+      observations.push(
+        "65-minute timing levels were not extracted; review the screenshot and levels JSON before relying on timing context."
+      );
+    }
+  } else {
+    observations.push(
+      `Cross-timeframe nearest context: weekly ${formatNearest(weekly)}; daily ${formatNearest(daily)}; 65-minute ${formatNearest(intraday)}.`
+    );
+    observations.push(
+      `Key extracted levels: weekly ${formatLevelList(keyLevels(weekly), "none")}; daily ${formatLevelList(keyLevels(daily), "none")}; 65-minute ${formatLevelList(keyLevels(intraday), "none")}.`
+    );
+  }
+
+  const referencePrice = firstReferencePrice([daily, intraday, weekly]);
+  if (typeof referencePrice === "number") {
+    observations.push(
+      `Reference chart price exposed by TradingView extraction: ${formatPrice(referencePrice)}.`
+    );
+  } else {
+    observations.push(
+      "TradingView extraction did not expose a current chart price; level comparisons are limited."
+    );
+  }
+
+  const avwap = describeAvwapContext([
+    ["weekly", weekly],
+    ["daily", daily],
+    ["65-minute", intraday]
+  ]);
+  if (avwap) {
+    observations.push(avwap);
+  }
+
+  if (daily?.compression.state && daily.compression.state !== "unknown") {
+    observations.push(`Daily compression context: ${formatCompression(daily)}.`);
+  }
+
+  const warnings = uniqueWarnings(result);
+  observations.push(
+    warnings.length > 0
+      ? `Extraction warnings to review: ${warnings.join(" ")}`
+      : "No extraction warnings were recorded for this symbol."
+  );
+
+  return observations;
+}
+
+function codexAnalysisChecks(profile: ChartAnalysisProfileName): string[] {
+  if (profile === "breakout") {
+    return [
+      "Start with the daily screenshot and confirm price behavior around the extracted 20D-H, 50D-H, and prior-week levels.",
+      "Use the 65-minute screenshot only as timing context after the daily breakout context is understood.",
+      "Check whether opening-range and prior-day levels are acting as support/resistance in the screenshot.",
+      "Open the linked levels JSON when warnings mention legend fallback or missing drawing fields."
+    ];
+  }
+
+  if (profile === "squeeze") {
+    return [
+      "Confirm whether the extracted compression range is visible and useful on the daily screenshot.",
+      "Compare range high/low against nearest extracted support and resistance.",
+      "Open the levels JSON if range state is unknown or warnings are present."
+    ];
+  }
+
+  if (profile === "momentum") {
+    return [
+      "Review whether price is respecting extracted continuation levels across daily and 65-minute charts.",
+      "Check anchored VWAP context when available.",
+      "Use warnings to decide whether the screenshot needs manual inspection before relying on extracted facts."
+    ];
+  }
+
+  return [
+    "Review weekly context first, then daily, then 65-minute timing.",
+    "Use extracted levels as objective references, not as recommendations.",
+    "Open the levels JSON when warnings or missing fields limit the dashboard summary."
+  ];
+}
+
+function renderHtmlList(items: readonly string[]): string {
+  return `<ul>${items.map((item) => `<li>${htmlEscape(item)}</li>`).join("")}</ul>`;
+}
+
+function renderCodexAnalysisHtml(
+  result: ChartbookSymbolResult,
+  profile: ChartAnalysisProfileName
+): string {
+  return `<section class="codex-analysis" aria-labelledby="${htmlEscape(result.symbolSlug)}-codex-analysis">
+    <h3 id="${htmlEscape(result.symbolSlug)}-codex-analysis">Codex Analysis</h3>
+    <p class="muted">Generated from extracted objective overlay facts and chartbook warnings. Review context only; no ranking, recommendation, alert, broker, or order action.</p>
+    <div class="review-grid compact">
+      <article>
+        <h4>Objective Read</h4>
+        ${renderHtmlList(codexAnalysisObservations(result, profile))}
+      </article>
+      <article>
+        <h4>Review Checks</h4>
+        ${renderHtmlList(codexAnalysisChecks(profile))}
+      </article>
+    </div>
+  </section>`;
+}
+
 function renderHtmlReviewFieldset(
   symbol: ChartbookSymbolResult,
   profile: ChartAnalysisProfileName
@@ -932,6 +1129,7 @@ function renderSymbolDashboardHtml(
     </header>
     <div class="tag-row">${tags.map((tag) => `<span>${htmlEscape(tag)}</span>`).join("")}</div>
     ${renderHtmlWarnings(symbol)}
+    ${renderCodexAnalysisHtml(symbol, profile)}
     ${renderProfileReviewHtml(profile, symbol)}
     <section class="screenshots-grid" aria-label="${htmlEscape(`${symbol.alias} screenshots`)}">
       ${symbol.timeframes.map((timeframe) => renderTimeframeScreenshotHtml(symbol, timeframe)).join("")}

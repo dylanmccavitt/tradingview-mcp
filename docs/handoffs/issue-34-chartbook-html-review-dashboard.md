@@ -6,8 +6,9 @@ Implemented on `feat/issue-34-chartbook-html-review-dashboard`.
 
 Chartbook runs now plan and write a static `index.html` dashboard next to the
 existing `index.md`. The dashboard is local-only and shows session metadata,
-profile/preset context, symbol navigation, warnings, profile-specific review
-panels, weekly/daily/65-minute screenshots, links to `*-levels.json`, links to
+profile/preset context, symbol navigation, warnings, generated Codex Analysis
+briefs from extracted facts, profile-specific review panels,
+weekly/daily/65-minute screenshots, links to `*-levels.json`, links to
 per-symbol `notes.md`, and local manual-review fields. The breakout profile
 surfaces weekly context, daily breakout levels, 65-minute timing levels, key
 extracted levels, confirmation fields, and invalidation prompts in the HTML
@@ -28,6 +29,8 @@ Desktop is relaunched with CDP and inspect the generated `index.html` visually.
   browser's `localStorage` for the generated dashboard session.
 - The dashboard presents extracted facts and screenshots; it does not rank,
   score, recommend, alert, trade, or call broker/order APIs.
+- The Codex Analysis section is deterministic and extraction-derived; it does
+  not call an LLM or infer hidden chart state from pixels.
 
 ## Files
 
@@ -50,3 +53,8 @@ Desktop is relaunched with CDP and inspect the generated `index.html` visually.
 - `npm test`
 - `npm run lint`
 - `git diff --check`
+
+Follow-up after user feedback:
+
+- Added per-symbol `Codex Analysis` HTML sections with objective observations
+  and review checks generated from extracted facts and warnings.

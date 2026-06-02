@@ -419,6 +419,8 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     );
     assert.match(dashboard, /<title>TradingView Chartbook session-a<\/title>/);
     assert.match(dashboard, /Profile<\/strong>breakout/);
+    assert.match(dashboard, /Codex Analysis/);
+    assert.match(dashboard, /Objective Read/);
     assert.match(dashboard, /Breakout Review/);
     assert.match(dashboard, /Weekly Context/);
     assert.match(dashboard, /Daily Setup/);
@@ -498,6 +500,11 @@ void test("chartbook HTML dashboard renders breakout facts in scannable sections
   assert.match(dashboard, /Local TradingView Chartbook/);
   assert.match(dashboard, /Groups<\/strong>semis/);
   assert.match(dashboard, /Preset<\/strong>focus/);
+  assert.match(dashboard, /Codex Analysis/);
+  assert.match(dashboard, /Daily breakout references:/);
+  assert.match(dashboard, /50D-H 151; reference 142 is below by 6%/);
+  assert.match(dashboard, /65-minute timing levels: opening range OR-H 142.5, OR-L 139.5; prior day PDH 143, PDL 138/);
+  assert.match(dashboard, /Review context only; no ranking, recommendation, alert, broker, or order action/);
   assert.match(dashboard, /Breakout Review/);
   assert.match(dashboard, /<strong>PWH<\/strong><span>147<\/span>/);
   assert.match(dashboard, /<strong>50D-H<\/strong><span>151<\/span>/);

@@ -58,6 +58,7 @@ void test("v1 workflow explains chartbook artifacts", () => {
   assert.match(workflow, /NASDAQ-NVDA-weekly\.png/);
   assert.match(workflow, /NASDAQ-NVDA-weekly-levels\.json/);
   assert.match(workflow, /primary local review dashboard/i);
+  assert.match(workflow, /Codex Analysis briefs/i);
   assert.match(workflow, /horizontal levels, zones from boxes, labels, tables/);
   assert.match(workflow, /Partial failures are recorded/);
 });

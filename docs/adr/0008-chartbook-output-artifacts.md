@@ -10,7 +10,7 @@ Generate chartbooks as ignored local artifact directories under `artifacts/tradi
 
 Each chartbook session contains an `index.md` file, a static `index.html` review dashboard, and one directory per resolved universe symbol. Each symbol directory contains weekly, daily, and 65-minute screenshots, matching `*-levels.json` structured drawing artifacts, and a `notes.md` page with local screenshot embeds, extraction warnings, and a profile-aware human review checklist.
 
-The HTML dashboard is the primary human review surface. It presents session metadata, profile/preset context, per-symbol warnings, profile-specific review panels, screenshots, links to JSON/Markdown artifacts, and local manual-note fields. The Markdown and JSON artifacts remain the durable machine-readable and fallback text surfaces for Codex review and debugging.
+The HTML dashboard is the primary human review surface. It presents session metadata, profile/preset context, per-symbol warnings, generated Codex Analysis briefs from extracted facts, profile-specific review panels, screenshots, links to JSON/Markdown artifacts, and local manual-note fields. The Markdown and JSON artifacts remain the durable machine-readable and fallback text surfaces for Codex review and debugging.
 
 The chartbook runner records partial failures in the HTML dashboard, Markdown index, notes, and per-timeframe JSON. It continues through later timeframes and symbols without deleting successful captures.
 
