@@ -5,8 +5,13 @@ import test from "node:test";
 
 const workflowPath = resolve(process.cwd(), "docs/v1-workflow.md");
 const readmePath = resolve(process.cwd(), "README.md");
+const rawAutomationAdrPath = resolve(
+  process.cwd(),
+  "docs/adr/0011-experimental-raw-automation-surface.md"
+);
 const workflow = readFileSync(workflowPath, "utf8");
 const readme = readFileSync(readmePath, "utf8");
+const rawAutomationAdr = readFileSync(rawAutomationAdrPath, "utf8");
 
 void test("v1 workflow documents global Codex MCP configuration", () => {
   assert.match(workflow, /\[mcp_servers\.tradingview\]/);
@@ -94,8 +99,34 @@ void test("v1 workflow documents chart-analysis profile boundaries", () => {
   assert.match(workflow, /generate candidates/);
 });
 
+void test("v1 workflow documents experimental raw automation boundary", () => {
+  assert.match(workflow, /Experimental Raw Automation Boundary/);
+  assert.match(workflow, /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
+  assert.match(workflow, /`tradingview_raw_\*`/);
+  assert.match(workflow, /`tradingview_draw_\*`/);
+  assert.match(workflow, /active local `tradingview\.com\/chart` page/);
+  assert.match(workflow, /not part of the default high-level\s+chartbook workflow/i);
+  assert.match(workflow, /broker\/order pages/i);
+  assert.match(workflow, /TradingView account or security settings/i);
+  assert.match(workflow, /Raw outputs should stay compact by default/i);
+});
+
+void test("raw automation ADR pins opt-in naming and guardrails", () => {
+  assert.match(rawAutomationAdr, /Experimental Raw Automation Surface/);
+  assert.match(rawAutomationAdr, /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
+  assert.match(rawAutomationAdr, /`tradingview_raw_\*`/);
+  assert.match(rawAutomationAdr, /`tradingview_draw_\*`/);
+  assert.match(rawAutomationAdr, /disabled by default/i);
+  assert.match(rawAutomationAdr, /active local TradingView chart target/i);
+  assert.match(rawAutomationAdr, /must not automate broker\/order workflows/i);
+  assert.match(rawAutomationAdr, /scanner\/ranking behavior/i);
+});
+
 void test("README links the v1 workflow", () => {
   assert.match(readme, /\[docs\/v1-workflow\.md\]\(\.\/docs\/v1-workflow\.md\)/);
   assert.match(readme, /defaults to the quieter `focus` style preset/);
   assert.match(readme, /keeps `clean`, `levels`, and `full-debug` available/);
+  assert.match(readme, /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
+  assert.match(readme, /`tradingview_raw_\*`/);
+  assert.match(readme, /`tradingview_draw_\*`/);
 });

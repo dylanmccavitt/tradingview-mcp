@@ -14,6 +14,25 @@ export const PROJECT_GUARDRAILS = {
     "Operate locally against user-controlled TradingView Desktop sessions; do not exfiltrate chart data."
 } as const;
 
+export const RAW_AUTOMATION_BOUNDARY = {
+  status: "future_opt_in_experimental",
+  gateEnv: "TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION",
+  toolPrefixes: ["tradingview_raw_", "tradingview_draw_"],
+  allowed: [
+    "local_chart_target_evaluate",
+    "local_chart_target_input",
+    "native_tradingview_drawings",
+    "direct_chart_manipulation"
+  ],
+  constraints: [
+    "disabled_by_default",
+    "active_tradingview_chart_target_only",
+    "compact_outputs_by_default",
+    "no_broker_order_or_account_automation",
+    "no_scanner_ranking_or_unattended_alerts"
+  ]
+} as const;
+
 export const CHART_ANALYSIS_PROFILE_NAMES = [
   "focus",
   "breakout",
@@ -66,6 +85,7 @@ export function getProjectInfo() {
   return {
     ...PROJECT_INFO,
     guardrails: PROJECT_GUARDRAILS,
+    rawAutomation: RAW_AUTOMATION_BOUNDARY,
     chartAnalysisProfiles: {
       names: CHART_ANALYSIS_PROFILE_NAMES,
       profiles: CHART_ANALYSIS_PROFILES,

@@ -16,7 +16,8 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a structured chart-facts layer for objective breakout, squeeze, and momentum review fields
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
-- a v1 MCP tool surface made only of high-level charting workflows
+- a default v1 MCP tool surface made only of high-level charting workflows
+- a documented opt-in boundary for future experimental raw automation tools
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -33,7 +34,7 @@ No scanner or broker behavior exists.
 
 `src/index.ts` starts a stdio MCP server created by `src/server.ts`. Codex can launch the built server with a local `node dist/src/index.js` command.
 
-`src/mcp/tradingview-tools.ts` registers the v1 high-level tool surface:
+`src/mcp/tradingview-tools.ts` registers the default v1 high-level tool surface:
 
 - `tradingview_connect`
 - `tradingview_status`
@@ -43,7 +44,14 @@ No scanner or broker behavior exists.
 - `tradingview_capture_current_chart`
 - `tradingview_build_chartbook`
 
-The server instructions and every tool description state the charting-only guardrails. V1 does not expose raw click, type, page evaluate, or generic browser-control tools.
+The server instructions and every tool description state the charting-only
+guardrails. The default v1 server does not expose raw click, type, page
+evaluate, or generic browser-control tools.
+
+ADR 0011 documents a future experimental raw automation surface. Raw tools must
+be disabled by default, gated by `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`,
+namespaced as `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the
+active local TradingView chart target.
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -154,7 +162,7 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 
 ## Boundaries
 
-- In scope: local MCP server, user-directed TradingView Desktop chart workflows, chartbook artifacts, objective chart/drawing data extraction, and user-selected chart-analysis profile vocabulary.
+- In scope: local MCP server, user-directed TradingView Desktop chart workflows, chartbook artifacts, objective chart/drawing data extraction, user-selected chart-analysis profile vocabulary, and explicitly enabled experimental raw automation against the active local TradingView chart target.
 - Out of scope: broker integrations, order placement, portfolio actions, scanners, rankings, unattended alerts, and financial advice.
 
 ## Main Flows
@@ -228,7 +236,9 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 1. Build with `npm run build`.
 2. Configure Codex to run `node dist/src/index.js` as a stdio MCP server.
 3. Codex starts the local server process when the MCP server is enabled.
-4. Codex sees only the high-level v1 charting tools; raw browser-control tools are not registered.
+4. Codex sees only the default high-level v1 charting tools; raw
+   browser-control tools are not registered unless a future raw tool slice is
+   implemented and explicitly enabled through the ADR 0011 gate.
 
 ## Important Invariants
 
@@ -248,6 +258,9 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.
 - Structured chart facts must stay objective and extraction-derived; unavailable fields should be represented with warnings instead of inferred from screenshots or pixels.
 - Chart-analysis profiles are review modes over user-selected charts or configured universe selections; they may produce objective facts, levels, checklist fields, notes, and prompts, but not rankings, watchlist scoring, financial advice, broker calls, order actions, unattended alerts, or generated candidates.
-- The MCP tool surface must stay high-level and must not expose raw browser micromanagement tools.
+- The default MCP tool surface must stay high-level.
+- Experimental raw automation tools must be disabled by default, explicitly
+  namespaced, local-chart-target scoped, compact by default, and registered
+  only when the raw automation gate is enabled.
 - The repo must not grow broker, scanner, or execution behavior through incidental helper code.
 - Architecture docs describe current system shape only; future task plans belong in `docs/plans/` while active.

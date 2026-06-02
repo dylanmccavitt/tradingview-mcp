@@ -6,7 +6,11 @@
 
 ## Product Boundary
 
-V1 is charting-only. It can become a local assistant for opening charts, applying chart context, organizing chartbooks, and extracting user-visible drawing data from TradingView Desktop. It is not a scanner, broker integration, signal service, or trade execution system.
+V1 is charting-only. It can become a local assistant for opening charts,
+applying chart context, organizing chartbooks, extracting user-visible drawing
+data, and, when explicitly enabled, using experimental raw automation against a
+local TradingView Desktop chart target. It is not a scanner, broker
+integration, signal service, or trade execution system.
 
 Chart-analysis profiles are user-selected review modes, not candidate
 generation. The stable profile names are `focus`, `breakout`, `squeeze`, and
@@ -24,9 +28,13 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 - Local TypeScript/Node MCP server over stdio.
 - Minimal local CLI commands expose the same setup, status, one-symbol charting,
   and universe charting workflows for repeatable smoke/debug runs outside Codex.
-- MCP exposes high-level v1 charting tools only: connect/status, universe
+- MCP exposes high-level v1 charting tools by default: connect/status, universe
   listing, one-symbol charting, universe charting, current-chart capture, and
   chartbook creation.
+- Experimental raw automation is allowed only as an opt-in surface gated by
+  `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, namespaced as
+  `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the active local
+  TradingView chart target.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.
@@ -46,4 +54,9 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
 - No profile-based rankings, watchlist scoring, financial advice, order
   actions, broker calls, unattended alerts, or generated candidates.
 - No bypassing TradingView subscriptions or access controls.
-- No generated Pine injection or subjective chart-pattern labels in v1 overlays.
+- No Pine editor automation or subjective chart-pattern labels in the default
+  high-level workflow. Pine editor automation, if added later, must be explicit
+  and opt-in under the experimental raw automation boundary.
+- Raw automation must not target non-TradingView pages, automate account or
+  security settings, create broker/order actions, add unattended alerts, rank
+  symbols, or generate candidates.

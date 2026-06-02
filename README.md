@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, and local chartbook artifact output.
+This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, and local chartbook artifact output. Future raw automation tools are allowed only as an explicitly enabled experimental surface.
 
 ## Requirements
 
@@ -241,7 +241,7 @@ startup_timeout_sec = 20
 tool_timeout_sec = 45
 ```
 
-The v1 MCP server advertises only high-level charting tools:
+The v1 MCP server advertises high-level charting tools by default:
 
 - `tradingview_connect`
 - `tradingview_status`
@@ -251,7 +251,19 @@ The v1 MCP server advertises only high-level charting tools:
 - `tradingview_capture_current_chart`
 - `tradingview_build_chartbook`
 
-Each tool description repeats the v1 guardrail: charting-only, no scanner or ranking behavior, no financial-advice claims, and no broker or order actions. The MCP surface does not expose raw click, type, or page-evaluate browser controls.
+Each tool description repeats the v1 guardrail: charting-only, no scanner or
+ranking behavior, no financial-advice claims, and no broker or order actions.
+The default MCP surface does not expose raw click, type, or page-evaluate
+browser controls.
+
+Experimental raw automation may be added in later issues for native
+TradingView drawings, direct chart manipulation, selector-oriented UI actions,
+and bounded CDP/page evaluation. Raw tools must be disabled by default, enabled
+explicitly with `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, named
+`tradingview_raw_*` or `tradingview_draw_*`, and scoped only to the active local
+TradingView chart target. They must not automate broker/order workflows,
+TradingView account or security settings, scanners, rankings, unattended
+alerts, or generated candidates.
 
 ## V1 Boundary
 
