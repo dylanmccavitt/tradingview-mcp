@@ -9,7 +9,11 @@ import type {
 import { runCli } from "../src/cli.js";
 import {
   RAW_AUTOMATION_ENV,
-  type RawEvaluateOptions
+  type RawEvaluateOptions,
+  type RawFindElementOptions,
+  type RawScrollOptions,
+  type RawSelectorClickOptions,
+  type RawSelectorHoverOptions
 } from "../src/tradingview/raw-automation.js";
 import type { ChartOneSymbolOptions, ChartOneSymbolResult } from "../src/tradingview/chart-runner.js";
 import type {
@@ -539,5 +543,141 @@ void test("CLI raw input commands parse click, keypress, and text payloads", asy
     "click:10,20:right",
     "keypress:Escape",
     "type-text:NASDAQ:NVDA"
+  ]);
+});
+
+void test("CLI raw selector and scroll commands parse bounded payloads", async () => {
+  const calls: string[] = [];
+  const runOptions = {
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawFindElement: (options: RawFindElementOptions) => {
+        calls.push(
+          `find:${options.strategy}:${options.value}:${options.maxMatches}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "find-element" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          value: {
+            count: 1,
+            elements: []
+          },
+          warnings: []
+        });
+      },
+      runRawSelectorClick: (options: RawSelectorClickOptions) => {
+        calls.push(
+          `selector-click:${options.strategy}:${options.value}:${options.matchIndex}:${options.clickMethod}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "selector-click" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawSelectorHover: (options: RawSelectorHoverOptions) => {
+        calls.push(
+          `selector-hover:${options.strategy}:${options.value}:${options.matchIndex}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "selector-hover" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawScroll: (options: RawScrollOptions) => {
+        calls.push(
+          `scroll:${options.direction}:${options.amount}:${options.x}:${options.y}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "scroll" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  };
+
+  const findCode = await runCli(
+    [
+      "raw",
+      "find-element",
+      "--strategy",
+      "text",
+      "--value",
+      "Watchlist",
+      "--max-matches",
+      "3"
+    ],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+  const clickCode = await runCli(
+    [
+      "raw",
+      "selector-click",
+      "--strategy",
+      "css",
+      "--value",
+      "[data-name=watchlist-button]",
+      "--match-index",
+      "1",
+      "--click-method",
+      "dom"
+    ],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+  const hoverCode = await runCli(
+    [
+      "raw",
+      "selector-hover",
+      "--strategy",
+      "aria-label",
+      "--value",
+      "Watchlist",
+      "--match-index",
+      "0"
+    ],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+  const scrollCode = await runCli(
+    ["raw", "scroll", "--direction", "down", "--amount", "300", "--x", "10"],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+
+  assert.equal(findCode, 0);
+  assert.equal(clickCode, 0);
+  assert.equal(hoverCode, 0);
+  assert.equal(scrollCode, 0);
+  assert.deepEqual(calls, [
+    "find:text:Watchlist:3",
+    "selector-click:css:[data-name=watchlist-button]:1:dom",
+    "selector-hover:aria-label:Watchlist:0",
+    "scroll:down:300:10:undefined"
   ]);
 });

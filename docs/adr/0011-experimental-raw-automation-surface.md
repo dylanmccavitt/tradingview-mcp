@@ -70,9 +70,11 @@ issues must port reference behavior in small slices.
 - Raw tools must not automate broker/order workflows, TradingView account or
   security settings, scanner/ranking behavior, financial advice, unattended
   alerts, or generated candidates.
-- The first accepted raw slice exposes `tradingview_raw_evaluate`,
+- The current accepted raw slice exposes `tradingview_raw_evaluate`,
   `tradingview_raw_click`, `tradingview_raw_keypress`, and
-  `tradingview_raw_type_text` as gated tracer-bullet primitives for the active
-  chart target only.
+  `tradingview_raw_type_text` plus `tradingview_raw_find_element`,
+  `tradingview_raw_selector_click`, `tradingview_raw_selector_hover`, and
+  `tradingview_raw_scroll` as gated primitives for the active chart target
+  only.
 - Future native drawing, chart manipulation, Pine editor, data extraction, and
   quant macro issues should build behind this boundary.

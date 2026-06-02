@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- an opt-in experimental raw automation runner for bounded evaluate/click/key/text primitives against the active chart target
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, and scroll primitives against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -57,6 +57,10 @@ active local TradingView chart target. The current gated raw MCP tools are:
 - `tradingview_raw_click`
 - `tradingview_raw_keypress`
 - `tradingview_raw_type_text`
+- `tradingview_raw_find_element`
+- `tradingview_raw_selector_click`
+- `tradingview_raw_selector_hover`
+- `tradingview_raw_scroll`
 
 `tradingview_capture_current_chart` and `tradingview_build_chartbook` expose the
 stable `focus`, `breakout`, `squeeze`, and `momentum` profile enum as concise
@@ -92,14 +96,18 @@ uses `checkTradingViewHealth` to require a healthy active
 CDP session client, and dispatches bounded primitives only to that page.
 
 The current raw primitives are compact JavaScript evaluation, coordinate mouse
-click, keyboard keypress, and bounded text insertion. Raw evaluate uses
-`Runtime.evaluate` with by-value return data and rejects oversized expressions
-or compact-output overflows. Raw input uses CDP `Input.dispatchMouseEvent`,
-`Input.dispatchKeyEvent`, and `Input.insertText`.
+click, keyboard keypress, bounded text insertion, visible element discovery by
+text, aria-label, data-name, or CSS selector, selector click/hover, and bounded
+directional scroll. Raw evaluate uses `Runtime.evaluate` with by-value return
+data and rejects oversized expressions or compact-output overflows. Raw input
+uses CDP `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`, and
+`Input.insertText`; selector actions first resolve compact visible element
+positions and fail clearly when selectors are missing or ambiguous.
 
-`src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`, and
-`raw type-text`; `src/mcp/tradingview-tools.ts` exposes matching
-`tradingview_raw_*` MCP tools only when
+`src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
+`raw type-text`, `raw find-element`, `raw selector-click`,
+`raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
+matching `tradingview_raw_*` MCP tools only when
 `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 

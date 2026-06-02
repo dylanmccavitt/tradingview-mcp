@@ -41,16 +41,29 @@ import {
 } from "../tradingview/pine-drawings.js";
 import {
   DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
+  DEFAULT_RAW_FIND_MAX_MATCHES,
+  DEFAULT_RAW_SCROLL_AMOUNT,
+  RAW_FIND_MAX_MATCHES_LIMIT,
+  RAW_SCROLL_MAX_AMOUNT,
+  RAW_SELECTOR_MAX_CHARS,
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
   runRawClick,
   runRawEvaluate,
+  runRawFindElement,
   runRawKeypress,
+  runRawScroll,
+  runRawSelectorClick,
+  runRawSelectorHover,
   runRawTypeText,
   type RawAutomationResult,
   type RawClickOptions,
+  type RawFindElementOptions,
   type RawEvaluateOptions,
   type RawKeypressOptions,
+  type RawScrollOptions,
+  type RawSelectorClickOptions,
+  type RawSelectorHoverOptions,
   type RawTypeTextOptions
 } from "../tradingview/raw-automation.js";
 import {
@@ -84,7 +97,11 @@ export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_raw_evaluate",
   "tradingview_raw_click",
   "tradingview_raw_keypress",
-  "tradingview_raw_type_text"
+  "tradingview_raw_type_text",
+  "tradingview_raw_find_element",
+  "tradingview_raw_selector_click",
+  "tradingview_raw_selector_hover",
+  "tradingview_raw_scroll"
 ] as const;
 
 export type RawTradingViewMcpToolName =
@@ -109,6 +126,16 @@ export interface TradingViewMcpToolHandlers {
   runRawClick: (options: RawClickOptions) => Promise<RawAutomationResult>;
   runRawKeypress: (options: RawKeypressOptions) => Promise<RawAutomationResult>;
   runRawTypeText: (options: RawTypeTextOptions) => Promise<RawAutomationResult>;
+  runRawFindElement: (
+    options: RawFindElementOptions
+  ) => Promise<RawAutomationResult>;
+  runRawSelectorClick: (
+    options: RawSelectorClickOptions
+  ) => Promise<RawAutomationResult>;
+  runRawSelectorHover: (
+    options: RawSelectorHoverOptions
+  ) => Promise<RawAutomationResult>;
+  runRawScroll: (options: RawScrollOptions) => Promise<RawAutomationResult>;
 }
 
 export interface RegisterTradingViewMcpToolsOptions {
@@ -233,6 +260,44 @@ const rawTypeTextSchema = z.object({
   text: z.string().min(1).max(1000)
 });
 
+const rawSelectorStrategy = z.enum(["text", "aria-label", "data-name", "css"]);
+const rawSelectorShape = {
+  ...endpointShape,
+  strategy: rawSelectorStrategy.describe(
+    "Visible element lookup strategy: text, aria-label, data-name, or CSS selector."
+  ),
+  value: nonEmptyString.max(RAW_SELECTOR_MAX_CHARS),
+  maxMatches: positiveInteger
+    .max(RAW_FIND_MAX_MATCHES_LIMIT)
+    .optional()
+    .describe(`Maximum compact matches to return. Defaults to ${DEFAULT_RAW_FIND_MAX_MATCHES}.`)
+};
+
+const rawFindElementSchema = z.object(rawSelectorShape);
+
+const rawSelectorClickSchema = z.object({
+  ...rawSelectorShape,
+  matchIndex: z.number().int().min(0).optional(),
+  button: rawInputButton.optional(),
+  clickMethod: z.enum(["mouse", "dom"]).optional()
+});
+
+const rawSelectorHoverSchema = z.object({
+  ...rawSelectorShape,
+  matchIndex: z.number().int().min(0).optional()
+});
+
+const rawScrollSchema = z.object({
+  ...endpointShape,
+  direction: z.enum(["up", "down", "left", "right"]),
+  amount: positiveInteger
+    .max(RAW_SCROLL_MAX_AMOUNT)
+    .optional()
+    .describe(`Bounded scroll amount in pixels. Defaults to ${DEFAULT_RAW_SCROLL_AMOUNT}.`),
+  x: nonNegativeNumber.optional(),
+  y: nonNegativeNumber.optional()
+});
+
 function handlersWithDefaults(
   handlers: Partial<TradingViewMcpToolHandlers> | undefined
 ): TradingViewMcpToolHandlers {
@@ -247,7 +312,11 @@ function handlersWithDefaults(
     runRawEvaluate: handlers?.runRawEvaluate ?? runRawEvaluate,
     runRawClick: handlers?.runRawClick ?? runRawClick,
     runRawKeypress: handlers?.runRawKeypress ?? runRawKeypress,
-    runRawTypeText: handlers?.runRawTypeText ?? runRawTypeText
+    runRawTypeText: handlers?.runRawTypeText ?? runRawTypeText,
+    runRawFindElement: handlers?.runRawFindElement ?? runRawFindElement,
+    runRawSelectorClick: handlers?.runRawSelectorClick ?? runRawSelectorClick,
+    runRawSelectorHover: handlers?.runRawSelectorHover ?? runRawSelectorHover,
+    runRawScroll: handlers?.runRawScroll ?? runRawScroll
   };
 }
 
@@ -771,6 +840,151 @@ export function registerTradingViewMcpTools(
 
       return textToolResult(
         `Raw type text: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_find_element",
+    {
+      title: "Raw Find TradingView UI Element",
+      description: rawGuardrailedDescription(
+        "Find visible TradingView UI elements by text, aria-label, data-name, or CSS selector and return compact positions."
+      ),
+      inputSchema: rawFindElementSchema,
+      annotations: {
+        title: "Raw Find TradingView UI Element",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawFindElementOptions = {
+        strategy: args.strategy,
+        value: args.value,
+        maxMatches: args.maxMatches ?? DEFAULT_RAW_FIND_MAX_MATCHES,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawFindElement(rawOptions);
+
+      return textToolResult(
+        `Raw find element: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_selector_click",
+    {
+      title: "Raw Selector Click TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Click one visible TradingView UI element selected by text, aria-label, data-name, or CSS selector."
+      ),
+      inputSchema: rawSelectorClickSchema,
+      annotations: {
+        title: "Raw Selector Click TradingView Chart",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawSelectorClickOptions = {
+        strategy: args.strategy,
+        value: args.value,
+        maxMatches: args.maxMatches ?? DEFAULT_RAW_FIND_MAX_MATCHES,
+        button: args.button ?? "left",
+        clickMethod: args.clickMethod ?? "mouse",
+        ...endpointOptions(args)
+      };
+
+      if (args.matchIndex !== undefined) {
+        rawOptions.matchIndex = args.matchIndex;
+      }
+
+      const result = await handlers.runRawSelectorClick(rawOptions);
+
+      return textToolResult(
+        `Raw selector click: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_selector_hover",
+    {
+      title: "Raw Selector Hover TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Hover one visible TradingView UI element selected by text, aria-label, data-name, or CSS selector."
+      ),
+      inputSchema: rawSelectorHoverSchema,
+      annotations: {
+        title: "Raw Selector Hover TradingView Chart",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawSelectorHoverOptions = {
+        strategy: args.strategy,
+        value: args.value,
+        maxMatches: args.maxMatches ?? DEFAULT_RAW_FIND_MAX_MATCHES,
+        ...endpointOptions(args)
+      };
+
+      if (args.matchIndex !== undefined) {
+        rawOptions.matchIndex = args.matchIndex;
+      }
+
+      const result = await handlers.runRawSelectorHover(rawOptions);
+
+      return textToolResult(
+        `Raw selector hover: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_scroll",
+    {
+      title: "Raw Scroll TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Dispatch a bounded directional wheel scroll against the active local TradingView chart target."
+      ),
+      inputSchema: rawScrollSchema,
+      annotations: {
+        title: "Raw Scroll TradingView Chart",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawScrollOptions = {
+        direction: args.direction,
+        amount: args.amount ?? DEFAULT_RAW_SCROLL_AMOUNT,
+        ...endpointOptions(args)
+      };
+
+      if (args.x !== undefined) {
+        rawOptions.x = args.x;
+      }
+
+      if (args.y !== undefined) {
+        rawOptions.y = args.y;
+      }
+
+      const result = await handlers.runRawScroll(rawOptions);
+
+      return textToolResult(
+        `Raw scroll: ${result.ok ? "success" : "failed"}.`,
         asToolData(result)
       );
     }

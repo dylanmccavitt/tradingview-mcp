@@ -283,6 +283,67 @@ void test("raw MCP evaluate and input tools call injected handlers when enabled"
           executedAt: "2026-06-02T14:30:00.000Z",
           warnings: []
         });
+      },
+      runRawFindElement: (options) => {
+        calls.push(`find:${options.strategy}:${options.value}`);
+        return Promise.resolve({
+          ok: true,
+          action: "find-element",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          value: {
+            count: 1,
+            elements: [
+              {
+                index: 0,
+                tagName: "button",
+                rect: {
+                  x: 10,
+                  y: 20,
+                  width: 30,
+                  height: 20,
+                  centerX: 25,
+                  centerY: 30
+                }
+              }
+            ]
+          },
+          warnings: []
+        });
+      },
+      runRawSelectorClick: (options) => {
+        calls.push(
+          `selector-click:${options.strategy}:${options.value}:${options.matchIndex ?? 0}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "selector-click",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawSelectorHover: (options) => {
+        calls.push(
+          `selector-hover:${options.strategy}:${options.value}:${options.matchIndex ?? 0}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "selector-hover",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawScroll: (options) => {
+        calls.push(`scroll:${options.direction}:${options.amount ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "scroll",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
       }
     }
   });
@@ -315,6 +376,37 @@ void test("raw MCP evaluate and input tools call injected handlers when enabled"
         text: "NASDAQ:NVDA"
       }
     });
+    const find = await client.callTool({
+      name: "tradingview_raw_find_element",
+      arguments: {
+        strategy: "text",
+        value: "Watchlist"
+      }
+    });
+    const selectorClick = await client.callTool({
+      name: "tradingview_raw_selector_click",
+      arguments: {
+        strategy: "css",
+        value: "[data-name=watchlist-button]",
+        matchIndex: 0,
+        clickMethod: "dom"
+      }
+    });
+    const selectorHover = await client.callTool({
+      name: "tradingview_raw_selector_hover",
+      arguments: {
+        strategy: "aria-label",
+        value: "Watchlist",
+        matchIndex: 0
+      }
+    });
+    const scroll = await client.callTool({
+      name: "tradingview_raw_scroll",
+      arguments: {
+        direction: "down",
+        amount: 400
+      }
+    });
 
     assert.equal(callResult(evaluate).isError, undefined);
     assert.equal(callResult(evaluate).structuredContent?.action, "evaluate");
@@ -324,11 +416,19 @@ void test("raw MCP evaluate and input tools call injected handlers when enabled"
     assert.equal(callResult(click).isError, undefined);
     assert.equal(callResult(keypress).isError, undefined);
     assert.equal(callResult(typeText).isError, undefined);
+    assert.equal(callResult(find).isError, undefined);
+    assert.equal(callResult(selectorClick).isError, undefined);
+    assert.equal(callResult(selectorHover).isError, undefined);
+    assert.equal(callResult(scroll).isError, undefined);
     assert.deepEqual(calls, [
       "evaluate:document.title:9223",
       "click:120,240:middle",
       "keypress:Escape",
-      "type-text:NASDAQ:NVDA"
+      "type-text:NASDAQ:NVDA",
+      "find:text:Watchlist",
+      "selector-click:css:[data-name=watchlist-button]:0",
+      "selector-hover:aria-label:Watchlist:0",
+      "scroll:down:400"
     ]);
   } finally {
     await close();

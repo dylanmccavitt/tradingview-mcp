@@ -23,13 +23,77 @@ export const DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES = 4096;
 export const RAW_EVALUATE_MAX_EXPRESSION_CHARS = 2000;
 export const RAW_TEXT_MAX_CHARS = 1000;
 export const RAW_KEY_MAX_CHARS = 64;
+export const RAW_SELECTOR_MAX_CHARS = 500;
+export const DEFAULT_RAW_FIND_MAX_MATCHES = 10;
+export const RAW_FIND_MAX_MATCHES_LIMIT = 25;
+export const DEFAULT_RAW_SCROLL_AMOUNT = 600;
+export const RAW_SCROLL_MAX_AMOUNT = 3000;
+
+const RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS = [
+  /\baccount\b/i,
+  /\bsecurity\b/i,
+  /\bpassword\b/i,
+  /\blog\s*in\b/i,
+  /\blog\s*out\b/i,
+  /\bbilling\b/i,
+  /\bsubscription\b/i,
+  /\bbroker\b/i,
+  /\border\b/i,
+  /\bbuy\b/i,
+  /\bsell\b/i,
+  /\btrade\b/i,
+  /\btrading\s*panel\b/i,
+  /\balert\b/i
+] as const;
+
+const RAW_SELECTOR_CLICK_BROAD_CSS = new Set([
+  "*",
+  "html",
+  "body",
+  "body *",
+  "button",
+  "a",
+  "[role=button]",
+  "[role='button']",
+  "[role=\"button\"]"
+]);
 
 export type RawInputButton = "left" | "middle" | "right";
+export type RawElementSelectorStrategy =
+  | "text"
+  | "aria-label"
+  | "data-name"
+  | "css";
+export type RawSelectorClickMethod = "mouse" | "dom";
+export type RawScrollDirection = "up" | "down" | "left" | "right";
 export type RawAutomationAction =
   | "evaluate"
   | "click"
   | "keypress"
-  | "type-text";
+  | "type-text"
+  | "find-element"
+  | "selector-click"
+  | "selector-hover"
+  | "scroll";
+
+export interface RawElementSummary {
+  index: number;
+  tagName: string;
+  text?: string;
+  ariaLabel?: string;
+  dataName?: string;
+  role?: string;
+  id?: string;
+  className?: string;
+  rect: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    centerX: number;
+    centerY: number;
+  };
+}
 
 export interface RawTradingViewPageClient {
   evaluate(
@@ -45,6 +109,13 @@ export interface RawTradingViewPageClient {
   }): Promise<void>;
   keypress(key: string): Promise<void>;
   typeText(text: string): Promise<void>;
+  hover(options: { x: number; y: number }): Promise<void>;
+  scroll(options: {
+    direction: RawScrollDirection;
+    amount: number;
+    x: number;
+    y: number;
+  }): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -82,6 +153,29 @@ export interface RawKeypressOptions extends RawAutomationBaseOptions {
 
 export interface RawTypeTextOptions extends RawAutomationBaseOptions {
   text: string;
+}
+
+export interface RawFindElementOptions extends RawAutomationBaseOptions {
+  strategy: RawElementSelectorStrategy;
+  value: string;
+  maxMatches?: number;
+}
+
+export interface RawSelectorClickOptions extends RawFindElementOptions {
+  matchIndex?: number;
+  button?: RawInputButton;
+  clickMethod?: RawSelectorClickMethod;
+}
+
+export interface RawSelectorHoverOptions extends RawFindElementOptions {
+  matchIndex?: number;
+}
+
+export interface RawScrollOptions extends RawAutomationBaseOptions {
+  direction: RawScrollDirection;
+  amount?: number;
+  x?: number;
+  y?: number;
 }
 
 export interface RawAutomationResult {
@@ -253,6 +347,126 @@ function invalidCoordinateMessage(x: number, y: number): string | null {
   return null;
 }
 
+function invalidSelectorMessage(options: {
+  strategy: RawElementSelectorStrategy;
+  value: string;
+  maxMatches?: number;
+}): string | null {
+  if (
+    options.strategy !== "text" &&
+    options.strategy !== "aria-label" &&
+    options.strategy !== "data-name" &&
+    options.strategy !== "css"
+  ) {
+    return "Raw selector strategy must be text, aria-label, data-name, or css.";
+  }
+
+  if (options.value.trim().length === 0) {
+    return "Raw selector value is required.";
+  }
+
+  if (options.value.length > RAW_SELECTOR_MAX_CHARS) {
+    return `Raw selector value must be ${RAW_SELECTOR_MAX_CHARS} characters or fewer.`;
+  }
+
+  if (
+    options.maxMatches !== undefined &&
+    (!Number.isInteger(options.maxMatches) ||
+      options.maxMatches <= 0 ||
+      options.maxMatches > RAW_FIND_MAX_MATCHES_LIMIT)
+  ) {
+    return `Raw maxMatches must be an integer from 1 to ${RAW_FIND_MAX_MATCHES_LIMIT}.`;
+  }
+
+  return null;
+}
+
+function invalidMatchIndexMessage(matchIndex: number | undefined): string | null {
+  if (
+    matchIndex !== undefined &&
+    (!Number.isInteger(matchIndex) || matchIndex < 0)
+  ) {
+    return "Raw selector matchIndex must be a non-negative integer.";
+  }
+
+  return null;
+}
+
+function invalidScrollMessage(options: RawScrollOptions): string | null {
+  if (
+    options.direction !== "up" &&
+    options.direction !== "down" &&
+    options.direction !== "left" &&
+    options.direction !== "right"
+  ) {
+    return "Raw scroll direction must be up, down, left, or right.";
+  }
+
+  const amount = options.amount ?? DEFAULT_RAW_SCROLL_AMOUNT;
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    amount > RAW_SCROLL_MAX_AMOUNT
+  ) {
+    return `Raw scroll amount must be greater than 0 and no more than ${RAW_SCROLL_MAX_AMOUNT}.`;
+  }
+
+  const x = options.x ?? 500;
+  const y = options.y ?? 500;
+
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
+    return "Raw scroll coordinates must be finite non-negative numbers.";
+  }
+
+  return null;
+}
+
+function normalizedClickScopeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function forbiddenClickScopeMessage(value: string): string | null {
+  for (const pattern of RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS) {
+    if (pattern.test(value)) {
+      return "Raw selector click refuses broker/order, alert, account, security, login, billing, or subscription UI targets.";
+    }
+  }
+
+  return null;
+}
+
+function invalidSelectorClickScopeMessage(options: {
+  strategy: RawElementSelectorStrategy;
+  value: string;
+}): string | null {
+  const normalizedValue = normalizedClickScopeText(options.value);
+
+  if (
+    options.strategy === "css" &&
+    RAW_SELECTOR_CLICK_BROAD_CSS.has(normalizedValue)
+  ) {
+    return "Raw selector click requires a narrow TradingView chart-control selector.";
+  }
+
+  return forbiddenClickScopeMessage(options.value);
+}
+
+function elementClickScopeMessage(element: RawElementSummary): string | null {
+  return forbiddenClickScopeMessage(
+    [
+      element.text,
+      element.ariaLabel,
+      element.dataName,
+      element.role,
+      element.id,
+      element.className
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .join(" ")
+  );
+}
+
 function normalizeEvaluateResponse(value: unknown): unknown {
   if (!isRecord(value)) {
     return value;
@@ -282,6 +496,191 @@ function normalizeEvaluateResponse(value: unknown): unknown {
     type: response.result.type,
     description: response.result.description
   };
+}
+
+function boundedMaxMatches(maxMatches: number | undefined): number {
+  return Math.min(
+    Math.max(maxMatches ?? DEFAULT_RAW_FIND_MAX_MATCHES, 1),
+    RAW_FIND_MAX_MATCHES_LIMIT
+  );
+}
+
+function elementFindExpression(options: {
+  strategy: RawElementSelectorStrategy;
+  value: string;
+  maxMatches?: number;
+}): string {
+  return `(() => {
+  const strategy = ${JSON.stringify(options.strategy)};
+  const value = ${JSON.stringify(options.value)};
+  const maxMatches = ${boundedMaxMatches(options.maxMatches)};
+  const normalize = (text) => String(text || "").replace(/\\s+/g, " ").trim();
+  const needle = normalize(value).toLowerCase();
+  const visible = (element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+  };
+  const summary = (element, index) => {
+    const rect = element.getBoundingClientRect();
+    const text = normalize(element.innerText || element.textContent || "").slice(0, 160);
+    const ariaLabel = element.getAttribute("aria-label") || undefined;
+    const dataName = element.getAttribute("data-name") || undefined;
+    const role = element.getAttribute("role") || undefined;
+    const id = element.id || undefined;
+    const className = typeof element.className === "string" ? normalize(element.className).slice(0, 120) : undefined;
+    return {
+      index,
+      tagName: element.tagName.toLowerCase(),
+      ...(text ? { text } : {}),
+      ...(ariaLabel ? { ariaLabel } : {}),
+      ...(dataName ? { dataName } : {}),
+      ...(role ? { role } : {}),
+      ...(id ? { id } : {}),
+      ...(className ? { className } : {}),
+      rect: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        centerX: Math.round(rect.x + rect.width / 2),
+        centerY: Math.round(rect.y + rect.height / 2)
+      }
+    };
+  };
+  let candidates = [];
+  try {
+    if (strategy === "css") {
+      candidates = Array.from(document.querySelectorAll(value));
+    } else {
+      candidates = Array.from(document.querySelectorAll("body *")).filter((element) => {
+        if (strategy === "text") {
+          return normalize(element.innerText || element.textContent || "").toLowerCase().includes(needle);
+        }
+        const attribute = element.getAttribute(strategy);
+        return attribute ? normalize(attribute).toLowerCase().includes(needle) : false;
+      });
+    }
+  } catch (error) {
+    return { error: "Invalid CSS selector: " + (error && error.message ? error.message : String(error)) };
+  }
+  const matches = candidates.filter(visible);
+  return {
+    query: { strategy, value },
+    count: matches.length,
+    truncated: matches.length > maxMatches,
+    elements: matches.slice(0, maxMatches).map(summary)
+  };
+})()`;
+}
+
+function domClickExpression(options: {
+  strategy: RawElementSelectorStrategy;
+  value: string;
+  matchIndex: number;
+}): string {
+  return `(() => {
+  const strategy = ${JSON.stringify(options.strategy)};
+  const value = ${JSON.stringify(options.value)};
+  const matchIndex = ${options.matchIndex};
+  const normalize = (text) => String(text || "").replace(/\\s+/g, " ").trim();
+  const needle = normalize(value).toLowerCase();
+  const visible = (element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+  };
+  let candidates = [];
+  try {
+    if (strategy === "css") {
+      candidates = Array.from(document.querySelectorAll(value));
+    } else {
+      candidates = Array.from(document.querySelectorAll("body *")).filter((element) => {
+        if (strategy === "text") {
+          return normalize(element.innerText || element.textContent || "").toLowerCase().includes(needle);
+        }
+        const attribute = element.getAttribute(strategy);
+        return attribute ? normalize(attribute).toLowerCase().includes(needle) : false;
+      });
+    }
+  } catch (error) {
+    return { ok: false, error: "Invalid CSS selector: " + (error && error.message ? error.message : String(error)) };
+  }
+  const element = candidates.filter(visible)[matchIndex];
+  if (!element) {
+    return { ok: false, error: "Selected element was not found for DOM click." };
+  }
+  element.click();
+  return { ok: true };
+})()`;
+}
+
+function parseFindPayload(value: unknown): {
+  query: { strategy: RawElementSelectorStrategy; value: string };
+  count: number;
+  truncated: boolean;
+  elements: RawElementSummary[];
+  error?: string;
+} {
+  const normalized = normalizeEvaluateResponse(value);
+
+  if (!isRecord(normalized)) {
+    throw new Error("Raw element discovery returned an invalid response.");
+  }
+
+  if (typeof normalized.error === "string") {
+    throw new Error(normalized.error);
+  }
+
+  const count = normalized.count;
+  const elements = normalized.elements;
+  const query = normalized.query;
+
+  if (
+    !Number.isInteger(count) ||
+    !Array.isArray(elements) ||
+    !isRecord(query) ||
+    typeof query.strategy !== "string" ||
+    typeof query.value !== "string"
+  ) {
+    throw new Error("Raw element discovery returned an invalid response.");
+  }
+
+  return {
+    query: {
+      strategy: query.strategy as RawElementSelectorStrategy,
+      value: query.value
+    },
+    count: count as number,
+    truncated: normalized.truncated === true,
+    elements: elements as RawElementSummary[]
+  };
+}
+
+function resolveSingleElement(options: {
+  payload: {
+    count: number;
+    truncated: boolean;
+    elements: RawElementSummary[];
+  };
+  matchIndex?: number;
+}): RawElementSummary | string {
+  if (options.payload.count === 0) {
+    return "Raw selector did not match any visible TradingView UI element.";
+  }
+
+  if (options.matchIndex === undefined && options.payload.count > 1) {
+    return `Raw selector matched ${options.payload.count} visible elements. Pass matchIndex to choose one.`;
+  }
+
+  const index = options.matchIndex ?? 0;
+  const element = options.payload.elements[index];
+
+  if (!element) {
+    return `Raw selector matchIndex ${index} is outside the compact match set.`;
+  }
+
+  return element;
 }
 
 async function resolveRawClient(
@@ -624,6 +1023,310 @@ export async function runRawTypeText(
   }
 }
 
+export async function runRawFindElement(
+  options: RawFindElementOptions
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+  const invalidSelector = invalidSelectorMessage(options);
+
+  if (invalidSelector) {
+    return failureResult("find-element", {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: invalidSelector
+    });
+  }
+
+  const resolved = await resolveRawClient("find-element", options, executedAt);
+
+  if (!resolved.ok) {
+    return resolved.result;
+  }
+
+  try {
+    const payload = parseFindPayload(
+      await resolved.client.evaluate(elementFindExpression(options))
+    );
+
+    return successResult("find-element", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      value: payload
+    });
+  } catch (error: unknown) {
+    return failureResult("find-element", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      error: errorMessage(error)
+    });
+  } finally {
+    await resolved.client.close();
+  }
+}
+
+export async function runRawSelectorClick(
+  options: RawSelectorClickOptions
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+  const invalidSelector = invalidSelectorMessage(options);
+  const invalidMatchIndex = invalidMatchIndexMessage(options.matchIndex);
+  const invalidClickScope = invalidSelectorClickScopeMessage(options);
+
+  if (invalidSelector || invalidMatchIndex || invalidClickScope) {
+    return failureResult("selector-click", {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error:
+        invalidSelector ??
+        invalidMatchIndex ??
+        invalidClickScope ??
+        "Invalid raw selector."
+    });
+  }
+
+  const resolved = await resolveRawClient("selector-click", options, executedAt);
+
+  if (!resolved.ok) {
+    return resolved.result;
+  }
+
+  try {
+    const payload = parseFindPayload(
+      await resolved.client.evaluate(
+        elementFindExpression({
+          ...options,
+          maxMatches: Math.max(
+            boundedMaxMatches(options.maxMatches),
+            (options.matchIndex ?? 0) + 1
+          )
+        })
+      )
+    );
+    const singleElementOptions: {
+      payload: {
+        count: number;
+        truncated: boolean;
+        elements: RawElementSummary[];
+      };
+      matchIndex?: number;
+    } = { payload };
+
+    if (options.matchIndex !== undefined) {
+      singleElementOptions.matchIndex = options.matchIndex;
+    }
+
+    const element = resolveSingleElement(singleElementOptions);
+
+    if (typeof element === "string") {
+      return failureResult("selector-click", {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: element
+      });
+    }
+
+    const elementScopeError = elementClickScopeMessage(element);
+
+    if (elementScopeError) {
+      return failureResult("selector-click", {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: elementScopeError
+      });
+    }
+
+    const clickMethod = options.clickMethod ?? "mouse";
+
+    if (clickMethod === "dom") {
+      const clickResult = normalizeEvaluateResponse(
+        await resolved.client.evaluate(
+          domClickExpression({
+            strategy: options.strategy,
+            value: options.value,
+            matchIndex: options.matchIndex ?? 0
+          })
+        )
+      );
+
+      if (
+        !isRecord(clickResult) ||
+        clickResult.ok !== true
+      ) {
+        throw new Error(
+          isRecord(clickResult) && typeof clickResult.error === "string"
+            ? clickResult.error
+            : "Raw DOM click failed."
+        );
+      }
+    } else {
+      await resolved.client.click({
+        x: element.rect.centerX,
+        y: element.rect.centerY,
+        button: options.button ?? "left"
+      });
+    }
+
+    return successResult("selector-click", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      value: {
+        query: payload.query,
+        method: clickMethod,
+        element
+      }
+    });
+  } catch (error: unknown) {
+    return failureResult("selector-click", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      error: errorMessage(error)
+    });
+  } finally {
+    await resolved.client.close();
+  }
+}
+
+export async function runRawSelectorHover(
+  options: RawSelectorHoverOptions
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+  const invalidSelector = invalidSelectorMessage(options);
+  const invalidMatchIndex = invalidMatchIndexMessage(options.matchIndex);
+
+  if (invalidSelector || invalidMatchIndex) {
+    return failureResult("selector-hover", {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: invalidSelector ?? invalidMatchIndex ?? "Invalid raw selector."
+    });
+  }
+
+  const resolved = await resolveRawClient("selector-hover", options, executedAt);
+
+  if (!resolved.ok) {
+    return resolved.result;
+  }
+
+  try {
+    const payload = parseFindPayload(
+      await resolved.client.evaluate(
+        elementFindExpression({
+          ...options,
+          maxMatches: Math.max(
+            boundedMaxMatches(options.maxMatches),
+            (options.matchIndex ?? 0) + 1
+          )
+        })
+      )
+    );
+    const singleElementOptions: {
+      payload: {
+        count: number;
+        truncated: boolean;
+        elements: RawElementSummary[];
+      };
+      matchIndex?: number;
+    } = { payload };
+
+    if (options.matchIndex !== undefined) {
+      singleElementOptions.matchIndex = options.matchIndex;
+    }
+
+    const element = resolveSingleElement(singleElementOptions);
+
+    if (typeof element === "string") {
+      return failureResult("selector-hover", {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: element
+      });
+    }
+
+    await resolved.client.hover({
+      x: element.rect.centerX,
+      y: element.rect.centerY
+    });
+
+    return successResult("selector-hover", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      value: {
+        query: payload.query,
+        element
+      }
+    });
+  } catch (error: unknown) {
+    return failureResult("selector-hover", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      error: errorMessage(error)
+    });
+  } finally {
+    await resolved.client.close();
+  }
+}
+
+export async function runRawScroll(
+  options: RawScrollOptions
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+  const invalidScroll = invalidScrollMessage(options);
+
+  if (invalidScroll) {
+    return failureResult("scroll", {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: invalidScroll
+    });
+  }
+
+  const resolved = await resolveRawClient("scroll", options, executedAt);
+
+  if (!resolved.ok) {
+    return resolved.result;
+  }
+
+  const scrollOptions = {
+    direction: options.direction,
+    amount: options.amount ?? DEFAULT_RAW_SCROLL_AMOUNT,
+    x: options.x ?? 500,
+    y: options.y ?? 500
+  };
+
+  try {
+    await resolved.client.scroll(scrollOptions);
+
+    return successResult("scroll", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      value: scrollOptions
+    });
+  } catch (error: unknown) {
+    return failureResult("scroll", {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      error: errorMessage(error)
+    });
+  } finally {
+    await resolved.client.close();
+  }
+}
+
 export class LiveRawTradingViewPageClient implements RawTradingViewPageClient {
   constructor(readonly client: CdpClient) {}
 
@@ -694,6 +1397,39 @@ export class LiveRawTradingViewPageClient implements RawTradingViewPageClient {
   async typeText(text: string): Promise<void> {
     await this.client.send("Input.insertText", {
       text
+    });
+  }
+
+  async hover(options: { x: number; y: number }): Promise<void> {
+    await this.client.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: options.x,
+      y: options.y,
+      button: "none",
+      buttons: 0
+    });
+  }
+
+  async scroll(options: {
+    direction: RawScrollDirection;
+    amount: number;
+    x: number;
+    y: number;
+  }): Promise<void> {
+    const delta = {
+      up: { deltaX: 0, deltaY: -options.amount },
+      down: { deltaX: 0, deltaY: options.amount },
+      left: { deltaX: -options.amount, deltaY: 0 },
+      right: { deltaX: options.amount, deltaY: 0 }
+    }[options.direction];
+
+    await this.client.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: options.x,
+      y: options.y,
+      button: "none",
+      buttons: 0,
+      ...delta
     });
   }
 
