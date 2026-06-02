@@ -94,7 +94,9 @@ browser-control tools.
 The experimental raw automation slice supports bounded CDP/page evaluation,
 basic mouse, keyboard, and text input, visible UI element discovery,
 selector-based click/hover, and bounded scroll against the active local
-TradingView chart target. Raw automation is not part of the default high-level
+TradingView chart target. It also supports MCP-only direct chart controls and
+native TradingView drawing tools when the active chart exposes the needed
+chart/drawing APIs. Raw automation is not part of the default high-level
 chartbook workflow.
 
 Raw automation tools must be explicitly enabled with:
@@ -127,6 +129,18 @@ Current enabled MCP raw tools are:
 - `tradingview_raw_set_visible_range`
 - `tradingview_raw_add_indicator`
 - `tradingview_raw_remove_entity`
+- `tradingview_draw_shape`
+- `tradingview_draw_list`
+- `tradingview_draw_properties`
+- `tradingview_draw_remove`
+- `tradingview_draw_clear_all`
+
+Native drawing tools create supported shapes from explicit price/time anchors,
+list drawing ids/types/names when available, inspect drawing points and
+properties when exposed, remove one drawing by id, and clear all native drawings
+only when `confirmClearAll` is explicitly true. They fail with clear
+unsupported-API reasons when TradingView does not expose the required chart
+API.
 
 The matching CLI commands are:
 

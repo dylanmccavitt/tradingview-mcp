@@ -43,6 +43,8 @@ import {
   DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
   DEFAULT_RAW_FIND_MAX_MATCHES,
   DEFAULT_RAW_SCROLL_AMOUNT,
+  RAW_DRAWING_MAX_OVERRIDES,
+  RAW_DRAWING_TEXT_MAX_CHARS,
   RAW_FIND_MAX_MATCHES_LIMIT,
   RAW_SCROLL_MAX_AMOUNT,
   RAW_SELECTOR_MAX_CHARS,
@@ -52,6 +54,11 @@ import {
   runRawAddIndicator,
   runRawChartState,
   runRawClick,
+  runRawDrawClearAll,
+  runRawDrawList,
+  runRawDrawRemove,
+  runRawDrawShape,
+  runRawDrawingProperties,
   runRawEvaluate,
   runRawFindElement,
   runRawKeypress,
@@ -67,6 +74,11 @@ import {
   type RawAutomationResult,
   type RawChartStateOptions,
   type RawClickOptions,
+  type RawDrawClearAllOptions,
+  type RawDrawListOptions,
+  type RawDrawRemoveOptions,
+  type RawDrawShapeOptions,
+  type RawDrawingPropertiesOptions,
   type RawFindElementOptions,
   type RawEvaluateOptions,
   type RawKeypressOptions,
@@ -122,7 +134,12 @@ export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_raw_set_chart_type",
   "tradingview_raw_set_visible_range",
   "tradingview_raw_add_indicator",
-  "tradingview_raw_remove_entity"
+  "tradingview_raw_remove_entity",
+  "tradingview_draw_shape",
+  "tradingview_draw_list",
+  "tradingview_draw_properties",
+  "tradingview_draw_remove",
+  "tradingview_draw_clear_all"
 ] as const;
 
 export type RawTradingViewMcpToolName =
@@ -177,6 +194,21 @@ export interface TradingViewMcpToolHandlers {
   ) => Promise<RawAutomationResult>;
   runRawRemoveEntity: (
     options: RawRemoveEntityOptions
+  ) => Promise<RawAutomationResult>;
+  runRawDrawShape: (
+    options: RawDrawShapeOptions
+  ) => Promise<RawAutomationResult>;
+  runRawDrawList: (
+    options: RawDrawListOptions
+  ) => Promise<RawAutomationResult>;
+  runRawDrawingProperties: (
+    options: RawDrawingPropertiesOptions
+  ) => Promise<RawAutomationResult>;
+  runRawDrawRemove: (
+    options: RawDrawRemoveOptions
+  ) => Promise<RawAutomationResult>;
+  runRawDrawClearAll: (
+    options: RawDrawClearAllOptions
   ) => Promise<RawAutomationResult>;
 }
 
@@ -381,6 +413,82 @@ const rawRemoveEntitySchema = z.object({
   entityId: nonEmptyString.max(200)
 });
 
+const rawDrawingPoint = z.object({
+  time: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Unix timestamp anchor for the drawing point."),
+  price: z
+    .number()
+    .positive()
+    .finite()
+    .describe("Price anchor for the drawing point.")
+});
+
+const rawDrawingOverrides = z
+  .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+  .refine(
+    (value) => Object.keys(value).length <= RAW_DRAWING_MAX_OVERRIDES,
+    `Drawing overrides may include at most ${RAW_DRAWING_MAX_OVERRIDES} keys.`
+  );
+
+const rawDrawShapeSchema = z
+  .object({
+    ...endpointShape,
+    shapeType: z
+      .enum(["horizontal-line", "trend-line", "rectangle", "text"])
+      .describe("Supported native TradingView drawing shape."),
+    points: z.array(rawDrawingPoint).min(1).max(2),
+    text: nonEmptyString.max(RAW_DRAWING_TEXT_MAX_CHARS).optional(),
+    overrides: rawDrawingOverrides.optional(),
+    lock: z.boolean().optional(),
+    disableSelection: z.boolean().optional()
+  })
+  .superRefine((value, context) => {
+    const expectedPoints =
+      value.shapeType === "trend-line" || value.shapeType === "rectangle"
+        ? 2
+        : 1;
+
+    if (value.points.length !== expectedPoints) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${value.shapeType} requires exactly ${expectedPoints} point${expectedPoints === 1 ? "" : "s"}.`,
+        path: ["points"]
+      });
+    }
+
+    if (value.shapeType === "text" && !value.text) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Text drawings require text.",
+        path: ["text"]
+      });
+    }
+  });
+
+const rawDrawListSchema = z.object(endpointShape);
+
+const rawDrawingPropertiesSchema = z.object({
+  ...endpointShape,
+  entityId: nonEmptyString.max(200)
+});
+
+const rawDrawRemoveSchema = z.object({
+  ...endpointShape,
+  entityId: nonEmptyString.max(200)
+});
+
+const rawDrawClearAllSchema = z.object({
+  ...endpointShape,
+  confirmClearAll: z
+    .literal(true)
+    .describe(
+      "Must be true. This explicit confirmation is required because the tool removes every native drawing from the active chart."
+    )
+});
+
 function handlersWithDefaults(
   handlers: Partial<TradingViewMcpToolHandlers> | undefined
 ): TradingViewMcpToolHandlers {
@@ -407,7 +515,13 @@ function handlersWithDefaults(
     runRawSetVisibleRange:
       handlers?.runRawSetVisibleRange ?? runRawSetVisibleRange,
     runRawAddIndicator: handlers?.runRawAddIndicator ?? runRawAddIndicator,
-    runRawRemoveEntity: handlers?.runRawRemoveEntity ?? runRawRemoveEntity
+    runRawRemoveEntity: handlers?.runRawRemoveEntity ?? runRawRemoveEntity,
+    runRawDrawShape: handlers?.runRawDrawShape ?? runRawDrawShape,
+    runRawDrawList: handlers?.runRawDrawList ?? runRawDrawList,
+    runRawDrawingProperties:
+      handlers?.runRawDrawingProperties ?? runRawDrawingProperties,
+    runRawDrawRemove: handlers?.runRawDrawRemove ?? runRawDrawRemove,
+    runRawDrawClearAll: handlers?.runRawDrawClearAll ?? runRawDrawClearAll
   };
 }
 
@@ -1280,6 +1394,168 @@ export function registerTradingViewMcpTools(
 
       return textToolResult(
         `Raw remove entity: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_draw_shape",
+    {
+      title: "Draw Native TradingView Shape",
+      description: rawGuardrailedDescription(
+        "Create one supported native TradingView drawing shape from explicit price/time anchors when createShape or createMultipointShape is exposed."
+      ),
+      inputSchema: rawDrawShapeSchema,
+      annotations: {
+        title: "Draw Native TradingView Shape",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawDrawShapeOptions = {
+        shapeType: args.shapeType,
+        points: args.points,
+        ...endpointOptions(args)
+      };
+
+      if (args.text) {
+        rawOptions.text = args.text;
+      }
+
+      if (args.overrides) {
+        rawOptions.overrides = args.overrides;
+      }
+
+      if (typeof args.lock === "boolean") {
+        rawOptions.lock = args.lock;
+      }
+
+      if (typeof args.disableSelection === "boolean") {
+        rawOptions.disableSelection = args.disableSelection;
+      }
+
+      const result = await handlers.runRawDrawShape(rawOptions);
+
+      return textToolResult(
+        `Draw native shape: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_draw_list",
+    {
+      title: "List Native TradingView Drawings",
+      description: rawGuardrailedDescription(
+        "List native TradingView drawing ids, names, and types when getAllShapes or an equivalent chart API is exposed."
+      ),
+      inputSchema: rawDrawListSchema,
+      annotations: {
+        title: "List Native TradingView Drawings",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawDrawListOptions = endpointOptions(args);
+      const result = await handlers.runRawDrawList(rawOptions);
+
+      return textToolResult(
+        `List native drawings: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_draw_properties",
+    {
+      title: "Inspect Native TradingView Drawing",
+      description: rawGuardrailedDescription(
+        "Read one native drawing id's points, style/properties, visibility, lock, and selectability when getShapeById is exposed."
+      ),
+      inputSchema: rawDrawingPropertiesSchema,
+      annotations: {
+        title: "Inspect Native TradingView Drawing",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawDrawingPropertiesOptions = {
+        entityId: args.entityId,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawDrawingProperties(rawOptions);
+
+      return textToolResult(
+        `Inspect native drawing: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_draw_remove",
+    {
+      title: "Remove Native TradingView Drawing",
+      description: rawGuardrailedDescription(
+        "Remove one native TradingView drawing by id through removeEntity when exposed."
+      ),
+      inputSchema: rawDrawRemoveSchema,
+      annotations: {
+        title: "Remove Native TradingView Drawing",
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawDrawRemoveOptions = {
+        entityId: args.entityId,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawDrawRemove(rawOptions);
+
+      return textToolResult(
+        `Remove native drawing: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_draw_clear_all",
+    {
+      title: "Clear All Native TradingView Drawings",
+      description: rawGuardrailedDescription(
+        "Destructive: remove every native drawing on the active chart only when confirmClearAll is true; never call this unless the user explicitly asks to clear all drawings."
+      ),
+      inputSchema: rawDrawClearAllSchema,
+      annotations: {
+        title: "Clear All Native TradingView Drawings",
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawDrawClearAllOptions = {
+        confirmClearAll: args.confirmClearAll,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawDrawClearAll(rawOptions);
+
+      return textToolResult(
+        `Clear all native drawings: ${result.ok ? "success" : "failed"}.`,
         asToolData(result)
       );
     }

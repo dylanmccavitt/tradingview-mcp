@@ -80,5 +80,12 @@ issues must port reference behavior in small slices.
   state, set symbol, set timeframe, set chart type, set visible range, add
   indicator, and remove entity by id when TradingView exposes the required
   chart API.
+- The native drawing slice adds MCP-only `tradingview_draw_shape`,
+  `tradingview_draw_list`, `tradingview_draw_properties`,
+  `tradingview_draw_remove`, and `tradingview_draw_clear_all` tools behind the
+  same gate. These tools use exposed TradingView chart/drawing APIs only,
+  return compact native drawing ids and properties when available, and report
+  unsupported API paths clearly. The clear-all tool requires explicit
+  confirmation because it removes every native drawing on the active chart.
 - Future native drawing, chart manipulation, Pine editor, data extraction, and
   quant macro issues should build behind this boundary.
