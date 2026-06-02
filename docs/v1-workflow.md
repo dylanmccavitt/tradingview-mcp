@@ -95,9 +95,10 @@ The experimental raw automation slice supports bounded CDP/page evaluation,
 basic mouse, keyboard, and text input, visible UI element discovery,
 selector-based click/hover, and bounded scroll against the active local
 TradingView chart target. It also supports MCP-only direct chart controls and
-native TradingView drawing tools when the active chart exposes the needed
-chart/drawing APIs, plus quant drawing macros for Fib-style levels,
-measured-move projections, range projections, and MCP-only Pine Editor tools.
+compact chart data extraction when the active chart exposes the needed
+chart APIs, native TradingView drawing tools when chart/drawing APIs are
+available, plus quant drawing macros for Fib-style levels, measured-move
+projections, range projections, and MCP-only Pine Editor tools.
 Raw automation is not part of the default high-level chartbook workflow.
 
 Raw automation tools must be explicitly enabled with:
@@ -126,6 +127,9 @@ Current enabled MCP raw tools are:
 - `tradingview_raw_selector_hover`
 - `tradingview_raw_scroll`
 - `tradingview_raw_chart_state`
+- `tradingview_raw_chart_data_summary`
+- `tradingview_raw_quote_snapshot`
+- `tradingview_raw_study_values`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -186,6 +190,12 @@ The direct chart state/control tools are MCP-only in this slice. They return
 compact before/after chart state or a clear failure when TradingView does not
 expose the required chart API for chart type, visible range, study creation, or
 entity removal.
+
+The compact chart data tools are MCP-only in this slice. They return bounded
+OHLCV summary stats, active-chart quote/current-bar snapshots, and compact
+visible study values when TradingView exposes them. Data extraction output is
+local chart-review context only; it is not a scan, ranking, alert,
+recommendation, generated candidate, or market-data service replacement.
 
 Raw automation does not change the core guardrails: no broker actions, no order
 placement, no scanner/ranking behavior, no financial advice, no unattended

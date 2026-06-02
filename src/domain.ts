@@ -23,6 +23,7 @@ export const RAW_AUTOMATION_BOUNDARY = {
     "local_chart_target_input",
     "native_tradingview_drawings",
     "direct_chart_manipulation",
+    "compact_chart_data_extraction",
     "explicit_pine_editor_actions"
   ],
   constraints: [

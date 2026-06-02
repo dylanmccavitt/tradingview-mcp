@@ -666,6 +666,145 @@ void test("raw MCP chart control tools call injected handlers when enabled", asy
   }
 });
 
+void test("raw MCP chart data tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawChartDataSummary: (options) => {
+        calls.push(`summary:${options.barCount}:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "chart-data-summary",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:00:00.000Z",
+          value: {
+            requestedBarCount: options.barCount,
+            barCount: 2,
+            high: 531,
+            low: 505,
+            close: 528,
+            warnings: []
+          },
+          warnings: []
+        });
+      },
+      runRawQuoteSnapshot: (options) => {
+        calls.push(`quote:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "quote-snapshot",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:00:00.000Z",
+          value: {
+            symbol: "NASDAQ:NVDA",
+            last: 528,
+            close: 528,
+            open: 520,
+            high: 531,
+            low: 515,
+            volume: 49_000_000,
+            timestamp: 1_780_172_800
+          },
+          warnings: []
+        });
+      },
+      runRawStudyValues: (options) => {
+        calls.push(
+          `studies:${options.studyName ?? "all"}:${options.maxStudies}:${options.maxValuesPerStudy}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "study-values",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:00:00.000Z",
+          value: {
+            studyCount: 1,
+            totalVisibleStudies: 1,
+            studies: [
+              {
+                id: "study-1",
+                name: "RSI",
+                valueCount: 1,
+                values: [
+                  {
+                    label: "RSI",
+                    value: 54.2
+                  }
+                ]
+              }
+            ],
+            warnings: []
+          },
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const summary = await client.callTool({
+      name: "tradingview_raw_chart_data_summary",
+      arguments: {
+        barCount: 25,
+        port: 9223
+      }
+    });
+    const quote = await client.callTool({
+      name: "tradingview_raw_quote_snapshot",
+      arguments: {
+        port: 9223
+      }
+    });
+    const studies = await client.callTool({
+      name: "tradingview_raw_study_values",
+      arguments: {
+        studyName: "RSI",
+        maxStudies: 3,
+        maxValuesPerStudy: 4
+      }
+    });
+
+    assert.equal(
+      callResult(summary).structuredContent?.action,
+      "chart-data-summary"
+    );
+    assert.equal(
+      (
+        callResult(summary).structuredContent?.value as {
+          barCount?: number;
+        }
+      ).barCount,
+      2
+    );
+    assert.equal(
+      callResult(quote).structuredContent?.action,
+      "quote-snapshot"
+    );
+    assert.equal(
+      (
+        callResult(quote).structuredContent?.value as {
+          symbol?: string;
+        }
+      ).symbol,
+      "NASDAQ:NVDA"
+    );
+    assert.equal(
+      callResult(studies).structuredContent?.action,
+      "study-values"
+    );
+    assert.deepEqual(calls, [
+      "summary:25:9223",
+      "quote:9223",
+      "studies:RSI:3:4"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
 void test("raw MCP native drawing tools call injected handlers when enabled", async () => {
   const calls: string[] = [];
   const drawValue = {

@@ -6,7 +6,7 @@ V1 is a charting assistant, not a scanner, broker integration, or trade executio
 
 ## Status
 
-This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, local chartbook artifact output, and an explicitly gated experimental raw automation surface for bounded chart-target CDP primitives, native drawings, chart controls, and Pine Editor actions.
+This repo has a TypeScript MCP server with high-level charting tools, a local TradingView Desktop CDP launch/health workflow, a narrow one-symbol chart capture CLI, a local universe config workflow, compact extraction for the installed objective Pine drawing overlay, structured chart facts for user-selected review profiles, current-chart capture, local chartbook artifact output, and an explicitly gated experimental raw automation surface for bounded chart-target CDP primitives, compact chart data extraction, native drawings, chart controls, and Pine Editor actions.
 
 ## Requirements
 
@@ -243,7 +243,10 @@ raw surface also exposes direct chart state/control tools for reading compact
 current chart state, setting symbol/timeframe/chart type/visible range, adding
 a named indicator, and removing a chart entity by id when TradingView exposes
 the required chart API. Those tools return before/after state or an explicit
-API-unavailable failure. MCP-only quant drawing macros can also create
+API-unavailable failure. MCP-only raw data tools read bounded OHLCV summary
+stats, quote/current-bar snapshots, and compact visible study values when
+TradingView exposes them; those outputs are local chart-review context only,
+not scans, rankings, alerts, recommendations, or advice. MCP-only quant drawing macros can also create
 Fib-style retracement/extension levels and measured-move or range-projection
 review levels from explicit anchors or caller-selected extracted range facts
 when native drawing APIs are exposed. Macro output records created drawing ids,
@@ -306,6 +309,9 @@ browser controls. When the server process is started with
 - `tradingview_raw_selector_hover`
 - `tradingview_raw_scroll`
 - `tradingview_raw_chart_state`
+- `tradingview_raw_chart_data_summary`
+- `tradingview_raw_quote_snapshot`
+- `tradingview_raw_study_values`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -338,6 +344,10 @@ drawings for mechanical chart-review levels and return metadata that can be
 recorded in current-chart or chartbook artifacts via `macroMetadata`.
 `tradingview_draw_clear_all` requires an explicit `confirmClearAll: true`
 argument because it removes every native drawing on the active chart.
+Chart data tools are MCP-only in this slice. They return bounded OHLCV
+summaries, latest current-bar quote fields, and compact visible study values
+when exposed by TradingView, and they report clear unsupported-data failures
+otherwise.
 Pine Editor tools are MCP-only in this slice. They can open/focus the editor,
 set source without compiling or saving, read bounded source with truncation
 warnings for large scripts, read compact errors and console output, and run

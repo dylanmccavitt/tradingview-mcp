@@ -37,6 +37,12 @@ export const RAW_FIND_MAX_MATCHES_LIMIT = 25;
 export const DEFAULT_RAW_SCROLL_AMOUNT = 600;
 export const RAW_SCROLL_MAX_AMOUNT = 3000;
 export const DEFAULT_RAW_CHART_CONTROL_MAX_RESULT_BYTES = 8192;
+export const DEFAULT_RAW_CHART_DATA_BAR_COUNT = 100;
+export const RAW_CHART_DATA_BAR_COUNT_LIMIT = 500;
+export const DEFAULT_RAW_STUDY_VALUES_MAX_STUDIES = 10;
+export const RAW_STUDY_VALUES_MAX_STUDIES_LIMIT = 50;
+export const DEFAULT_RAW_STUDY_VALUES_MAX_VALUES = 10;
+export const RAW_STUDY_VALUES_MAX_VALUES_LIMIT = 50;
 export const RAW_SYMBOL_MAX_CHARS = 64;
 export const RAW_TIMEFRAME_MAX_CHARS = 32;
 export const RAW_CHART_TYPE_MAX_CHARS = 64;
@@ -99,6 +105,9 @@ export type RawAutomationAction =
   | "selector-hover"
   | "scroll"
   | "chart-state"
+  | "chart-data-summary"
+  | "quote-snapshot"
+  | "study-values"
   | "set-symbol"
   | "set-timeframe"
   | "set-chart-type"
@@ -269,6 +278,18 @@ export interface RawScrollOptions extends RawAutomationBaseOptions {
 }
 
 export type RawChartStateOptions = RawAutomationBaseOptions;
+
+export interface RawChartDataSummaryOptions extends RawAutomationBaseOptions {
+  barCount?: number;
+}
+
+export type RawQuoteSnapshotOptions = RawAutomationBaseOptions;
+
+export interface RawStudyValuesOptions extends RawAutomationBaseOptions {
+  maxStudies?: number;
+  maxValuesPerStudy?: number;
+  studyName?: string;
+}
 
 export interface RawSetSymbolOptions extends RawAutomationBaseOptions {
   symbol: string;
@@ -672,6 +693,50 @@ function invalidRangeMessage(range: RawVisibleRange): string | null {
   return null;
 }
 
+function invalidBarCountMessage(barCount: number): string | null {
+  if (
+    !Number.isInteger(barCount) ||
+    barCount <= 0 ||
+    barCount > RAW_CHART_DATA_BAR_COUNT_LIMIT
+  ) {
+    return `Raw chart data barCount must be an integer from 1 to ${RAW_CHART_DATA_BAR_COUNT_LIMIT}.`;
+  }
+
+  return null;
+}
+
+function invalidStudyValuesMessage(options: {
+  maxStudies: number;
+  maxValuesPerStudy: number;
+  studyName?: string;
+}): string | null {
+  if (
+    !Number.isInteger(options.maxStudies) ||
+    options.maxStudies <= 0 ||
+    options.maxStudies > RAW_STUDY_VALUES_MAX_STUDIES_LIMIT
+  ) {
+    return `Raw study values maxStudies must be an integer from 1 to ${RAW_STUDY_VALUES_MAX_STUDIES_LIMIT}.`;
+  }
+
+  if (
+    !Number.isInteger(options.maxValuesPerStudy) ||
+    options.maxValuesPerStudy <= 0 ||
+    options.maxValuesPerStudy > RAW_STUDY_VALUES_MAX_VALUES_LIMIT
+  ) {
+    return `Raw study values maxValuesPerStudy must be an integer from 1 to ${RAW_STUDY_VALUES_MAX_VALUES_LIMIT}.`;
+  }
+
+  if (
+    options.studyName !== undefined &&
+    (options.studyName.trim().length === 0 ||
+      options.studyName.length > RAW_INDICATOR_NAME_MAX_CHARS)
+  ) {
+    return `Raw studyName filter must be 1 to ${RAW_INDICATOR_NAME_MAX_CHARS} characters when provided.`;
+  }
+
+  return null;
+}
+
 function invalidIndicatorNameMessage(name: string): string | null {
   const trimmed = name.trim();
 
@@ -1005,6 +1070,588 @@ async (command, args) => {
       warnings.push("Study list truncated to " + MAX_STUDIES + " entries.");
     }
     return studies;
+  }
+
+  function finiteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : undefined;
+  }
+
+  function compactNumber(value) {
+    const number = finiteNumber(value);
+    return typeof number === "number" ? Number(number.toFixed(6)) : undefined;
+  }
+
+  function primitiveValue(value) {
+    if (value === null || typeof value === "undefined") {
+      return undefined;
+    }
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? compactNumber(value) : undefined;
+    }
+    if (typeof value === "string") {
+      const text = compactText(value);
+      return text && text !== "∅" && text !== "NaN" ? text : undefined;
+    }
+    if (typeof value === "boolean") {
+      return value;
+    }
+    return undefined;
+  }
+
+  function normalizeBar(value) {
+    if (Array.isArray(value)) {
+      const time = finiteNumber(value[0]);
+      const open = compactNumber(value[1]);
+      const high = compactNumber(value[2]);
+      const low = compactNumber(value[3]);
+      const close = compactNumber(value[4]);
+      const volume = compactNumber(value[5]);
+      if (
+        typeof time === "number" &&
+        typeof open === "number" &&
+        typeof high === "number" &&
+        typeof low === "number" &&
+        typeof close === "number"
+      ) {
+        const bar = {
+          timestamp: Math.trunc(time),
+          open,
+          high,
+          low,
+          close
+        };
+        if (typeof volume === "number") {
+          bar.volume = volume;
+        }
+        return bar;
+      }
+      return undefined;
+    }
+
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+
+    const time = finiteNumber(
+      value.time ??
+        value.timestamp ??
+        value.time_t ??
+        value.datetime ??
+        value.date
+    );
+    const open = compactNumber(value.open ?? value.o);
+    const high = compactNumber(value.high ?? value.h);
+    const low = compactNumber(value.low ?? value.l);
+    const close = compactNumber(value.close ?? value.c ?? value.last ?? value.value);
+    const volume = compactNumber(value.volume ?? value.v);
+
+    if (
+      typeof time !== "number" ||
+      typeof open !== "number" ||
+      typeof high !== "number" ||
+      typeof low !== "number" ||
+      typeof close !== "number"
+    ) {
+      return undefined;
+    }
+
+    const bar = {
+      timestamp: Math.trunc(time),
+      open,
+      high,
+      low,
+      close
+    };
+    if (typeof volume === "number") {
+      bar.volume = volume;
+    }
+    return bar;
+  }
+
+  function normalizeBarArray(value, limit) {
+    const candidates = Array.isArray(value)
+      ? value
+      : Array.isArray(value?.bars)
+        ? value.bars
+        : Array.isArray(value?.data)
+          ? value.data
+          : Array.isArray(value?.rows)
+            ? value.rows
+            : Array.isArray(value?.series)
+              ? value.series
+              : undefined;
+    if (!Array.isArray(candidates)) {
+      return undefined;
+    }
+    const bars = candidates.map(normalizeBar).filter(Boolean);
+    return bars.length > 0
+      ? {
+          bars: bars.slice(-limit),
+          totalAvailable: bars.length
+        }
+      : undefined;
+  }
+
+  function readBarsObject(value, limit) {
+    if (
+      !value ||
+      typeof value !== "object" ||
+      typeof value.lastIndex !== "function" ||
+      typeof value.valueAt !== "function"
+    ) {
+      return undefined;
+    }
+
+    const end = Number(value.lastIndex());
+    const first = typeof value.firstIndex === "function"
+      ? Number(value.firstIndex())
+      : 0;
+    if (!Number.isFinite(end) || !Number.isFinite(first)) {
+      return undefined;
+    }
+
+    const start = Math.max(Math.trunc(first), Math.trunc(end) - limit + 1);
+    const bars = [];
+    for (let index = start; index <= end; index += 1) {
+      const bar = normalizeBar(value.valueAt(index));
+      if (bar) {
+        bars.push(bar);
+      }
+    }
+
+    if (bars.length === 0) {
+      return undefined;
+    }
+
+    let totalAvailable = Math.trunc(end - first + 1);
+    if (typeof value.size === "function") {
+      const size = Number(value.size());
+      if (Number.isFinite(size)) {
+        totalAvailable = Math.trunc(size);
+      }
+    }
+
+    return {
+      bars,
+      totalAvailable
+    };
+  }
+
+  function rootActiveWidgetValue() {
+    try {
+      const activeWidget = root.TradingViewApi?._activeChartWidgetWV;
+      return typeof activeWidget?.value === "function"
+        ? activeWidget.value()
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function rootMainSeriesBars() {
+    try {
+      return rootActiveWidgetValue()?._chartWidget
+        ?.model?.()
+        ?.mainSeries?.()
+        ?.bars?.();
+    } catch {
+      return undefined;
+    }
+  }
+
+  async function asyncMethodValue(target, names, args = []) {
+    for (const name of names) {
+      if (target && typeof target[name] === "function") {
+        try {
+          const value = await awaitMaybe(target[name](...args));
+          if (typeof value !== "undefined" && value !== null) {
+            return value;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  async function readBars(chart, limit, warnings) {
+    const fixture = root.__TVMCP_CHART_DATA__;
+    const fixtureBars = normalizeBarArray(fixture?.bars ?? fixture?.ohlcv, limit);
+    if (fixtureBars) {
+      return {
+        ...fixtureBars,
+        source: "fixture"
+      };
+    }
+
+    const direct = await asyncMethodValue(chart, [
+      "exportData",
+      "getSeriesData",
+      "getVisibleSeriesData",
+      "getBars"
+    ]);
+    const directBars = normalizeBarArray(direct, limit);
+    if (directBars) {
+      return {
+        ...directBars,
+        source: "chart-api"
+      };
+    }
+
+    const chartBars =
+      readBarsObject(valueFrom(chart, ["bars", "mainSeriesBars"]), limit) ??
+      normalizeBarArray(valueFrom(chart, ["bars", "mainSeriesBars"]), limit);
+    if (chartBars) {
+      return {
+        ...chartBars,
+        source: "chart-bars"
+      };
+    }
+
+    const rootBars = readBarsObject(rootMainSeriesBars(), limit);
+    if (rootBars) {
+      return {
+        ...rootBars,
+        source: "tradingview-main-series"
+      };
+    }
+
+    warnings.push("TradingView chart API did not expose compact OHLCV bars.");
+    return undefined;
+  }
+
+  function summarizeBars(barData, requestedBarCount, warnings) {
+    const bars = barData.bars;
+    if (!Array.isArray(bars) || bars.length === 0) {
+      return { error: "TradingView chart API did not expose OHLCV bars for summary extraction." };
+    }
+
+    const first = bars[0];
+    const last = bars[bars.length - 1];
+    const highs = bars.map((bar) => bar.high).filter((value) => typeof value === "number");
+    const lows = bars.map((bar) => bar.low).filter((value) => typeof value === "number");
+    const volumes = bars.map((bar) => bar.volume).filter((value) => typeof value === "number");
+    const high = compactNumber(Math.max(...highs));
+    const low = compactNumber(Math.min(...lows));
+    const range = typeof high === "number" && typeof low === "number"
+      ? compactNumber(high - low)
+      : undefined;
+    const change = compactNumber(last.close - first.open);
+    const changePct = first.open !== 0
+      ? compactNumber(((last.close - first.open) / first.open) * 100)
+      : undefined;
+    const volumeSum = volumes.reduce((sum, volume) => sum + volume, 0);
+    const summary = {
+      requestedBarCount,
+      barCount: bars.length,
+      totalAvailable: barData.totalAvailable,
+      source: barData.source,
+      period: {
+        from: first.timestamp,
+        to: last.timestamp
+      },
+      open: first.open,
+      close: last.close,
+      high,
+      low,
+      range,
+      change,
+      changePct,
+      lastBar: last,
+      warnings
+    };
+
+    if (volumes.length > 0) {
+      summary.volume = {
+        total: compactNumber(volumeSum),
+        average: compactNumber(volumeSum / volumes.length),
+        min: compactNumber(Math.min(...volumes)),
+        max: compactNumber(Math.max(...volumes))
+      };
+    }
+
+    return summary;
+  }
+
+  async function chartDataSummary(chart, args) {
+    const warnings = [];
+    const requestedBarCount = Math.trunc(Number(args.barCount));
+    const barData = await readBars(chart, requestedBarCount, warnings);
+    if (!barData) {
+      return {
+        error: "Could not extract compact OHLCV data from the active chart.",
+        warnings
+      };
+    }
+    return summarizeBars(barData, requestedBarCount, warnings);
+  }
+
+  async function quoteSnapshot(chart) {
+    const warnings = [];
+    const ext = methodValue(chart, ["symbolExt"]) ?? {};
+    const symbol = compactText(
+      methodValue(chart, ["symbol"]) ??
+        propertyValue(ext, ["symbol", "full_name", "pro_name", "ticker"])
+    );
+    const quote = {};
+    if (symbol) {
+      quote.symbol = symbol;
+    } else {
+      warnings.push("TradingView chart API did not expose the current symbol.");
+    }
+    const description = compactText(propertyValue(ext, ["description", "name"]));
+    const exchange = compactText(propertyValue(ext, ["exchange"]));
+    const type = compactText(propertyValue(ext, ["type"]));
+    if (description) {
+      quote.description = description;
+    }
+    if (exchange) {
+      quote.exchange = exchange;
+    }
+    if (type) {
+      quote.type = type;
+    }
+
+    const barData = await readBars(chart, 1, warnings);
+    const lastBar = barData?.bars?.[barData.bars.length - 1];
+    if (lastBar) {
+      quote.timestamp = lastBar.timestamp;
+      quote.open = lastBar.open;
+      quote.high = lastBar.high;
+      quote.low = lastBar.low;
+      quote.close = lastBar.close;
+      quote.last = lastBar.close;
+      if (typeof lastBar.volume === "number") {
+        quote.volume = lastBar.volume;
+      }
+      quote.source = barData.source;
+    }
+
+    if (typeof quote.last !== "number" && typeof quote.close !== "number") {
+      return {
+        error: "TradingView chart API did not expose a current bar or quote price.",
+        warnings
+      };
+    }
+
+    quote.warnings = warnings;
+    return quote;
+  }
+
+  function studyDisplayName(entity, fallback) {
+    const nameValue = valueFrom(entity, [
+      "name",
+      "title",
+      "description",
+      "shortName"
+    ]);
+    const name = compactText(typeof nameValue === "string" ? nameValue : String(nameValue ?? ""));
+    return name || fallback;
+  }
+
+  function normalizeStudyValueItem(item, index) {
+    if (!item || typeof item !== "object") {
+      const value = primitiveValue(item);
+      return typeof value !== "undefined"
+        ? {
+            label: "value_" + (index + 1),
+            value
+          }
+        : undefined;
+    }
+
+    const label = compactText(
+      String(
+        item.title ??
+          item._title ??
+          item.name ??
+          item.id ??
+          item.label ??
+          ("value_" + (index + 1))
+      )
+    );
+    const value = primitiveValue(
+      item.value ??
+        item._value ??
+        item.last ??
+        item.close ??
+        item.y ??
+        item.text
+    );
+    return label && typeof value !== "undefined"
+      ? {
+          label,
+          value
+        }
+      : undefined;
+  }
+
+  function studyValueEntries(value, maxValues) {
+    if (!value) {
+      return [];
+    }
+
+    if (Array.isArray(value)) {
+      return value
+        .map(normalizeStudyValueItem)
+        .filter(Boolean)
+        .slice(0, maxValues);
+    }
+
+    if (typeof value === "object") {
+      const entries = [];
+      for (const [key, candidate] of Object.entries(value)) {
+        if (entries.length >= maxValues) {
+          break;
+        }
+        const primitive = primitiveValue(candidate);
+        if (typeof primitive !== "undefined") {
+          entries.push({
+            label: compactText(key) ?? key,
+            value: primitive
+          });
+        }
+      }
+      return entries;
+    }
+
+    const primitive = primitiveValue(value);
+    return typeof primitive !== "undefined"
+      ? [
+          {
+            label: "value",
+            value: primitive
+          }
+        ]
+      : [];
+  }
+
+  function readStudyValuesFromEntity(entity, maxValues) {
+    const dataWindow = valueFrom(entity, ["dataWindowView"]);
+    const dataWindowItems = valueFrom(dataWindow, ["items"]);
+    const dataWindowValues = studyValueEntries(dataWindowItems, maxValues);
+    if (dataWindowValues.length > 0) {
+      return {
+        values: dataWindowValues,
+        source: "data-window"
+      };
+    }
+
+    for (const key of [
+      "getValues",
+      "values",
+      "lastValues",
+      "plotValues",
+      "plots",
+      "data"
+    ]) {
+      const rawValues = valueFrom(entity, [key]);
+      const values = studyValueEntries(rawValues, maxValues);
+      if (values.length > 0) {
+        return {
+          values,
+          source: key
+        };
+      }
+    }
+
+    return {
+      values: [],
+      source: "unavailable"
+    };
+  }
+
+  function studyVisible(entity) {
+    const visible = valueFrom(entity, ["isVisible", "visible", "getVisible"]);
+    return typeof visible === "boolean" ? visible : undefined;
+  }
+
+  function readStudyEntity(chart, entityOrSummary) {
+    const id = compactText(
+      String(valueFrom(entityOrSummary, ["id", "entityId", "studyId", "paneEntityId"]) ?? "")
+    );
+    if (id && typeof chart.getStudyById === "function") {
+      try {
+        return {
+          id,
+          entity: chart.getStudyById(id) ?? entityOrSummary
+        };
+      } catch {
+        return {
+          id,
+          entity: entityOrSummary
+        };
+      }
+    }
+    return {
+      id,
+      entity: entityOrSummary
+    };
+  }
+
+  function readStudyValues(chart, args) {
+    const warnings = [];
+    const rawStudies = methodValue(chart, ["getAllStudies", "getStudies"]);
+    if (!Array.isArray(rawStudies)) {
+      const error = "TradingView chart API did not expose visible study identifiers for study-value extraction.";
+      return {
+        error,
+        warnings: [error]
+      };
+    }
+
+    const studyNameFilter = compactText(String(args.studyName ?? "")).toLowerCase();
+    const studies = [];
+    let considered = 0;
+    for (const rawStudy of rawStudies) {
+      const { id, entity } = readStudyEntity(chart, rawStudy);
+      const fallbackName = studyDisplayName(rawStudy, id) || "Study";
+      const name = studyDisplayName(entity, fallbackName) || fallbackName;
+      if (studyNameFilter && !name.toLowerCase().includes(studyNameFilter)) {
+        continue;
+      }
+      const visible = studyVisible(entity);
+      if (visible === false) {
+        continue;
+      }
+      considered += 1;
+      if (studies.length >= args.maxStudies) {
+        continue;
+      }
+      const valueData = readStudyValuesFromEntity(entity, args.maxValuesPerStudy);
+      if (valueData.values.length === 0) {
+        continue;
+      }
+      const study = {
+        id: id || name,
+        name,
+        valueCount: valueData.values.length,
+        source: valueData.source,
+        values: valueData.values
+      };
+      if (typeof visible === "boolean") {
+        study.visible = visible;
+      }
+      studies.push(study);
+    }
+
+    if (considered > args.maxStudies) {
+      warnings.push("Study values truncated to " + args.maxStudies + " visible studies.");
+    }
+    if (studies.length === 0) {
+      warnings.push("No visible study values were exposed by the active chart API.");
+    }
+
+    return {
+      studyCount: studies.length,
+      totalVisibleStudies: considered,
+      maxStudies: args.maxStudies,
+      maxValuesPerStudy: args.maxValuesPerStudy,
+      studies,
+      warnings
+    };
   }
 
   function normalizeDrawingPoint(value) {
@@ -1353,6 +2000,27 @@ async (command, args) => {
   async function mutate(chart, before) {
     if (command === "state") {
       return { ok: true, before };
+    }
+    if (command === "chartDataSummary") {
+      const data = await chartDataSummary(chart, args);
+      if (data.error) {
+        return { ok: false, before, error: data.error, warnings: data.warnings ?? [] };
+      }
+      return { ok: true, value: data };
+    }
+    if (command === "quoteSnapshot") {
+      const quote = await quoteSnapshot(chart);
+      if (quote.error) {
+        return { ok: false, before, error: quote.error, warnings: quote.warnings ?? [] };
+      }
+      return { ok: true, value: quote };
+    }
+    if (command === "studyValues") {
+      const values = readStudyValues(chart, args);
+      if (values.error) {
+        return { ok: false, before, error: values.error, warnings: values.warnings ?? [] };
+      }
+      return { ok: true, value: values };
     }
     if (command === "setSymbol") {
       if (typeof chart.setSymbol !== "function") {
@@ -2853,12 +3521,20 @@ async function runRawChartControl(
       });
     }
 
+    const payloadRecord = payload as Record<string, unknown>;
+    const payloadWarnings = Array.isArray(payloadRecord.warnings)
+      ? payloadRecord.warnings.filter((warning: unknown): warning is string =>
+          typeof warning === "string"
+        )
+      : [];
+
     if (!payload.ok) {
       return failureResult(action, {
         endpoint: resolved.endpoint,
         executedAt,
         target: resolved.target,
         error: payload.error ?? "TradingView chart control failed.",
+        warnings: payloadWarnings,
         value: "before" in payload ? { before: payload.before } : undefined
       });
     }
@@ -2871,7 +3547,8 @@ async function runRawChartControl(
         endpoint: resolved.endpoint,
         executedAt,
         target: resolved.target,
-        error: "Raw chart control result exceeded the compact output limit."
+        error: "Raw chart control result exceeded the compact output limit.",
+        warnings: payloadWarnings
       });
     }
 
@@ -2889,7 +3566,8 @@ async function runRawChartControl(
       endpoint: resolved.endpoint,
       executedAt,
       target: resolved.target,
-      value: payload.value
+      value: payload.value,
+      warnings: payloadWarnings
     });
   } catch (error: unknown) {
     return failureResult(action, {
@@ -3008,6 +3686,55 @@ export function runRawChartState(
   options: RawChartStateOptions
 ): Promise<RawAutomationResult> {
   return runRawChartControl("chart-state", "state", {}, options);
+}
+
+export function runRawChartDataSummary(
+  options: RawChartDataSummaryOptions
+): Promise<RawAutomationResult> {
+  const barCount = options.barCount ?? DEFAULT_RAW_CHART_DATA_BAR_COUNT;
+
+  return runRawChartControl(
+    "chart-data-summary",
+    "chartDataSummary",
+    {
+      barCount
+    },
+    options,
+    invalidBarCountMessage(barCount)
+  );
+}
+
+export function runRawQuoteSnapshot(
+  options: RawQuoteSnapshotOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("quote-snapshot", "quoteSnapshot", {}, options);
+}
+
+export function runRawStudyValues(
+  options: RawStudyValuesOptions
+): Promise<RawAutomationResult> {
+  const args: {
+    maxStudies: number;
+    maxValuesPerStudy: number;
+    studyName?: string;
+  } = {
+    maxStudies:
+      options.maxStudies ?? DEFAULT_RAW_STUDY_VALUES_MAX_STUDIES,
+    maxValuesPerStudy:
+      options.maxValuesPerStudy ?? DEFAULT_RAW_STUDY_VALUES_MAX_VALUES
+  };
+
+  if (options.studyName !== undefined) {
+    args.studyName = options.studyName.trim();
+  }
+
+  return runRawChartControl(
+    "study-values",
+    "studyValues",
+    args,
+    options,
+    invalidStudyValuesMessage(args)
+  );
 }
 
 export function runRawSetSymbol(

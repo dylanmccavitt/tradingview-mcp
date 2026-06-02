@@ -40,16 +40,17 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   and bounded scroll primitives through CLI and MCP only when that gate is
   enabled. It also exposes MCP-only direct chart state/control tools for current
   symbol, timeframe, chart type, visible range, visible studies, indicator
-  creation, and entity removal when TradingView exposes the needed chart API,
-  plus MCP-only native drawing creation, listing, inspection, one-drawing
-  removal, explicit clear-all, and quant drawing macro tools when TradingView
-  exposes drawing APIs. Macro output is mechanical review context: created
-  drawing ids, anchors, levels, and warnings for Fib-style levels, measured
-  moves, and range projections. It must not be presented as predictions,
-  recommendations, rankings, or advice. The gated MCP surface also exposes
-  Pine Editor tools for opening/focusing the editor, setting bounded source,
-  reading bounded source, reading compact errors/console output, and explicit
-  compile or save actions.
+  creation, and entity removal when TradingView exposes the needed chart API;
+  MCP-only compact chart data extraction for bounded OHLCV summaries,
+  quote/current-bar snapshots, and visible study values; plus MCP-only native
+  drawing creation, listing, inspection, one-drawing removal, explicit
+  clear-all, and quant drawing macro tools when TradingView exposes drawing
+  APIs. Chart data and macro output are mechanical review context only:
+  bounded values, created drawing ids, anchors, levels, and warnings. They must
+  not be presented as scans, predictions, recommendations, rankings, alerts, or
+  advice. The gated MCP surface also exposes Pine Editor tools for
+  opening/focusing the editor, setting bounded source, reading bounded source,
+  reading compact errors/console output, and explicit compile or save actions.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.
