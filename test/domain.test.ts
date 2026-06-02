@@ -48,6 +48,16 @@ void test("raw automation boundary is experimental and opt-in", () => {
   assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("direct_chart_manipulation"));
   assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("compact_chart_data_extraction"));
   assert.ok(RAW_AUTOMATION_BOUNDARY.allowed.includes("explicit_pine_editor_actions"));
+  assert.ok(
+    RAW_AUTOMATION_BOUNDARY.allowed.includes(
+      "workspace_tab_pane_layout_controls"
+    )
+  );
+  assert.ok(
+    RAW_AUTOMATION_BOUNDARY.allowed.includes(
+      "bounded_explicit_batch_chart_actions"
+    )
+  );
   assert.ok(RAW_AUTOMATION_BOUNDARY.constraints.includes("disabled_by_default"));
   assert.ok(
     RAW_AUTOMATION_BOUNDARY.constraints.includes(

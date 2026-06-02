@@ -89,6 +89,16 @@ issues must port reference behavior in small slices.
   visible study values only when TradingView exposes them. Their output is
   review context only, not scanner/ranking output, market-data service output,
   alerts, generated candidates, recommendations, or advice.
+- The workspace-control slice adds MCP-only `tradingview_raw_list_tabs`,
+  `tradingview_raw_focus_tab`, `tradingview_raw_list_panes`,
+  `tradingview_raw_focus_pane`, `tradingview_raw_set_pane_layout`,
+  `tradingview_raw_list_layouts`, `tradingview_raw_switch_layout`, and
+  `tradingview_raw_batch_chart` behind the same gate. These tools may list or
+  focus local chart tabs, inspect or focus panes, set common pane layouts, and
+  list or switch saved layouts only when TradingView exposes the needed local
+  chart/widget APIs. The batch tool applies bounded explicit symbol/timeframe
+  actions in caller-provided order and reports per-step results; it must not
+  scan, rank, score, alert, recommend, or generate candidates.
 - The native drawing slice adds MCP-only `tradingview_draw_shape`,
   `tradingview_draw_list`, `tradingview_draw_properties`,
   `tradingview_draw_remove`, and `tradingview_draw_clear_all` tools behind the
@@ -112,5 +122,5 @@ issues must port reference behavior in small slices.
   retrieval is bounded by default and reports truncation warnings for larger
   scripts. These tools use the active local chart target and exposed
   TradingView/Monaco Pine Editor surfaces only.
-- Future native drawing, chart manipulation, Pine editor, data extraction, and
-  quant macro issues should build behind this boundary.
+- Future native drawing, chart manipulation, workspace-control, Pine editor,
+  data extraction, and quant macro issues should build behind this boundary.

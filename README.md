@@ -243,14 +243,19 @@ raw surface also exposes direct chart state/control tools for reading compact
 current chart state, setting symbol/timeframe/chart type/visible range, adding
 a named indicator, and removing a chart entity by id when TradingView exposes
 the required chart API. Those tools return before/after state or an explicit
-API-unavailable failure. MCP-only raw data tools read bounded OHLCV summary
-stats, quote/current-bar snapshots, and compact visible study values when
-TradingView exposes them; those outputs are local chart-review context only,
-not scans, rankings, alerts, recommendations, or advice. MCP-only quant drawing macros can also create
-Fib-style retracement/extension levels and measured-move or range-projection
-review levels from explicit anchors or caller-selected extracted range facts
-when native drawing APIs are exposed. Macro output records created drawing ids,
-anchor metadata, levels used, and warnings; it is review context only, not a
+API-unavailable failure. MCP-only workspace tools list/focus local chart tabs,
+list/focus panes, set common pane layouts, and list/switch saved layouts only
+when TradingView exposes the required APIs. The bounded batch chart tool applies
+explicit user-provided symbol/timeframe actions in caller order only; it does
+not scan, rank, score, recommend, alert, or generate candidates. MCP-only raw
+data tools read bounded OHLCV summary stats, quote/current-bar snapshots, and
+compact visible study values when TradingView exposes them; those outputs are
+local chart-review context only, not scans, rankings, alerts, recommendations,
+or advice. MCP-only quant drawing macros can also create Fib-style
+retracement/extension levels and measured-move or range-projection review levels
+from explicit anchors or caller-selected extracted range facts when native
+drawing APIs are exposed. Macro output records created drawing ids, anchor
+metadata, levels used, and warnings; it is review context only, not a
 prediction, recommendation, ranking, or advice.
 
 Raw automation remains experimental local chart control. It must not operate on
@@ -312,6 +317,14 @@ browser controls. When the server process is started with
 - `tradingview_raw_chart_data_summary`
 - `tradingview_raw_quote_snapshot`
 - `tradingview_raw_study_values`
+- `tradingview_raw_list_tabs`
+- `tradingview_raw_focus_tab`
+- `tradingview_raw_list_panes`
+- `tradingview_raw_focus_pane`
+- `tradingview_raw_set_pane_layout`
+- `tradingview_raw_list_layouts`
+- `tradingview_raw_switch_layout`
+- `tradingview_raw_batch_chart`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -348,6 +361,10 @@ Chart data tools are MCP-only in this slice. They return bounded OHLCV
 summaries, latest current-bar quote fields, and compact visible study values
 when exposed by TradingView, and they report clear unsupported-data failures
 otherwise.
+Workspace tools are MCP-only in this slice. They list/focus chart tabs, panes,
+and saved layouts only when exposed, and the batch chart tool runs bounded
+explicit symbol/timeframe actions in input order without scanner/ranking or
+candidate-generation behavior.
 Pine Editor tools are MCP-only in this slice. They can open/focus the editor,
 set source without compiling or saving, read bounded source with truncation
 warnings for large scripts, read compact errors and console output, and run

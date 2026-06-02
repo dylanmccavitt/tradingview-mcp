@@ -1,4 +1,4 @@
-import { formatCdpEndpoint } from "./cdp.js";
+import { fetchCdpJson, formatCdpEndpoint } from "./cdp.js";
 import {
   type CdpClient,
   connectCdpClient
@@ -10,6 +10,7 @@ import {
 } from "./desktop.js";
 import {
   checkTradingViewHealth,
+  type CdpJsonFetcher,
   type CheckTradingViewHealthOptions,
   type TradingViewHealthResult
 } from "./health.js";
@@ -23,6 +24,7 @@ import {
 } from "./drawing-macros.js";
 import {
   isTradingViewChartTarget,
+  normalizeCdpTargets,
   type CdpTarget
 } from "./targets.js";
 
@@ -48,6 +50,10 @@ export const RAW_TIMEFRAME_MAX_CHARS = 32;
 export const RAW_CHART_TYPE_MAX_CHARS = 64;
 export const RAW_INDICATOR_NAME_MAX_CHARS = 120;
 export const RAW_ENTITY_ID_MAX_CHARS = 200;
+export const RAW_TARGET_ID_MAX_CHARS = 200;
+export const RAW_PANE_ID_MAX_CHARS = 120;
+export const RAW_LAYOUT_ID_MAX_CHARS = 200;
+export const RAW_BATCH_MAX_STEPS = 50;
 export const RAW_DRAWING_TEXT_MAX_CHARS = 500;
 export const RAW_DRAWING_MAX_POINTS = 2;
 export const RAW_DRAWING_MAX_OVERRIDES = 40;
@@ -108,6 +114,14 @@ export type RawAutomationAction =
   | "chart-data-summary"
   | "quote-snapshot"
   | "study-values"
+  | "list-tabs"
+  | "focus-tab"
+  | "list-panes"
+  | "focus-pane"
+  | "set-pane-layout"
+  | "list-layouts"
+  | "switch-layout"
+  | "batch-chart"
   | "set-symbol"
   | "set-timeframe"
   | "set-chart-type"
@@ -149,6 +163,13 @@ export interface RawElementSummary {
 }
 
 export type RawChartTypeValue = string | number;
+
+export type RawPaneLayoutValue =
+  | "single"
+  | "two-vertical"
+  | "two-horizontal"
+  | "three-vertical"
+  | "four-grid";
 
 export interface RawVisibleRange {
   from: number;
@@ -208,6 +229,7 @@ export interface RawTradingViewPageClient {
   }): Promise<void>;
   keypress(key: string): Promise<void>;
   typeText(text: string): Promise<void>;
+  bringToFront(): Promise<void>;
   hover(options: { x: number; y: number }): Promise<void>;
   scroll(options: {
     direction: RawScrollDirection;
@@ -226,6 +248,7 @@ export interface RawAutomationBaseOptions {
   checkHealth?: (
     options: CheckTradingViewHealthOptions
   ) => Promise<TradingViewHealthResult>;
+  fetchJson?: CdpJsonFetcher;
   pageClientFactory?: (
     target: CdpTarget,
     options: {
@@ -289,6 +312,38 @@ export interface RawStudyValuesOptions extends RawAutomationBaseOptions {
   maxStudies?: number;
   maxValuesPerStudy?: number;
   studyName?: string;
+}
+
+export type RawListTabsOptions = RawAutomationBaseOptions;
+
+export interface RawFocusTabOptions extends RawAutomationBaseOptions {
+  targetId: string;
+}
+
+export type RawListPanesOptions = RawAutomationBaseOptions;
+
+export interface RawFocusPaneOptions extends RawAutomationBaseOptions {
+  paneId: string;
+}
+
+export interface RawSetPaneLayoutOptions extends RawAutomationBaseOptions {
+  layout: RawPaneLayoutValue;
+}
+
+export type RawListLayoutsOptions = RawAutomationBaseOptions;
+
+export interface RawSwitchLayoutOptions extends RawAutomationBaseOptions {
+  layoutId: string;
+}
+
+export interface RawBatchChartStep {
+  symbol?: string;
+  timeframe?: string;
+}
+
+export interface RawBatchChartOptions extends RawAutomationBaseOptions {
+  steps: RawBatchChartStep[];
+  stopOnError?: boolean;
 }
 
 export interface RawSetSymbolOptions extends RawAutomationBaseOptions {
@@ -494,6 +549,10 @@ function healthOptionsFromRaw(
 
   if (options.appPath) {
     healthOptions.appPath = options.appPath;
+  }
+
+  if (options.fetchJson) {
+    healthOptions.fetchJson = options.fetchJson;
   }
 
   return healthOptions;
@@ -732,6 +791,102 @@ function invalidStudyValuesMessage(options: {
       options.studyName.length > RAW_INDICATOR_NAME_MAX_CHARS)
   ) {
     return `Raw studyName filter must be 1 to ${RAW_INDICATOR_NAME_MAX_CHARS} characters when provided.`;
+  }
+
+  return null;
+}
+
+function invalidBoundedIdMessage(options: {
+  value: string;
+  name: string;
+  maxChars: number;
+}): string | null {
+  const trimmed = options.value.trim();
+
+  if (trimmed.length === 0) {
+    return `Raw ${options.name} is required.`;
+  }
+
+  if (trimmed.length > options.maxChars) {
+    return `Raw ${options.name} must be ${options.maxChars} characters or fewer.`;
+  }
+
+  return null;
+}
+
+function invalidTargetIdMessage(targetId: string): string | null {
+  return invalidBoundedIdMessage({
+    value: targetId,
+    name: "target id",
+    maxChars: RAW_TARGET_ID_MAX_CHARS
+  });
+}
+
+function invalidPaneIdMessage(paneId: string): string | null {
+  return invalidBoundedIdMessage({
+    value: paneId,
+    name: "pane id",
+    maxChars: RAW_PANE_ID_MAX_CHARS
+  });
+}
+
+function invalidLayoutIdMessage(layoutId: string): string | null {
+  return invalidBoundedIdMessage({
+    value: layoutId,
+    name: "layout id",
+    maxChars: RAW_LAYOUT_ID_MAX_CHARS
+  });
+}
+
+function invalidPaneLayoutMessage(layout: RawPaneLayoutValue): string | null {
+  if (
+    layout !== "single" &&
+    layout !== "two-vertical" &&
+    layout !== "two-horizontal" &&
+    layout !== "three-vertical" &&
+    layout !== "four-grid"
+  ) {
+    return "Raw pane layout must be single, two-vertical, two-horizontal, three-vertical, or four-grid.";
+  }
+
+  return null;
+}
+
+function invalidBatchChartMessage(
+  options: RawBatchChartOptions
+): string | null {
+  if (!Array.isArray(options.steps) || options.steps.length === 0) {
+    return "Raw batch chart steps must include at least one explicit action.";
+  }
+
+  if (options.steps.length > RAW_BATCH_MAX_STEPS) {
+    return `Raw batch chart steps may include at most ${RAW_BATCH_MAX_STEPS} actions.`;
+  }
+
+  for (let index = 0; index < options.steps.length; index += 1) {
+    const step = options.steps[index]!;
+    const hasSymbol = typeof step.symbol === "string";
+    const hasTimeframe = typeof step.timeframe === "string";
+
+    if (!hasSymbol && !hasTimeframe) {
+      return `Raw batch chart step ${index + 1} must include a symbol, timeframe, or both.`;
+    }
+
+    if (hasSymbol) {
+      const invalidSymbol = invalidSymbolMessage(step.symbol!);
+
+      if (invalidSymbol) {
+        return `Raw batch chart step ${index + 1}: ${invalidSymbol}`;
+      }
+    }
+
+    if (hasTimeframe) {
+      const invalidTimeframe = invalidTimeframeMessage(step.timeframe!);
+
+      if (invalidTimeframe) {
+        return `Raw batch chart step ${index + 1}: ${invalidTimeframe}`;
+      }
+    }
   }
 
   return null;
@@ -980,6 +1135,169 @@ function normalizeEvaluateResponse(value: unknown): unknown {
     type: response.result.type,
     description: response.result.description
   };
+}
+
+function compactChartTarget(target: CdpTarget): {
+  id: string;
+  title: string;
+  url: string;
+  hasWebSocketDebuggerUrl: boolean;
+} {
+  return {
+    id: target.id,
+    title: target.title,
+    url: target.url,
+    hasWebSocketDebuggerUrl: typeof target.webSocketDebuggerUrl === "string"
+  };
+}
+
+async function readRawChartTargets(options: RawAutomationBaseOptions): Promise<{
+  endpoint: string;
+  targets: CdpTarget[];
+}> {
+  const endpoint = endpointOptions(options);
+  const endpointUrl = formatCdpEndpoint(endpoint);
+  const fetchJson = options.fetchJson ?? fetchCdpJson;
+  const targetsJson = await fetchJson("/json/list", {
+    host: endpoint.host,
+    port: endpoint.port,
+    timeoutMs: endpoint.timeoutMs
+  });
+  const targets = normalizeCdpTargets(targetsJson);
+
+  if (!targets) {
+    throw new Error("CDP /json/list did not return a target array.");
+  }
+
+  return {
+    endpoint: endpointUrl,
+    targets: targets.filter(isTradingViewChartTarget)
+  };
+}
+
+export async function runRawListTabs(
+  options: RawListTabsOptions
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+
+  try {
+    const { endpoint: endpointUrl, targets } = await readRawChartTargets(options);
+
+    return {
+      ok: true,
+      action: "list-tabs",
+      endpoint: endpointUrl,
+      executedAt,
+      value: {
+        targetCount: targets.length,
+        targets: targets.map(compactChartTarget),
+        warnings:
+          targets.length === 0
+            ? ["No active local TradingView chart targets were exposed by CDP."]
+            : []
+      },
+      warnings: []
+    };
+  } catch (error: unknown) {
+    return failureResult("list-tabs", {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: `Could not list TradingView chart targets: ${errorMessage(error)}`
+    });
+  }
+}
+
+export async function runRawFocusTab(
+  options: RawFocusTabOptions
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+  const targetId = options.targetId.trim();
+  const invalidTargetId = invalidTargetIdMessage(options.targetId);
+
+  if (invalidTargetId) {
+    return failureResult("focus-tab", {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: invalidTargetId
+    });
+  }
+
+  let endpointUrl = formatCdpEndpoint(endpoint);
+  let target: CdpTarget | undefined;
+
+  try {
+    const targetList = await readRawChartTargets(options);
+    endpointUrl = targetList.endpoint;
+    target = targetList.targets.find((candidate) => candidate.id === targetId);
+
+    if (!target) {
+      return failureResult("focus-tab", {
+        endpoint: endpointUrl,
+        executedAt,
+        error:
+          "No active local TradingView chart target matched the requested target id.",
+        warnings: targetList.targets.map(
+          (candidate) => `Available chart target: ${candidate.id}`
+        )
+      });
+    }
+
+    const webSocketDebuggerUrl = target.webSocketDebuggerUrl;
+
+    if (!webSocketDebuggerUrl) {
+      return failureResult("focus-tab", {
+        endpoint: endpointUrl,
+        executedAt,
+        target,
+        error:
+          "TradingView chart target does not expose a page WebSocket debugger URL."
+      });
+    }
+
+    const makeClient =
+      options.pageClientFactory ??
+      ((_target, clientOptions) =>
+        createLiveRawTradingViewPageClient(
+          webSocketDebuggerUrl,
+          clientOptions
+        ));
+    const client = await makeClient(target, {
+      timeoutMs: endpoint.timeoutMs
+    });
+
+    try {
+      await client.bringToFront();
+
+      return successResult("focus-tab", {
+        endpoint: endpointUrl,
+        executedAt,
+        target,
+        value: {
+          focused: true,
+          target: compactChartTarget(target)
+        }
+      });
+    } finally {
+      await client.close();
+    }
+  } catch (error: unknown) {
+    if (target) {
+      return failureResult("focus-tab", {
+        endpoint: endpointUrl,
+        executedAt,
+        target,
+        error: `Could not focus TradingView chart target: ${errorMessage(error)}`
+      });
+    }
+
+    return failureResult("focus-tab", {
+      endpoint: endpointUrl,
+      executedAt,
+      error: `Could not focus TradingView chart target: ${errorMessage(error)}`
+    });
+  }
 }
 
 const RAW_CHART_CONTROL_EVALUATOR = String.raw`
@@ -1954,6 +2272,230 @@ async (command, args) => {
     return state;
   }
 
+  function paneIdValue(pane, index) {
+    const id = valueFrom(pane, ["id", "paneId", "entityId", "name"]);
+    const text = compactText(String(id ?? ""));
+    return text || "pane-" + (index + 1);
+  }
+
+  function paneSummary(pane, index) {
+    const id = paneIdValue(pane, index);
+    const title = compactText(
+      String(valueFrom(pane, ["title", "name", "description"]) ?? "")
+    );
+    const height = finiteNumber(valueFrom(pane, ["height", "getHeight"]));
+    const summary = { id, index };
+    if (title && title !== id) {
+      summary.title = title;
+    }
+    if (typeof height === "number") {
+      summary.height = Math.trunc(height);
+    }
+    return summary;
+  }
+
+  function rawPanes(chart) {
+    const panes = methodValue(chart, ["getPanes", "panes", "getAllPanes"]);
+    return Array.isArray(panes) ? panes : undefined;
+  }
+
+  function readPanes(chart) {
+    const panes = rawPanes(chart);
+    if (!panes) {
+      const error = "TradingView chart API did not expose pane identifiers through getPanes(), panes(), or getAllPanes().";
+      return {
+        panes: [],
+        count: 0,
+        error,
+        warnings: [error]
+      };
+    }
+
+    return {
+      panes: panes.map(paneSummary).slice(0, MAX_STUDIES),
+      count: panes.length,
+      warnings:
+        panes.length > MAX_STUDIES
+          ? ["Pane list truncated to " + MAX_STUDIES + " entries."]
+          : []
+    };
+  }
+
+  async function focusPane(chart, paneId) {
+    const before = readPanes(chart);
+    if (before.error) {
+      return { ok: false, before, error: before.error };
+    }
+    const panes = rawPanes(chart) ?? [];
+    const paneIndex = panes.findIndex(
+      (pane, index) => paneIdValue(pane, index) === paneId
+    );
+    const pane = panes[paneIndex];
+    if (!pane) {
+      return {
+        ok: false,
+        before,
+        error: "No TradingView pane matched the requested pane id."
+      };
+    }
+    if (typeof chart.setActivePane === "function") {
+      await awaitMaybe(chart.setActivePane(paneId));
+      return { ok: true, before, pane: paneSummary(pane, paneIndex) };
+    }
+    if (typeof chart.focusPane === "function") {
+      await awaitMaybe(chart.focusPane(paneId));
+      return { ok: true, before, pane: paneSummary(pane, paneIndex) };
+    }
+    if (typeof chart.selectPane === "function") {
+      await awaitMaybe(chart.selectPane(paneId));
+      return { ok: true, before, pane: paneSummary(pane, paneIndex) };
+    }
+    if (typeof pane.focus === "function") {
+      await awaitMaybe(pane.focus());
+      return { ok: true, before, pane: paneSummary(pane, paneIndex) };
+    }
+    if (typeof pane.select === "function") {
+      await awaitMaybe(pane.select());
+      return { ok: true, before, pane: paneSummary(pane, paneIndex) };
+    }
+    return {
+      ok: false,
+      before,
+      error: "TradingView chart API exposed panes but not a supported pane focus method."
+    };
+  }
+
+  function nativePaneLayoutName(layout) {
+    if (layout === "single") {
+      return "single";
+    }
+    if (layout === "two-vertical") {
+      return "2v";
+    }
+    if (layout === "two-horizontal") {
+      return "2h";
+    }
+    if (layout === "three-vertical") {
+      return "3v";
+    }
+    if (layout === "four-grid") {
+      return "4";
+    }
+    return layout;
+  }
+
+  async function setPaneLayout(chart, layout) {
+    const before = readPanes(chart);
+    const nativeLayout = nativePaneLayoutName(layout);
+    if (typeof chart.setPaneLayout === "function") {
+      await awaitMaybe(chart.setPaneLayout(nativeLayout));
+      return { ok: true, before, layout };
+    }
+    if (typeof chart.setLayout === "function") {
+      await awaitMaybe(chart.setLayout(nativeLayout));
+      return { ok: true, before, layout };
+    }
+    if (typeof chart.setPanesLayout === "function") {
+      await awaitMaybe(chart.setPanesLayout(nativeLayout));
+      return { ok: true, before, layout };
+    }
+    return {
+      ok: false,
+      before,
+      error: "TradingView chart API did not expose setPaneLayout(), setLayout(), or setPanesLayout()."
+    };
+  }
+
+  function layoutSummary(layout, index) {
+    const id = compactText(
+      String(valueFrom(layout, ["id", "layoutId", "uid", "name"]) ?? "")
+    ) || "layout-" + (index + 1);
+    const name = compactText(
+      String(valueFrom(layout, ["name", "title", "description"]) ?? "")
+    );
+    const modifiedAt = compactText(
+      String(valueFrom(layout, ["modifiedAt", "updatedAt", "lastModified"]) ?? "")
+    );
+    const summary = { id, index };
+    if (name && name !== id) {
+      summary.name = name;
+    }
+    if (modifiedAt) {
+      summary.modifiedAt = modifiedAt;
+    }
+    return summary;
+  }
+
+  function widgetOrChartLayouts(chart) {
+    const widget = findWidget();
+    const candidates = [
+      methodValue(widget, ["getSavedCharts", "getLayouts", "savedCharts"]),
+      methodValue(chart, ["getSavedCharts", "getLayouts", "savedLayouts"])
+    ];
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) {
+        return candidate;
+      }
+      if (Array.isArray(candidate?.items)) {
+        return candidate.items;
+      }
+      if (Array.isArray(candidate?.layouts)) {
+        return candidate.layouts;
+      }
+    }
+    return undefined;
+  }
+
+  function readLayouts(chart) {
+    const layouts = widgetOrChartLayouts(chart);
+    if (!layouts) {
+      const error = "TradingView did not expose saved layout identifiers through getSavedCharts(), getLayouts(), or savedLayouts().";
+      return {
+        layouts: [],
+        count: 0,
+        error,
+        warnings: [error]
+      };
+    }
+    return {
+      layouts: layouts.map(layoutSummary).slice(0, MAX_STUDIES),
+      count: layouts.length,
+      warnings:
+        layouts.length > MAX_STUDIES
+          ? ["Layout list truncated to " + MAX_STUDIES + " entries."]
+          : []
+    };
+  }
+
+  async function switchLayout(chart, layoutId) {
+    const before = readLayouts(chart);
+    if (before.error) {
+      return { ok: false, before, error: before.error };
+    }
+    const widget = findWidget();
+    if (typeof widget?.loadChart === "function") {
+      await awaitMaybe(widget.loadChart(layoutId));
+      return { ok: true, before, layoutId };
+    }
+    if (typeof widget?.switchLayout === "function") {
+      await awaitMaybe(widget.switchLayout(layoutId));
+      return { ok: true, before, layoutId };
+    }
+    if (typeof chart.loadChart === "function") {
+      await awaitMaybe(chart.loadChart(layoutId));
+      return { ok: true, before, layoutId };
+    }
+    if (typeof chart.switchLayout === "function") {
+      await awaitMaybe(chart.switchLayout(layoutId));
+      return { ok: true, before, layoutId };
+    }
+    return {
+      ok: false,
+      before,
+      error: "TradingView exposed saved layouts but not a supported layout switch method."
+    };
+  }
+
   function waitForCallback(invoke) {
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -1997,6 +2539,86 @@ async (command, args) => {
     return value;
   }
 
+  function readBatchState(chart) {
+    const symbol = compactText(
+      methodValue(chart, ["symbol"]) ??
+        propertyValue(methodValue(chart, ["symbolExt"]), ["symbol", "full_name", "pro_name"])
+    );
+    const timeframe = compactText(methodValue(chart, ["resolution", "interval"]));
+    const state = {};
+    if (symbol) {
+      state.symbol = symbol;
+    }
+    if (timeframe) {
+      state.timeframe = timeframe;
+    }
+    return state;
+  }
+
+  async function applyBatchStep(chart, step) {
+    if (step.symbol && step.timeframe && typeof chart.setSymbol === "function") {
+      await waitForCallback((done) => chart.setSymbol(step.symbol, step.timeframe, done));
+      return;
+    }
+
+    if (step.symbol) {
+      if (typeof chart.setSymbol !== "function") {
+        throw new Error("TradingView chart API does not expose setSymbol().");
+      }
+      await waitForCallback((done) => chart.setSymbol(step.symbol, done));
+    }
+
+    if (step.timeframe) {
+      if (typeof chart.setResolution !== "function") {
+        throw new Error("TradingView chart API does not expose setResolution().");
+      }
+      await waitForCallback((done) => chart.setResolution(step.timeframe, done));
+    }
+  }
+
+  async function batchChart(chart, args) {
+    const results = [];
+    for (let index = 0; index < args.steps.length; index += 1) {
+      const step = args.steps[index];
+      const before = readBatchState(chart);
+      try {
+        await applyBatchStep(chart, step);
+        results.push({
+          index,
+          requested: step,
+          ok: true,
+          before,
+          after: readBatchState(chart)
+        });
+      } catch (error) {
+        results.push({
+          index,
+          requested: step,
+          ok: false,
+          before,
+          error: String(error?.message ?? error)
+        });
+        if (args.stopOnError) {
+          break;
+        }
+      }
+    }
+
+    const failedCount = results.filter((result) => result.ok !== true).length;
+    return {
+      requestedCount: args.steps.length,
+      completedCount: results.length - failedCount,
+      failedCount,
+      stopOnError: args.stopOnError === true,
+      orderPreserved: true,
+      generatedCandidates: false,
+      results,
+      warnings: [
+        "Batch chart actions preserve explicit input order and do not scan, rank, score, recommend, alert, or generate candidates."
+      ]
+    };
+  }
+
   async function mutate(chart, before) {
     if (command === "state") {
       return { ok: true, before };
@@ -2021,6 +2643,32 @@ async (command, args) => {
         return { ok: false, before, error: values.error, warnings: values.warnings ?? [] };
       }
       return { ok: true, value: values };
+    }
+    if (command === "listPanes") {
+      const panes = readPanes(chart);
+      if (panes.error) {
+        return { ok: false, before, error: panes.error, warnings: panes.warnings ?? [] };
+      }
+      return { ok: true, value: panes };
+    }
+    if (command === "focusPane") {
+      return await focusPane(chart, args.paneId);
+    }
+    if (command === "setPaneLayout") {
+      return await setPaneLayout(chart, args.layout);
+    }
+    if (command === "listLayouts") {
+      const layouts = readLayouts(chart);
+      if (layouts.error) {
+        return { ok: false, before, error: layouts.error, warnings: layouts.warnings ?? [] };
+      }
+      return { ok: true, value: layouts };
+    }
+    if (command === "switchLayout") {
+      return await switchLayout(chart, args.layoutId);
+    }
+    if (command === "batchChart") {
+      return { ok: true, value: await batchChart(chart, args) };
     }
     if (command === "setSymbol") {
       if (typeof chart.setSymbol !== "function") {
@@ -2207,6 +2855,15 @@ async (command, args) => {
   }
   if (mutation.drawings) {
     value.drawings = mutation.drawings;
+  }
+  if (mutation.pane) {
+    value.pane = mutation.pane;
+  }
+  if (mutation.layout) {
+    value.layout = mutation.layout;
+  }
+  if (mutation.layoutId) {
+    value.layoutId = mutation.layoutId;
   }
   if (mutation.macro) {
     value.macro = mutation.macro;
@@ -3737,6 +4394,87 @@ export function runRawStudyValues(
   );
 }
 
+export function runRawListPanes(
+  options: RawListPanesOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("list-panes", "listPanes", {}, options);
+}
+
+export function runRawFocusPane(
+  options: RawFocusPaneOptions
+): Promise<RawAutomationResult> {
+  const paneId = options.paneId.trim();
+
+  return runRawChartControl(
+    "focus-pane",
+    "focusPane",
+    { paneId },
+    options,
+    invalidPaneIdMessage(options.paneId)
+  );
+}
+
+export function runRawSetPaneLayout(
+  options: RawSetPaneLayoutOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl(
+    "set-pane-layout",
+    "setPaneLayout",
+    { layout: options.layout },
+    options,
+    invalidPaneLayoutMessage(options.layout)
+  );
+}
+
+export function runRawListLayouts(
+  options: RawListLayoutsOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("list-layouts", "listLayouts", {}, options);
+}
+
+export function runRawSwitchLayout(
+  options: RawSwitchLayoutOptions
+): Promise<RawAutomationResult> {
+  const layoutId = options.layoutId.trim();
+
+  return runRawChartControl(
+    "switch-layout",
+    "switchLayout",
+    { layoutId },
+    options,
+    invalidLayoutIdMessage(options.layoutId)
+  );
+}
+
+export function runRawBatchChart(
+  options: RawBatchChartOptions
+): Promise<RawAutomationResult> {
+  const steps = options.steps.map((step) => {
+    const nextStep: RawBatchChartStep = {};
+
+    if (step.symbol !== undefined) {
+      nextStep.symbol = step.symbol.trim();
+    }
+
+    if (step.timeframe !== undefined) {
+      nextStep.timeframe = step.timeframe.trim();
+    }
+
+    return nextStep;
+  });
+
+  return runRawChartControl(
+    "batch-chart",
+    "batchChart",
+    {
+      steps,
+      stopOnError: options.stopOnError === true
+    },
+    options,
+    invalidBatchChartMessage(options)
+  );
+}
+
 export function runRawSetSymbol(
   options: RawSetSymbolOptions
 ): Promise<RawAutomationResult> {
@@ -4124,6 +4862,10 @@ export class LiveRawTradingViewPageClient implements RawTradingViewPageClient {
     await this.client.send("Input.insertText", {
       text
     });
+  }
+
+  async bringToFront(): Promise<void> {
+    await this.client.send("Page.bringToFront", {});
   }
 
   async hover(options: { x: number; y: number }): Promise<void> {

@@ -108,6 +108,10 @@ to the active local TradingView chart target. The current raw slice registers
 `tradingview_raw_selector_hover`, `tradingview_raw_scroll`,
 `tradingview_raw_chart_state`, `tradingview_raw_chart_data_summary`,
 `tradingview_raw_quote_snapshot`, `tradingview_raw_study_values`,
+`tradingview_raw_list_tabs`, `tradingview_raw_focus_tab`,
+`tradingview_raw_list_panes`, `tradingview_raw_focus_pane`,
+`tradingview_raw_set_pane_layout`, `tradingview_raw_list_layouts`,
+`tradingview_raw_switch_layout`, `tradingview_raw_batch_chart`,
 `tradingview_raw_set_symbol`,
 `tradingview_raw_set_timeframe`, `tradingview_raw_set_chart_type`,
 `tradingview_raw_set_visible_range`, `tradingview_raw_add_indicator`, and
@@ -126,7 +130,11 @@ never scans, rankings, alerts, recommendations, or advice. Quant drawing macros
 must return review context only: created drawing ids, anchors, levels, and warnings,
 never predictions, recommendations, rankings, or advice. `tradingview_draw_clear_all` is
 destructive and must require an explicit clear-all confirmation in its schema
-and caller intent.
+and caller intent. Workspace tools may list/focus local chart tabs, list/focus
+panes, set common pane layouts, list/switch saved layouts when TradingView
+exposes the APIs, and run bounded explicit symbol/timeframe batch chart actions
+in caller-provided order only. Batch tools must not scan, rank, score, alert,
+recommend, or generate candidates.
 
 ## Test, Lint, And Typecheck
 

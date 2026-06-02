@@ -6,6 +6,7 @@ import {
   RAW_AUTOMATION_ENV,
   isRawAutomationEnabled,
   runRawAddIndicator,
+  runRawBatchChart,
   runRawChartDataSummary,
   runRawChartState,
   runRawClick,
@@ -18,7 +19,12 @@ import {
   runRawDrawingProperties,
   runRawEvaluate,
   runRawFindElement,
+  runRawFocusPane,
+  runRawFocusTab,
   runRawKeypress,
+  runRawListLayouts,
+  runRawListPanes,
+  runRawListTabs,
   runRawPineCompile,
   runRawPineGetConsole,
   runRawPineGetErrors,
@@ -31,11 +37,13 @@ import {
   runRawScroll,
   runRawSelectorClick,
   runRawSelectorHover,
+  runRawSetPaneLayout,
   runRawSetChartType,
   runRawSetSymbol,
   runRawSetTimeframe,
   runRawSetVisibleRange,
   runRawStudyValues,
+  runRawSwitchLayout,
   runRawTypeText,
   type RawTradingViewPageClient
 } from "../src/tradingview/raw-automation.js";
@@ -150,6 +158,14 @@ class FakeRawPageClient implements RawTradingViewPageClient {
     return Promise.resolve();
   }
 
+  bringToFront(): Promise<void> {
+    this.calls.push({
+      method: "bringToFront",
+      args: []
+    });
+    return Promise.resolve();
+  }
+
   hover(options: { x: number; y: number }): Promise<void> {
     this.calls.push({
       method: "hover",
@@ -224,6 +240,20 @@ interface FakeDrawing {
   isSelectable(): boolean;
 }
 
+interface FakePane {
+  id: string;
+  title: string;
+  height: number;
+  focused: boolean;
+  focus(): void;
+}
+
+interface FakeLayout {
+  id: string;
+  name: string;
+  modifiedAt: string;
+}
+
 interface FakeChartApi {
   symbol(): string;
   resolution(): string;
@@ -237,6 +267,11 @@ interface FakeChartApi {
   exportData?: () => {
     bars: FakeBar[];
   };
+  getPanes?: () => FakePane[];
+  setActivePane?: (paneId: string) => void;
+  setPaneLayout?: (layout: string) => void;
+  getLayouts?: () => FakeLayout[];
+  switchLayout?: (layoutId: string) => void;
   setSymbol?: (symbol: string, timeframeOrDone?: unknown, done?: () => void) => void;
   setResolution?: (timeframe: string, done?: () => void) => void;
   setChartType?: (chartType: string | number) => void;
@@ -312,6 +347,10 @@ class EvaluatingRawPageClient implements RawTradingViewPageClient {
   }
 
   typeText(): Promise<void> {
+    throw new Error("not implemented");
+  }
+
+  bringToFront(): Promise<void> {
     throw new Error("not implemented");
   }
 
@@ -460,6 +499,8 @@ function fakeChartApi(options: {
   studyCount?: number;
   withBars?: boolean;
   withStudyValues?: boolean;
+  withPanes?: boolean;
+  withLayouts?: boolean;
   withDrawingApi?: boolean;
   withClearAll?: boolean;
 } = {}): FakeChartApi {
@@ -534,6 +575,22 @@ function fakeChartApi(options: {
       }
     ])
   ];
+  const panes: FakePane[] = [
+    makeFakePane("pane-main", "Main chart", 420),
+    makeFakePane("pane-volume", "Volume", 160)
+  ];
+  const layouts: FakeLayout[] = [
+    {
+      id: "layout-breakout",
+      name: "Breakout Review",
+      modifiedAt: "2026-06-02T14:00:00.000Z"
+    },
+    {
+      id: "layout-clean",
+      name: "Clean Review",
+      modifiedAt: "2026-06-01T14:00:00.000Z"
+    }
+  ];
 
   const chart: FakeChartApi = {
     symbol: () => symbol,
@@ -552,6 +609,21 @@ function fakeChartApi(options: {
   if (options.withStudyValues) {
     chart.getStudyById = (entityId: string) =>
       studies.find((study) => study.id === entityId);
+  }
+
+  if (options.withPanes) {
+    chart.getPanes = () => panes;
+    chart.setActivePane = (paneId: string) => {
+      for (const pane of panes) {
+        pane.focused = pane.id === paneId;
+      }
+    };
+    chart.setPaneLayout = () => {};
+  }
+
+  if (options.withLayouts) {
+    chart.getLayouts = () => layouts;
+    chart.switchLayout = () => {};
   }
 
   if (options.withMutators) {
@@ -667,6 +739,20 @@ function fakeChartApi(options: {
   }
 
   return chart;
+}
+
+function makeFakePane(id: string, title: string, height: number): FakePane {
+  const pane: FakePane = {
+    id,
+    title,
+    height,
+    focused: false,
+    focus: () => {
+      pane.focused = true;
+    }
+  };
+
+  return pane;
 }
 
 function makeFakeDrawing(
@@ -874,6 +960,79 @@ void test("raw input primitives validate payloads and dispatch click, keypress, 
       args: ["NVDA"]
     }
   ]);
+});
+
+void test("raw tab tools list TradingView chart targets and focus a selected target", async () => {
+  const secondaryTarget: CdpTarget = {
+    id: "chart-target-2",
+    title: "AMD Chart",
+    type: "page",
+    url: "https://www.tradingview.com/chart/def/?symbol=NASDAQ%3AAMD",
+    webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/chart-target-2"
+  };
+  const nonChartTarget = {
+    id: "home",
+    title: "TradingView",
+    type: "page",
+    url: "https://www.tradingview.com/"
+  };
+  const fetchJson = (pathname: string) => {
+    assert.equal(pathname, "/json/list");
+    return Promise.resolve([chartTarget, nonChartTarget, secondaryTarget]);
+  };
+  const list = await runRawListTabs({
+    fetchJson,
+    now: () => new Date("2026-06-02T14:45:00.000Z")
+  });
+  const fakeClient = new FakeRawPageClient();
+  const focused = await runRawFocusTab({
+    targetId: "chart-target-2",
+    fetchJson,
+    pageClientFactory: (target) => {
+      assert.equal(target.id, "chart-target-2");
+      return Promise.resolve(fakeClient);
+    },
+    now: () => new Date("2026-06-02T14:46:00.000Z")
+  });
+
+  assert.equal(list.ok, true);
+  assert.equal(list.action, "list-tabs");
+  assert.equal(
+    (list.value as { targetCount: number }).targetCount,
+    2
+  );
+  assert.deepEqual(
+    (list.value as { targets: { id: string }[] }).targets.map(
+      (target) => target.id
+    ),
+    ["chart-target", "chart-target-2"]
+  );
+  assert.equal(focused.ok, true);
+  assert.equal(focused.action, "focus-tab");
+  assert.deepEqual(fakeClient.calls, [
+    {
+      method: "bringToFront",
+      args: []
+    }
+  ]);
+  assert.equal(fakeClient.closed, true);
+});
+
+void test("raw tab focus reports missing targets before opening a page client", async () => {
+  let pageClientCalled = false;
+
+  const result = await runRawFocusTab({
+    targetId: "missing-target",
+    fetchJson: () => Promise.resolve([chartTarget]),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new FakeRawPageClient());
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error ?? "", /matched the requested target id/i);
+  assert.equal(pageClientCalled, false);
 });
 
 void test("raw chart state reads compact chart API fields without a live TradingView session", async () => {
@@ -1174,6 +1333,262 @@ void test("raw chart control tools return before and after state for supported c
       ),
       /"id":"study-1"/
     );
+  } finally {
+    restore();
+  }
+});
+
+void test("raw pane and layout tools list, focus, and switch supported workspace APIs", async () => {
+  const restore = installFakeWidget(
+    fakeChartApi({
+      withPanes: true,
+      withLayouts: true
+    })
+  );
+
+  try {
+    const makeClient = () => Promise.resolve(new EvaluatingRawPageClient());
+    const common = {
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: makeClient
+    };
+    const panes = await runRawListPanes(common);
+    const focusPane = await runRawFocusPane({
+      ...common,
+      paneId: "pane-volume"
+    });
+    const setPaneLayout = await runRawSetPaneLayout({
+      ...common,
+      layout: "two-horizontal"
+    });
+    const layouts = await runRawListLayouts(common);
+    const switchLayout = await runRawSwitchLayout({
+      ...common,
+      layoutId: "layout-clean"
+    });
+
+    assert.equal(panes.ok, true);
+    assert.equal(panes.action, "list-panes");
+    assert.deepEqual(
+      (panes.value as { panes: { id: string; title: string }[] }).panes.map(
+        (pane) => ({
+          id: pane.id,
+          title: pane.title
+        })
+      ),
+      [
+        {
+          id: "pane-main",
+          title: "Main chart"
+        },
+        {
+          id: "pane-volume",
+          title: "Volume"
+        }
+      ]
+    );
+    assert.equal(focusPane.ok, true);
+    assert.equal(focusPane.action, "focus-pane");
+    assert.equal(
+      (focusPane.value as { pane: { id: string } }).pane.id,
+      "pane-volume"
+    );
+    assert.equal(setPaneLayout.ok, true);
+    assert.equal(
+      (setPaneLayout.value as { layout: string }).layout,
+      "two-horizontal"
+    );
+    assert.equal(layouts.ok, true);
+    assert.deepEqual(
+      (layouts.value as { layouts: { id: string }[] }).layouts.map(
+        (layout) => layout.id
+      ),
+      ["layout-breakout", "layout-clean"]
+    );
+    assert.equal(switchLayout.ok, true);
+    assert.equal(
+      (switchLayout.value as { layoutId: string }).layoutId,
+      "layout-clean"
+    );
+  } finally {
+    restore();
+  }
+});
+
+void test("raw pane and layout tools report unsupported APIs explicitly", async () => {
+  let pageClientCalled = false;
+  const invalidPane = await runRawFocusPane({
+    paneId: "",
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(invalidPane.ok, false);
+  assert.match(invalidPane.error ?? "", /pane id/i);
+  assert.equal(pageClientCalled, false);
+
+  const restore = installFakeWidget(fakeChartApi());
+
+  try {
+    const panes = await runRawListPanes({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+    const layouts = await runRawListLayouts({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    assert.equal(panes.ok, false);
+    assert.match(panes.error ?? "", /pane identifiers/i);
+    assert.equal(layouts.ok, false);
+    assert.match(layouts.error ?? "", /saved layout identifiers/i);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw batch chart applies explicit ordered symbol and timeframe steps", async () => {
+  const restore = installFakeWidget(fakeChartApi({ withMutators: true }));
+
+  try {
+    const result = await runRawBatchChart({
+      steps: [
+        {
+          symbol: "NASDAQ:NVDA",
+          timeframe: "65"
+        },
+        {
+          symbol: "NASDAQ:AMD",
+          timeframe: "1D"
+        },
+        {
+          timeframe: "1W"
+        }
+      ],
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    const value = result.value as {
+      requestedCount: number;
+      completedCount: number;
+      failedCount: number;
+      orderPreserved: boolean;
+      generatedCandidates: boolean;
+      results: {
+        index: number;
+        requested: {
+          symbol?: string;
+          timeframe?: string;
+        };
+        ok: boolean;
+        after?: {
+          symbol?: string;
+          timeframe?: string;
+        };
+      }[];
+      warnings: string[];
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "batch-chart");
+    assert.equal(value.requestedCount, 3);
+    assert.equal(value.completedCount, 3);
+    assert.equal(value.failedCount, 0);
+    assert.equal(value.orderPreserved, true);
+    assert.equal(value.generatedCandidates, false);
+    assert.deepEqual(
+      value.results.map((step) => ({
+        index: step.index,
+        requested: step.requested,
+        after: step.after
+      })),
+      [
+        {
+          index: 0,
+          requested: {
+            symbol: "NASDAQ:NVDA",
+            timeframe: "65"
+          },
+          after: {
+            symbol: "NASDAQ:NVDA",
+            timeframe: "65"
+          }
+        },
+        {
+          index: 1,
+          requested: {
+            symbol: "NASDAQ:AMD",
+            timeframe: "1D"
+          },
+          after: {
+            symbol: "NASDAQ:AMD",
+            timeframe: "1D"
+          }
+        },
+        {
+          index: 2,
+          requested: {
+            timeframe: "1W"
+          },
+          after: {
+            symbol: "NASDAQ:AMD",
+            timeframe: "1W"
+          }
+        }
+      ]
+    );
+    assert.match(value.warnings.join(" "), /do not scan, rank, score/i);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw batch chart validates bounds and reports per-step failures", async () => {
+  let pageClientCalled = false;
+  const tooManySteps = await runRawBatchChart({
+    steps: Array.from({ length: 51 }, () => ({
+      symbol: "NASDAQ:NVDA"
+    })),
+    checkHealth: () => Promise.resolve(healthyResult),
+    pageClientFactory: () => {
+      pageClientCalled = true;
+      return Promise.resolve(new EvaluatingRawPageClient());
+    }
+  });
+
+  assert.equal(tooManySteps.ok, false);
+  assert.match(tooManySteps.error ?? "", /at most 50/i);
+  assert.equal(pageClientCalled, false);
+
+  const restore = installFakeWidget(fakeChartApi());
+
+  try {
+    const unsupported = await runRawBatchChart({
+      steps: [
+        {
+          symbol: "NASDAQ:AMD"
+        }
+      ],
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
+
+    const value = unsupported.value as {
+      completedCount: number;
+      failedCount: number;
+      results: { ok: boolean; error?: string }[];
+    };
+
+    assert.equal(unsupported.ok, true);
+    assert.equal(value.completedCount, 0);
+    assert.equal(value.failedCount, 1);
+    assert.equal(value.results[0]?.ok, false);
+    assert.match(value.results[0]?.error ?? "", /setSymbol/i);
   } finally {
     restore();
   }

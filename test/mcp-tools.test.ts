@@ -805,6 +805,233 @@ void test("raw MCP chart data tools call injected handlers when enabled", async 
   }
 });
 
+void test("raw MCP workspace tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawListTabs: (options) => {
+        calls.push(`tabs:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "list-tabs",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            targetCount: 1,
+            targets: [
+              {
+                id: "chart-target",
+                title: "NVDA Chart",
+                url: "https://www.tradingview.com/chart/abc/",
+                hasWebSocketDebuggerUrl: true
+              }
+            ]
+          },
+          warnings: []
+        });
+      },
+      runRawFocusTab: (options) => {
+        calls.push(`focus-tab:${options.targetId}`);
+        return Promise.resolve({
+          ok: true,
+          action: "focus-tab",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            focused: true
+          },
+          warnings: []
+        });
+      },
+      runRawListPanes: () => {
+        calls.push("panes");
+        return Promise.resolve({
+          ok: true,
+          action: "list-panes",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            count: 2,
+            panes: [
+              {
+                id: "pane-main",
+                index: 0
+              }
+            ]
+          },
+          warnings: []
+        });
+      },
+      runRawFocusPane: (options) => {
+        calls.push(`focus-pane:${options.paneId}`);
+        return Promise.resolve({
+          ok: true,
+          action: "focus-pane",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            pane: {
+              id: options.paneId
+            }
+          },
+          warnings: []
+        });
+      },
+      runRawSetPaneLayout: (options) => {
+        calls.push(`pane-layout:${options.layout}`);
+        return Promise.resolve({
+          ok: true,
+          action: "set-pane-layout",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            layout: options.layout
+          },
+          warnings: []
+        });
+      },
+      runRawListLayouts: () => {
+        calls.push("layouts");
+        return Promise.resolve({
+          ok: true,
+          action: "list-layouts",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            count: 1,
+            layouts: [
+              {
+                id: "layout-clean"
+              }
+            ]
+          },
+          warnings: []
+        });
+      },
+      runRawSwitchLayout: (options) => {
+        calls.push(`switch-layout:${options.layoutId}`);
+        return Promise.resolve({
+          ok: true,
+          action: "switch-layout",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            layoutId: options.layoutId
+          },
+          warnings: []
+        });
+      },
+      runRawBatchChart: (options) => {
+        calls.push(
+          `batch:${options.steps.map((step) => `${step.symbol ?? ""}/${step.timeframe ?? ""}`).join("|")}:${options.stopOnError ?? false}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "batch-chart",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          value: {
+            requestedCount: options.steps.length,
+            completedCount: options.steps.length,
+            failedCount: 0,
+            orderPreserved: true,
+            generatedCandidates: false,
+            results: []
+          },
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const tabs = await client.callTool({
+      name: "tradingview_raw_list_tabs",
+      arguments: {
+        port: 9223
+      }
+    });
+    const focusTab = await client.callTool({
+      name: "tradingview_raw_focus_tab",
+      arguments: {
+        targetId: "chart-target"
+      }
+    });
+    const panes = await client.callTool({
+      name: "tradingview_raw_list_panes",
+      arguments: {}
+    });
+    const focusPane = await client.callTool({
+      name: "tradingview_raw_focus_pane",
+      arguments: {
+        paneId: "pane-main"
+      }
+    });
+    const paneLayout = await client.callTool({
+      name: "tradingview_raw_set_pane_layout",
+      arguments: {
+        layout: "two-vertical"
+      }
+    });
+    const layouts = await client.callTool({
+      name: "tradingview_raw_list_layouts",
+      arguments: {}
+    });
+    const switchLayout = await client.callTool({
+      name: "tradingview_raw_switch_layout",
+      arguments: {
+        layoutId: "layout-clean"
+      }
+    });
+    const batch = await client.callTool({
+      name: "tradingview_raw_batch_chart",
+      arguments: {
+        steps: [
+          {
+            symbol: "NASDAQ:NVDA",
+            timeframe: "65"
+          },
+          {
+            symbol: "NASDAQ:AMD",
+            timeframe: "1D"
+          }
+        ],
+        stopOnError: true
+      }
+    });
+
+    assert.equal(callResult(tabs).structuredContent?.action, "list-tabs");
+    assert.equal(callResult(focusTab).structuredContent?.action, "focus-tab");
+    assert.equal(callResult(panes).structuredContent?.action, "list-panes");
+    assert.equal(callResult(focusPane).structuredContent?.action, "focus-pane");
+    assert.equal(
+      callResult(paneLayout).structuredContent?.action,
+      "set-pane-layout"
+    );
+    assert.equal(callResult(layouts).structuredContent?.action, "list-layouts");
+    assert.equal(
+      callResult(switchLayout).structuredContent?.action,
+      "switch-layout"
+    );
+    assert.equal(callResult(batch).structuredContent?.action, "batch-chart");
+    assert.deepEqual(calls, [
+      "tabs:9223",
+      "focus-tab:chart-target",
+      "panes",
+      "focus-pane:pane-main",
+      "pane-layout:two-vertical",
+      "layouts",
+      "switch-layout:layout-clean",
+      "batch:NASDAQ:NVDA/65|NASDAQ:AMD/1D:true"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
 void test("raw MCP native drawing tools call injected handlers when enabled", async () => {
   const calls: string[] = [];
   const drawValue = {
@@ -1429,6 +1656,90 @@ void test("raw chart-control validation rejects invalid MCP requests before hand
     assert.match(contentText(badSymbol), /Input validation error/i);
     assert.equal(callResult(badRange).isError, true);
     assert.match(contentText(badRange), /Input validation error/i);
+  } finally {
+    await close();
+  }
+});
+
+void test("raw workspace validation rejects invalid MCP requests before handlers run", async () => {
+  let called = false;
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawFocusTab: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "focus-tab",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          warnings: []
+        });
+      },
+      runRawSetPaneLayout: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "set-pane-layout",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          warnings: []
+        });
+      },
+      runRawBatchChart: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "batch-chart",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T16:15:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const badTarget = await client.callTool({
+      name: "tradingview_raw_focus_tab",
+      arguments: {
+        targetId: ""
+      }
+    });
+    const badPaneLayout = await client.callTool({
+      name: "tradingview_raw_set_pane_layout",
+      arguments: {
+        layout: "scanner-grid"
+      }
+    });
+    const badBatchSymbol = await client.callTool({
+      name: "tradingview_raw_batch_chart",
+      arguments: {
+        steps: [
+          {
+            symbol: "NVDA"
+          }
+        ]
+      }
+    });
+    const badBatchEmptyStep = await client.callTool({
+      name: "tradingview_raw_batch_chart",
+      arguments: {
+        steps: [{}]
+      }
+    });
+
+    assert.equal(called, false);
+    assert.equal(callResult(badTarget).isError, true);
+    assert.match(contentText(badTarget), /Input validation error/i);
+    assert.equal(callResult(badPaneLayout).isError, true);
+    assert.match(contentText(badPaneLayout), /Input validation error/i);
+    assert.equal(callResult(badBatchSymbol).isError, true);
+    assert.match(contentText(badBatchSymbol), /Input validation error/i);
+    assert.equal(callResult(badBatchEmptyStep).isError, true);
+    assert.match(contentText(badBatchEmptyStep), /Input validation error/i);
   } finally {
     await close();
   }

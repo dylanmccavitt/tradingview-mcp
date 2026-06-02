@@ -17,7 +17,7 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
 - a local chartbook output workflow that combines universe selection, screenshots, drawing JSON, notes, a Markdown index, and a static HTML review dashboard
 - a default v1 MCP tool surface made only of high-level charting workflows
-- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, compact chart data extraction, native drawing tools, and Pine Editor tools against the active chart target
+- an opt-in experimental raw automation runner for bounded evaluate/click/key/text, visible UI selector, hover, scroll, direct chart state/control primitives, compact chart data extraction, workspace tab/pane/layout controls, bounded explicit batch chart actions, native drawing tools, and Pine Editor tools against the active chart target
 - typed internal health-result shaping for CLI and MCP tools
 - a shared chart-analysis profile boundary for user-selected `focus`,
   `breakout`, `squeeze`, and `momentum` review modes
@@ -66,6 +66,14 @@ The current gated raw MCP tools are:
 - `tradingview_raw_chart_data_summary`
 - `tradingview_raw_quote_snapshot`
 - `tradingview_raw_study_values`
+- `tradingview_raw_list_tabs`
+- `tradingview_raw_focus_tab`
+- `tradingview_raw_list_panes`
+- `tradingview_raw_focus_pane`
+- `tradingview_raw_set_pane_layout`
+- `tradingview_raw_list_layouts`
+- `tradingview_raw_switch_layout`
+- `tradingview_raw_batch_chart`
 - `tradingview_raw_set_symbol`
 - `tradingview_raw_set_timeframe`
 - `tradingview_raw_set_chart_type`
@@ -146,6 +154,19 @@ with explicit study/value caps. These outputs are local chart-review context
 only and must not be presented as scans, rankings, alerts, recommendations,
 generated candidates, market-data service output, or financial advice.
 
+The same gated MCP surface exposes workspace tools for local chart review when
+TradingView exposes the required chart/widget APIs.
+`tradingview_raw_list_tabs` lists CDP chart targets and
+`tradingview_raw_focus_tab` brings a selected chart target to the front by
+explicit target id. `tradingview_raw_list_panes`,
+`tradingview_raw_focus_pane`, and `tradingview_raw_set_pane_layout` inspect or
+adjust active-chart panes only when pane APIs are available.
+`tradingview_raw_list_layouts` and `tradingview_raw_switch_layout` inspect or
+switch saved layouts only when saved-layout APIs are exposed.
+`tradingview_raw_batch_chart` applies bounded explicit symbol/timeframe actions
+in caller-provided order and reports per-step results. It must not scan, rank,
+score, alert, recommend, or generate candidates.
+
 The same gated MCP surface exposes native drawing tools through supported
 TradingView chart/drawing APIs when available. `tradingview_draw_shape` creates
 horizontal line, trend line, rectangle, and text drawings from explicit
@@ -179,9 +200,10 @@ surfaces only and report unsupported editor/API paths clearly.
 `raw type-text`, `raw find-element`, `raw selector-click`,
 `raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
 matching input/selector tools plus direct chart state/control, compact data,
-drawing, and Pine MCP tools under `tradingview_raw_*`, `tradingview_draw_*`,
-and `tradingview_pine_*` only when `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`
-is present in the server environment.
+workspace controls, bounded batch chart actions, drawing, and Pine MCP tools
+under `tradingview_raw_*`, `tradingview_draw_*`, and `tradingview_pine_*` only
+when `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server
+environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 
 ### One-Symbol Chart Capture

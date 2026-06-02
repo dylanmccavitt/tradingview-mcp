@@ -45,10 +45,14 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   quote/current-bar snapshots, and visible study values; plus MCP-only native
   drawing creation, listing, inspection, one-drawing removal, explicit
   clear-all, and quant drawing macro tools when TradingView exposes drawing
-  APIs. Chart data and macro output are mechanical review context only:
-  bounded values, created drawing ids, anchors, levels, and warnings. They must
-  not be presented as scans, predictions, recommendations, rankings, alerts, or
-  advice. The gated MCP surface also exposes Pine Editor tools for
+  APIs. It also exposes MCP-only workspace controls for listing/focusing local
+  chart tabs, listing/focusing panes, setting common pane layouts, listing or
+  switching saved layouts when exposed, and bounded explicit symbol/timeframe
+  batch chart actions in caller-provided order only. Chart data, macro output,
+  and batch output are mechanical review context only: bounded values, created
+  drawing ids, anchors, levels, input-ordered action results, and warnings.
+  They must not be presented as scans, predictions, recommendations, rankings,
+  alerts, or advice. The gated MCP surface also exposes Pine Editor tools for
   opening/focusing the editor, setting bounded source, reading bounded source,
   reading compact errors/console output, and explicit compile or save actions.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
