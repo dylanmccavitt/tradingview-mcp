@@ -40,6 +40,20 @@ import {
   DEFAULT_PINE_DRAWING_STUDY_NAME
 } from "../tradingview/pine-drawings.js";
 import {
+  DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
+  RAW_AUTOMATION_ENV,
+  isRawAutomationEnabled,
+  runRawClick,
+  runRawEvaluate,
+  runRawKeypress,
+  runRawTypeText,
+  type RawAutomationResult,
+  type RawClickOptions,
+  type RawEvaluateOptions,
+  type RawKeypressOptions,
+  type RawTypeTextOptions
+} from "../tradingview/raw-automation.js";
+import {
   DEFAULT_UNIVERSE_CONFIG_PATH,
   listUniverseGroups,
   loadUniverseConfig,
@@ -66,6 +80,16 @@ export const TRADINGVIEW_MCP_TOOL_NAMES = [
 export type TradingViewMcpToolName =
   (typeof TRADINGVIEW_MCP_TOOL_NAMES)[number];
 
+export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
+  "tradingview_raw_evaluate",
+  "tradingview_raw_click",
+  "tradingview_raw_keypress",
+  "tradingview_raw_type_text"
+] as const;
+
+export type RawTradingViewMcpToolName =
+  (typeof RAW_TRADINGVIEW_MCP_TOOL_NAMES)[number];
+
 export interface TradingViewMcpToolHandlers {
   launchTradingViewDesktop: (
     options: LaunchTradingViewDesktopOptions
@@ -81,15 +105,21 @@ export interface TradingViewMcpToolHandlers {
     options: CaptureCurrentChartOptions
   ) => Promise<CurrentChartCaptureResult>;
   runChartbook: (options: RunChartbookOptions) => Promise<ChartbookResult>;
+  runRawEvaluate: (options: RawEvaluateOptions) => Promise<RawAutomationResult>;
+  runRawClick: (options: RawClickOptions) => Promise<RawAutomationResult>;
+  runRawKeypress: (options: RawKeypressOptions) => Promise<RawAutomationResult>;
+  runRawTypeText: (options: RawTypeTextOptions) => Promise<RawAutomationResult>;
 }
 
 export interface RegisterTradingViewMcpToolsOptions {
   handlers?: Partial<TradingViewMcpToolHandlers>;
+  env?: NodeJS.ProcessEnv;
 }
 
 type ToolResultData = Record<string, unknown>;
 
 const positiveInteger = z.number().int().positive();
+const nonNegativeNumber = z.number().finite().min(0);
 const nonEmptyString = z.string().trim().min(1);
 const exchangeQualifiedSymbol = z
   .string()
@@ -171,6 +201,38 @@ const chartbookSchema = z.object({
   preset: nonEmptyString.optional()
 });
 
+const rawEvaluateSchema = z.object({
+  ...endpointShape,
+  expression: nonEmptyString
+    .max(2000)
+    .describe(
+      "Bounded JavaScript expression evaluated in the active local TradingView chart target only."
+    ),
+  maxResultBytes: positiveInteger
+    .max(65536)
+    .optional()
+    .describe("Maximum compact JSON result size. Defaults to 4096 bytes.")
+});
+
+const rawInputButton = z.enum(["left", "middle", "right"]);
+
+const rawClickSchema = z.object({
+  ...endpointShape,
+  x: nonNegativeNumber,
+  y: nonNegativeNumber,
+  button: rawInputButton.optional()
+});
+
+const rawKeypressSchema = z.object({
+  ...endpointShape,
+  key: nonEmptyString.max(64)
+});
+
+const rawTypeTextSchema = z.object({
+  ...endpointShape,
+  text: z.string().min(1).max(1000)
+});
+
 function handlersWithDefaults(
   handlers: Partial<TradingViewMcpToolHandlers> | undefined
 ): TradingViewMcpToolHandlers {
@@ -181,7 +243,11 @@ function handlersWithDefaults(
     loadUniverseConfig: handlers?.loadUniverseConfig ?? loadUniverseConfig,
     chartOneSymbol: handlers?.chartOneSymbol ?? chartOneSymbol,
     captureCurrentChart: handlers?.captureCurrentChart ?? captureCurrentChart,
-    runChartbook: handlers?.runChartbook ?? runChartbook
+    runChartbook: handlers?.runChartbook ?? runChartbook,
+    runRawEvaluate: handlers?.runRawEvaluate ?? runRawEvaluate,
+    runRawClick: handlers?.runRawClick ?? runRawClick,
+    runRawKeypress: handlers?.runRawKeypress ?? runRawKeypress,
+    runRawTypeText: handlers?.runRawTypeText ?? runRawTypeText
   };
 }
 
@@ -305,6 +371,10 @@ function asToolData(value: unknown): ToolResultData {
 
 function guardrailedDescription(action: string): string {
   return `${action} Charting-only: no scanner/ranking behavior, no financial advice, and no broker/order actions.`;
+}
+
+function rawGuardrailedDescription(action: string): string {
+  return `${action} Experimental local TradingView raw control for the active chart target only. Requires ${RAW_AUTOMATION_ENV}=1. Charting-only: no scanner/ranking behavior, no financial advice, no broker/order actions, no unattended candidates, and no TradingView account/security automation.`;
 }
 
 async function resolveUniverse(
@@ -576,6 +646,131 @@ export function registerTradingViewMcpTools(
 
       return textToolResult(
         `Built chartbook ${result.sessionId}: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  if (!isRawAutomationEnabled(options.env)) {
+    return;
+  }
+
+  server.registerTool(
+    "tradingview_raw_evaluate",
+    {
+      title: "Raw Evaluate TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Evaluate one bounded JavaScript expression and return compact structured output."
+      ),
+      inputSchema: rawEvaluateSchema,
+      annotations: {
+        title: "Raw Evaluate TradingView Chart",
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawEvaluateOptions = {
+        expression: args.expression,
+        maxResultBytes:
+          args.maxResultBytes ?? DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawEvaluate(rawOptions);
+
+      return textToolResult(
+        `Raw evaluate: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_click",
+    {
+      title: "Raw Click TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Dispatch a coordinate mouse click against the active local TradingView chart target."
+      ),
+      inputSchema: rawClickSchema,
+      annotations: {
+        title: "Raw Click TradingView Chart",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawClickOptions = {
+        x: args.x,
+        y: args.y,
+        button: args.button ?? "left",
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawClick(rawOptions);
+
+      return textToolResult(
+        `Raw click: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_keypress",
+    {
+      title: "Raw Keypress TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Dispatch one keyboard keypress against the active local TradingView chart target."
+      ),
+      inputSchema: rawKeypressSchema,
+      annotations: {
+        title: "Raw Keypress TradingView Chart",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawKeypressOptions = {
+        key: args.key,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawKeypress(rawOptions);
+
+      return textToolResult(
+        `Raw keypress: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
+    "tradingview_raw_type_text",
+    {
+      title: "Raw Type Text TradingView Chart",
+      description: rawGuardrailedDescription(
+        "Insert bounded text against the active local TradingView chart target."
+      ),
+      inputSchema: rawTypeTextSchema,
+      annotations: {
+        title: "Raw Type Text TradingView Chart",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawTypeTextOptions = {
+        text: args.text,
+        ...endpointOptions(args)
+      };
+      const result = await handlers.runRawTypeText(rawOptions);
+
+      return textToolResult(
+        `Raw type text: ${result.ok ? "success" : "failed"}.`,
         asToolData(result)
       );
     }

@@ -7,6 +7,10 @@ import type {
   RunChartbookOptions
 } from "../src/chartbook/chartbook.js";
 import { runCli } from "../src/cli.js";
+import {
+  RAW_AUTOMATION_ENV,
+  type RawEvaluateOptions
+} from "../src/tradingview/raw-automation.js";
 import type { ChartOneSymbolOptions, ChartOneSymbolResult } from "../src/tradingview/chart-runner.js";
 import type {
   LaunchTradingViewDesktopOptions,
@@ -374,4 +378,166 @@ void test("CLI rejects unsupported chartbook profiles before loading config", as
   assert.equal(configLoaded, false);
   assert.equal(chartbookRan, false);
   assert.match(stderr.join(""), /Chart-analysis profile must be one of/);
+});
+
+void test("CLI raw commands are gated by the explicit raw automation env", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let rawCalled = false;
+
+  const exitCode = await runCli(
+    ["raw", "evaluate", "--expression", "document.title"],
+    {
+      stdout: captureStream(stdout),
+      stderr: captureStream(stderr)
+    },
+    {
+      env: {},
+      handlers: {
+        runRawEvaluate: () => {
+          rawCalled = true;
+          return Promise.resolve({
+            ok: true,
+            action: "evaluate",
+            endpoint: "http://127.0.0.1:9222",
+            executedAt: "2026-06-02T14:30:00.000Z",
+            warnings: []
+          });
+        }
+      }
+    }
+  );
+
+  assert.equal(exitCode, 2);
+  assert.equal(stdout.join(""), "");
+  assert.equal(rawCalled, false);
+  assert.match(stderr.join(""), /TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1/);
+});
+
+void test("CLI raw evaluate parses arguments and returns compact JSON when enabled", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let capturedOptions: RawEvaluateOptions | undefined;
+
+  const exitCode = await runCli(
+    [
+      "raw",
+      "evaluate",
+      "--expression",
+      "document.title",
+      "--max-result-bytes",
+      "128",
+      "--port",
+      "9223",
+      "--json"
+    ],
+    {
+      stdout: captureStream(stdout),
+      stderr: captureStream(stderr)
+    },
+    {
+      env: {
+        [RAW_AUTOMATION_ENV]: "1"
+      },
+      handlers: {
+        runRawEvaluate: (options) => {
+          capturedOptions = options;
+          return Promise.resolve({
+            ok: true,
+            action: "evaluate",
+            endpoint: "http://127.0.0.1:9223",
+            executedAt: "2026-06-02T14:30:00.000Z",
+            value: "NVDA Chart",
+            warnings: []
+          });
+        }
+      }
+    }
+  );
+
+  const parsed = JSON.parse(stdout.join("")) as Record<string, unknown>;
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr.join(""), "");
+  assert.equal(capturedOptions?.expression, "document.title");
+  assert.equal(capturedOptions?.port, 9223);
+  assert.equal(capturedOptions?.maxResultBytes, 128);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.action, "evaluate");
+  assert.equal(parsed.value, "NVDA Chart");
+});
+
+void test("CLI raw input commands parse click, keypress, and text payloads", async () => {
+  const calls: string[] = [];
+  const runOptions = {
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawClick: (options: { x: number; y: number; button?: string }) => {
+        calls.push(`click:${options.x},${options.y}:${options.button ?? "left"}`);
+        return Promise.resolve({
+          ok: true,
+          action: "click" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawKeypress: (options: { key: string }) => {
+        calls.push(`keypress:${options.key}`);
+        return Promise.resolve({
+          ok: true,
+          action: "keypress" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawTypeText: (options: { text: string }) => {
+        calls.push(`type-text:${options.text}`);
+        return Promise.resolve({
+          ok: true,
+          action: "type-text" as const,
+          endpoint: "http://127.0.0.1:9222",
+          executedAt: "2026-06-02T14:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  };
+
+  const clickCode = await runCli(
+    ["raw", "click", "--x", "10", "--y", "20", "--button", "right"],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+  const keyCode = await runCli(
+    ["raw", "keypress", "--key", "Escape"],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+  const textCode = await runCli(
+    ["raw", "type-text", "--text", "NASDAQ:NVDA"],
+    {
+      stdout: captureStream([]),
+      stderr: captureStream([])
+    },
+    runOptions
+  );
+
+  assert.equal(clickCode, 0);
+  assert.equal(keyCode, 0);
+  assert.equal(textCode, 0);
+  assert.deepEqual(calls, [
+    "click:10,20:right",
+    "keypress:Escape",
+    "type-text:NASDAQ:NVDA"
+  ]);
 });

@@ -44,6 +44,21 @@ import {
 } from "./tradingview/pine-drawing-runner.js";
 import { DEFAULT_PINE_DRAWING_STUDY_NAME } from "./tradingview/pine-drawings.js";
 import {
+  DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
+  RAW_AUTOMATION_ENV,
+  isRawAutomationEnabled,
+  runRawClick,
+  runRawEvaluate,
+  runRawKeypress,
+  runRawTypeText,
+  type RawAutomationResult,
+  type RawClickOptions,
+  type RawEvaluateOptions,
+  type RawInputButton,
+  type RawKeypressOptions,
+  type RawTypeTextOptions
+} from "./tradingview/raw-automation.js";
+import {
   DEFAULT_UNIVERSE_CONFIG_PATH,
   listUniverseGroups,
   loadUniverseConfig,
@@ -72,10 +87,15 @@ export interface CliHandlers {
   runChartbook: typeof runChartbook;
   launchTradingViewDesktop: typeof launchTradingViewDesktop;
   resolveTradingViewApp: typeof resolveTradingViewApp;
+  runRawEvaluate: typeof runRawEvaluate;
+  runRawClick: typeof runRawClick;
+  runRawKeypress: typeof runRawKeypress;
+  runRawTypeText: typeof runRawTypeText;
 }
 
 export interface RunCliOptions {
   handlers?: Partial<CliHandlers>;
+  env?: NodeJS.ProcessEnv;
 }
 
 interface CommonCliOptions {
@@ -94,6 +114,10 @@ const USAGE = `Usage:
   tradingview-mcp-cli chart-universe [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-charts] [--port 9222] [--json]
   tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--profile focus|breakout|squeeze|momentum] [--port 9222] [--json]
   tradingview-mcp-cli drawings [--study-name "TVMCP Objective Drawing Overlay"] [--port 9222] [--timeout-ms 2500] [--json] [--debug]
+  tradingview-mcp-cli raw evaluate --expression "document.title" [--max-result-bytes 4096] [--port 9222] [--json]
+  tradingview-mcp-cli raw click --x 100 --y 200 [--button left|middle|right] [--port 9222] [--json]
+  tradingview-mcp-cli raw keypress --key Escape [--port 9222] [--json]
+  tradingview-mcp-cli raw type-text --text "NASDAQ:NVDA" [--port 9222] [--json]
   tradingview-mcp-cli universe list [--config config/universe.sample.json] [--json]
   tradingview-mcp-cli universe resolve [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--json]
 
@@ -107,6 +131,7 @@ npm scripts:
   npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222
   npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
   npm run tv:drawings -- --port 9222 --json
+  TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- evaluate --expression "document.title" --port 9222 --json
   npm run tv:universe -- list
   npm run tv:universe -- resolve --group semis --tier core
 `;
@@ -123,7 +148,11 @@ function handlersWithDefaults(
     runChartbook: handlers?.runChartbook ?? runChartbook,
     launchTradingViewDesktop:
       handlers?.launchTradingViewDesktop ?? launchTradingViewDesktop,
-    resolveTradingViewApp: handlers?.resolveTradingViewApp ?? resolveTradingViewApp
+    resolveTradingViewApp: handlers?.resolveTradingViewApp ?? resolveTradingViewApp,
+    runRawEvaluate: handlers?.runRawEvaluate ?? runRawEvaluate,
+    runRawClick: handlers?.runRawClick ?? runRawClick,
+    runRawKeypress: handlers?.runRawKeypress ?? runRawKeypress,
+    runRawTypeText: handlers?.runRawTypeText ?? runRawTypeText
   };
 }
 
@@ -136,6 +165,23 @@ function parsePositiveInteger(value: string | undefined, label: string): number 
 
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error(`${label} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function parseNonNegativeNumber(
+  value: string | undefined,
+  label: string
+): number {
+  if (!value) {
+    throw new Error(`${label} is required.`);
+  }
+
+  const parsed = Number.parseFloat(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative number.`);
   }
 
   return parsed;
@@ -441,6 +487,50 @@ function formatPineDrawingExtractionResult(
   return `${lines.join("\n")}\n`;
 }
 
+function formatRawAutomationResult(result: RawAutomationResult): string {
+  const lines = [
+    `Status: ${result.ok ? "success" : "failed"}`,
+    `Action: ${result.action}`,
+    `Endpoint: ${result.endpoint}`,
+    `Executed at: ${result.executedAt}`
+  ];
+
+  if (result.target) {
+    lines.push(`Chart target: ${result.target.title} <${result.target.url}>`);
+  }
+
+  if ("value" in result) {
+    lines.push(`Value: ${JSON.stringify(result.value)}`);
+  }
+
+  if (result.error) {
+    lines.push(`Error: ${result.error}`);
+  }
+
+  if (result.warnings.length > 0) {
+    lines.push("Warnings:");
+    for (const warning of result.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+function rawGateError(): string {
+  return `Raw automation is disabled. Set ${RAW_AUTOMATION_ENV}=1 to run experimental local TradingView raw controls.`;
+}
+
+function parseRawButton(value: string | undefined): RawInputButton {
+  const button = value ?? "left";
+
+  if (button === "left" || button === "middle" || button === "right") {
+    return button;
+  }
+
+  throw new Error("--button must be left, middle, or right.");
+}
+
 function chartbookSelectionSummary(
   configPath: string,
   groupIds: string[] | undefined,
@@ -537,6 +627,18 @@ export async function runCli(
         debug: {
           type: "boolean"
         },
+        button: {
+          type: "string"
+        },
+        expression: {
+          type: "string"
+        },
+        key: {
+          type: "string"
+        },
+        "max-result-bytes": {
+          type: "string"
+        },
         "output-dir": {
           type: "string"
         },
@@ -566,10 +668,19 @@ export async function runCli(
         "study-name": {
           type: "string"
         },
+        text: {
+          type: "string"
+        },
         tier: {
           type: "string"
         },
         "timeout-ms": {
+          type: "string"
+        },
+        x: {
+          type: "string"
+        },
+        y: {
           type: "string"
         }
       }
@@ -864,6 +975,116 @@ export async function runCli(
       writeJson(streams.stdout, result);
     } else {
       streams.stdout.write(formatPineDrawingExtractionResult(result));
+    }
+
+    return result.ok ? 0 : 1;
+  }
+
+  if (command === "raw") {
+    if (!isRawAutomationEnabled(runOptions.env)) {
+      streams.stderr.write(`${rawGateError()}\n\n${USAGE}`);
+      return 2;
+    }
+
+    const subcommand = parsed.positionals[1];
+    let result: RawAutomationResult;
+
+    try {
+      if (subcommand === "evaluate") {
+        const expression = getStringOption(parsed.values, "expression");
+
+        if (!expression) {
+          throw new Error("--expression is required for raw evaluate.");
+        }
+
+        const rawOptions: RawEvaluateOptions = {
+          expression,
+          host: options.host,
+          port: options.port,
+          timeoutMs: options.timeoutMs
+        };
+
+        if (options.appPath) {
+          rawOptions.appPath = options.appPath;
+        }
+
+        const maxResultBytes = getStringOption(
+          parsed.values,
+          "max-result-bytes"
+        );
+        rawOptions.maxResultBytes = maxResultBytes
+          ? parsePositiveInteger(maxResultBytes, "--max-result-bytes")
+          : DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES;
+
+        result = await handlers.runRawEvaluate(rawOptions);
+      } else if (subcommand === "click") {
+        const rawOptions: RawClickOptions = {
+          x: parseNonNegativeNumber(getStringOption(parsed.values, "x"), "--x"),
+          y: parseNonNegativeNumber(getStringOption(parsed.values, "y"), "--y"),
+          button: parseRawButton(getStringOption(parsed.values, "button")),
+          host: options.host,
+          port: options.port,
+          timeoutMs: options.timeoutMs
+        };
+
+        if (options.appPath) {
+          rawOptions.appPath = options.appPath;
+        }
+
+        result = await handlers.runRawClick(rawOptions);
+      } else if (subcommand === "keypress") {
+        const key = getStringOption(parsed.values, "key");
+
+        if (!key) {
+          throw new Error("--key is required for raw keypress.");
+        }
+
+        const rawOptions: RawKeypressOptions = {
+          key,
+          host: options.host,
+          port: options.port,
+          timeoutMs: options.timeoutMs
+        };
+
+        if (options.appPath) {
+          rawOptions.appPath = options.appPath;
+        }
+
+        result = await handlers.runRawKeypress(rawOptions);
+      } else if (subcommand === "type-text") {
+        const text = getStringOption(parsed.values, "text");
+
+        if (!text) {
+          throw new Error("--text is required for raw type-text.");
+        }
+
+        const rawOptions: RawTypeTextOptions = {
+          text,
+          host: options.host,
+          port: options.port,
+          timeoutMs: options.timeoutMs
+        };
+
+        if (options.appPath) {
+          rawOptions.appPath = options.appPath;
+        }
+
+        result = await handlers.runRawTypeText(rawOptions);
+      } else {
+        throw new Error(
+          "Raw command must be evaluate, click, keypress, or type-text."
+        );
+      }
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      streams.stderr.write(`${detail}\n\n${USAGE}`);
+      return 2;
+    }
+
+    if (options.json) {
+      writeJson(streams.stdout, result);
+    } else {
+      streams.stdout.write(formatRawAutomationResult(result));
     }
 
     return result.ok ? 0 : 1;

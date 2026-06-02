@@ -35,6 +35,9 @@ The primary user is a local operator using Codex and TradingView Desktop on thei
   `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1`, namespaced as
   `tradingview_raw_*` or `tradingview_draw_*`, and scoped to the active local
   TradingView chart target.
+- The current raw automation slice exposes bounded evaluate, coordinate click,
+  keypress, and text insertion primitives through CLI and MCP only when that
+  gate is enabled.
 - TradingView Desktop integration starts with a local macOS launch command and CDP health check against the user's own desktop session.
 - Local universe configuration is the v1 source of truth for chart symbol lists; TradingView watchlists are not required for universe resolution.
 - Pine drawing overlays are tracked as repo source and manually installed into TradingView; the first required visible study name is `TVMCP Objective Drawing Overlay`.
