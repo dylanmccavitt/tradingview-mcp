@@ -28,6 +28,12 @@ export const DEFAULT_RAW_FIND_MAX_MATCHES = 10;
 export const RAW_FIND_MAX_MATCHES_LIMIT = 25;
 export const DEFAULT_RAW_SCROLL_AMOUNT = 600;
 export const RAW_SCROLL_MAX_AMOUNT = 3000;
+export const DEFAULT_RAW_CHART_CONTROL_MAX_RESULT_BYTES = 8192;
+export const RAW_SYMBOL_MAX_CHARS = 64;
+export const RAW_TIMEFRAME_MAX_CHARS = 32;
+export const RAW_CHART_TYPE_MAX_CHARS = 64;
+export const RAW_INDICATOR_NAME_MAX_CHARS = 120;
+export const RAW_ENTITY_ID_MAX_CHARS = 200;
 
 const RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS = [
   /\baccount\b/i,
@@ -74,7 +80,14 @@ export type RawAutomationAction =
   | "find-element"
   | "selector-click"
   | "selector-hover"
-  | "scroll";
+  | "scroll"
+  | "chart-state"
+  | "set-symbol"
+  | "set-timeframe"
+  | "set-chart-type"
+  | "set-visible-range"
+  | "add-indicator"
+  | "remove-entity";
 
 export interface RawElementSummary {
   index: number;
@@ -95,10 +108,32 @@ export interface RawElementSummary {
   };
 }
 
+export type RawChartTypeValue = string | number;
+
+export interface RawVisibleRange {
+  from: number;
+  to: number;
+}
+
+export interface RawChartStudySummary {
+  id: string;
+  name?: string;
+}
+
+export interface RawChartState {
+  symbol?: string;
+  timeframe?: string;
+  chartType?: RawChartTypeValue;
+  visibleRange?: RawVisibleRange;
+  studies: RawChartStudySummary[];
+  warnings: string[];
+}
+
 export interface RawTradingViewPageClient {
   evaluate(
     expression: string,
     options?: {
+      awaitPromise?: boolean;
       throwOnSideEffect?: boolean;
     }
   ): Promise<unknown>;
@@ -178,6 +213,32 @@ export interface RawScrollOptions extends RawAutomationBaseOptions {
   y?: number;
 }
 
+export type RawChartStateOptions = RawAutomationBaseOptions;
+
+export interface RawSetSymbolOptions extends RawAutomationBaseOptions {
+  symbol: string;
+}
+
+export interface RawSetTimeframeOptions extends RawAutomationBaseOptions {
+  timeframe: string;
+}
+
+export interface RawSetChartTypeOptions extends RawAutomationBaseOptions {
+  chartType: RawChartTypeValue;
+}
+
+export interface RawSetVisibleRangeOptions extends RawAutomationBaseOptions {
+  range: RawVisibleRange;
+}
+
+export interface RawAddIndicatorOptions extends RawAutomationBaseOptions {
+  name: string;
+}
+
+export interface RawRemoveEntityOptions extends RawAutomationBaseOptions {
+  entityId: string;
+}
+
 export interface RawAutomationResult {
   ok: boolean;
   action: RawAutomationAction;
@@ -243,6 +304,7 @@ function failureResult(
     error: string;
     warnings?: string[];
     target?: CdpTarget;
+    value?: unknown;
   }
 ): RawAutomationResult {
   const result: RawAutomationResult = {
@@ -256,6 +318,10 @@ function failureResult(
 
   if (options.target) {
     result.target = options.target;
+  }
+
+  if ("value" in options) {
+    result.value = options.value;
   }
 
   return result;
@@ -422,6 +488,109 @@ function invalidScrollMessage(options: RawScrollOptions): string | null {
   return null;
 }
 
+function invalidSymbolMessage(symbol: string): string | null {
+  const trimmed = symbol.trim();
+
+  if (trimmed.length === 0) {
+    return "Raw chart symbol is required.";
+  }
+
+  if (trimmed.length > RAW_SYMBOL_MAX_CHARS) {
+    return `Raw chart symbol must be ${RAW_SYMBOL_MAX_CHARS} characters or fewer.`;
+  }
+
+  if (!/^[A-Za-z0-9_.-]+:[A-Za-z0-9_.-]+$/.test(trimmed)) {
+    return "Raw chart symbol must be exchange-qualified, for example NASDAQ:NVDA.";
+  }
+
+  return null;
+}
+
+function invalidTimeframeMessage(timeframe: string): string | null {
+  const trimmed = timeframe.trim();
+
+  if (trimmed.length === 0) {
+    return "Raw chart timeframe is required.";
+  }
+
+  if (trimmed.length > RAW_TIMEFRAME_MAX_CHARS) {
+    return `Raw chart timeframe must be ${RAW_TIMEFRAME_MAX_CHARS} characters or fewer.`;
+  }
+
+  if (!/^[A-Za-z0-9]+$/.test(trimmed)) {
+    return "Raw chart timeframe must contain only letters and numbers.";
+  }
+
+  return null;
+}
+
+function invalidChartTypeMessage(chartType: RawChartTypeValue): string | null {
+  if (typeof chartType === "number") {
+    return Number.isInteger(chartType) && chartType >= 0 && chartType <= 100
+      ? null
+      : "Raw chart type number must be an integer from 0 through 100.";
+  }
+
+  const trimmed = chartType.trim();
+
+  if (trimmed.length === 0) {
+    return "Raw chart type is required.";
+  }
+
+  if (trimmed.length > RAW_CHART_TYPE_MAX_CHARS) {
+    return `Raw chart type must be ${RAW_CHART_TYPE_MAX_CHARS} characters or fewer.`;
+  }
+
+  return null;
+}
+
+function invalidRangeMessage(range: RawVisibleRange): string | null {
+  if (
+    !Number.isFinite(range.from) ||
+    !Number.isFinite(range.to) ||
+    !Number.isInteger(range.from) ||
+    !Number.isInteger(range.to) ||
+    range.from < 0 ||
+    range.to < 0
+  ) {
+    return "Raw visible range values must be non-negative Unix timestamp integers.";
+  }
+
+  if (range.from >= range.to) {
+    return "Raw visible range from must be earlier than to.";
+  }
+
+  return null;
+}
+
+function invalidIndicatorNameMessage(name: string): string | null {
+  const trimmed = name.trim();
+
+  if (trimmed.length === 0) {
+    return "Raw indicator name is required.";
+  }
+
+  if (trimmed.length > RAW_INDICATOR_NAME_MAX_CHARS) {
+    return `Raw indicator name must be ${RAW_INDICATOR_NAME_MAX_CHARS} characters or fewer.`;
+  }
+
+  return null;
+}
+
+function invalidEntityIdMessage(entityId: string): string | null {
+  const trimmed = entityId.trim();
+
+  if (trimmed.length === 0) {
+    return "Raw entity id is required.";
+  }
+
+  if (trimmed.length > RAW_ENTITY_ID_MAX_CHARS) {
+    return `Raw entity id must be ${RAW_ENTITY_ID_MAX_CHARS} characters or fewer.`;
+  }
+
+  return null;
+}
+
 function normalizedClickScopeText(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
@@ -496,6 +665,295 @@ function normalizeEvaluateResponse(value: unknown): unknown {
     type: response.result.type,
     description: response.result.description
   };
+}
+
+const RAW_CHART_CONTROL_EVALUATOR = String.raw`
+async (command, args) => {
+  const MAX_STUDIES = 50;
+  const MAX_TEXT = 160;
+  const root = globalThis;
+
+  function compactText(value) {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > MAX_TEXT ? trimmed.slice(0, MAX_TEXT) + "..." : trimmed;
+  }
+
+  function methodValue(target, names) {
+    for (const name of names) {
+      if (target && typeof target[name] === "function") {
+        try {
+          return target[name]();
+        } catch {
+          return undefined;
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function propertyValue(target, names) {
+    for (const name of names) {
+      const value = target?.[name];
+      if (typeof value !== "undefined" && typeof value !== "function") {
+        return value;
+      }
+    }
+    return undefined;
+  }
+
+  function normalizeRange(value) {
+    if (!value || typeof value !== "object") {
+      return undefined;
+    }
+    const from = Number(value.from);
+    const to = Number(value.to);
+    return Number.isFinite(from) && Number.isFinite(to)
+      ? { from: Math.trunc(from), to: Math.trunc(to) }
+      : undefined;
+  }
+
+  function valueFrom(entity, names) {
+    for (const name of names) {
+      const candidate = entity?.[name];
+      if (typeof candidate === "function") {
+        try {
+          const value = candidate.call(entity);
+          if (typeof value !== "undefined" && value !== null) {
+            return value;
+          }
+        } catch {
+          continue;
+        }
+      } else if (typeof candidate !== "undefined" && candidate !== null) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  function studySummary(entity) {
+    const id = compactText(String(valueFrom(entity, ["id", "entityId", "studyId", "paneEntityId"]) ?? ""));
+    if (!id) {
+      return undefined;
+    }
+    const nameValue = valueFrom(entity, ["name", "title", "description", "shortName"]);
+    const name = compactText(typeof nameValue === "string" ? nameValue : String(nameValue ?? ""));
+    return name ? { id, name } : { id };
+  }
+
+  function getStudies(chart, warnings) {
+    const rawStudies = methodValue(chart, ["getAllStudies", "getStudies"]);
+    if (!Array.isArray(rawStudies)) {
+      warnings.push("TradingView chart API did not expose visible study identifiers.");
+      return [];
+    }
+    const studies = rawStudies.map(studySummary).filter(Boolean).slice(0, MAX_STUDIES);
+    if (rawStudies.length > MAX_STUDIES) {
+      warnings.push("Study list truncated to " + MAX_STUDIES + " entries.");
+    }
+    return studies;
+  }
+
+  function findWidget() {
+    const direct = [
+      root.tvWidget,
+      root.widget,
+      root.tradingViewWidget,
+      root.TradingViewWidget,
+      root.__tvWidget
+    ];
+    for (const candidate of direct) {
+      if (candidate && typeof candidate.activeChart === "function") {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  function getChart() {
+    const widget = findWidget();
+    if (!widget) {
+      return { error: "TradingView chart API is not exposed on the active chart target." };
+    }
+    try {
+      const chart = widget.activeChart();
+      return chart ? { chart } : { error: "TradingView activeChart() returned no chart." };
+    } catch (error) {
+      return { error: "TradingView activeChart() failed: " + String(error?.message ?? error) };
+    }
+  }
+
+  function readState(chart) {
+    const warnings = [];
+    const state = {
+      studies: [],
+      warnings
+    };
+    const symbol = compactText(
+      methodValue(chart, ["symbol"]) ??
+        propertyValue(methodValue(chart, ["symbolExt"]), ["symbol", "full_name", "pro_name"])
+    );
+    if (symbol) {
+      state.symbol = symbol;
+    } else {
+      warnings.push("TradingView chart API did not expose the current symbol.");
+    }
+    const timeframe = compactText(methodValue(chart, ["resolution", "interval"]));
+    if (timeframe) {
+      state.timeframe = timeframe;
+    } else {
+      warnings.push("TradingView chart API did not expose the current timeframe.");
+    }
+    const chartType = methodValue(chart, ["chartType", "getChartType"]);
+    if (typeof chartType === "string" || typeof chartType === "number") {
+      state.chartType = chartType;
+    } else {
+      warnings.push("TradingView chart API did not expose the chart type.");
+    }
+    const visibleRange = normalizeRange(methodValue(chart, ["getVisibleRange", "visibleRange"]));
+    if (visibleRange) {
+      state.visibleRange = visibleRange;
+    } else {
+      warnings.push("TradingView chart API did not expose the visible range.");
+    }
+    state.studies = getStudies(chart, warnings);
+    return state;
+  }
+
+  function waitForCallback(invoke) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve(undefined);
+        }
+      }, 1500);
+      const done = (value) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          resolve(value);
+        }
+      };
+      try {
+        const returned = invoke(done);
+        if (returned && typeof returned.then === "function") {
+          returned.then(done, (error) => {
+            if (!settled) {
+              settled = true;
+              clearTimeout(timeout);
+              reject(error);
+            }
+          });
+        } else if (typeof returned !== "undefined") {
+          done(returned);
+        }
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+  }
+
+  async function awaitMaybe(value) {
+    if (value && typeof value.then === "function") {
+      return await value;
+    }
+    return value;
+  }
+
+  async function mutate(chart, before) {
+    if (command === "state") {
+      return { ok: true, before };
+    }
+    if (command === "setSymbol") {
+      if (typeof chart.setSymbol !== "function") {
+        return { ok: false, before, error: "TradingView chart API does not expose setSymbol()." };
+      }
+      await waitForCallback((done) =>
+        before.timeframe
+          ? chart.setSymbol(args.symbol, before.timeframe, done)
+          : chart.setSymbol(args.symbol, done)
+      );
+      return { ok: true, before };
+    }
+    if (command === "setTimeframe") {
+      if (typeof chart.setResolution !== "function") {
+        return { ok: false, before, error: "TradingView chart API does not expose setResolution()." };
+      }
+      await waitForCallback((done) => chart.setResolution(args.timeframe, done));
+      return { ok: true, before };
+    }
+    if (command === "setChartType") {
+      if (typeof chart.setChartType !== "function") {
+        return { ok: false, before, error: "TradingView chart API does not expose setChartType()." };
+      }
+      await awaitMaybe(chart.setChartType(args.chartType));
+      return { ok: true, before };
+    }
+    if (command === "setVisibleRange") {
+      if (typeof chart.setVisibleRange !== "function") {
+        return { ok: false, before, error: "TradingView chart API does not expose setVisibleRange()." };
+      }
+      await awaitMaybe(chart.setVisibleRange(args.range));
+      return { ok: true, before };
+    }
+    if (command === "addIndicator") {
+      if (typeof chart.createStudy !== "function") {
+        return { ok: false, before, error: "TradingView chart API does not expose createStudy()." };
+      }
+      const entityId = await awaitMaybe(chart.createStudy(args.name, false, false));
+      return { ok: true, before, entityId: typeof entityId === "string" ? entityId : undefined };
+    }
+    if (command === "removeEntity") {
+      if (typeof chart.removeEntity !== "function") {
+        return { ok: false, before, error: "TradingView chart API does not expose removeEntity()." };
+      }
+      await awaitMaybe(chart.removeEntity(args.entityId));
+      return { ok: true, before };
+    }
+    return { ok: false, before, error: "Unknown chart command: " + command };
+  }
+
+  const chartResult = getChart();
+  if (chartResult.error) {
+    return { ok: false, error: chartResult.error };
+  }
+
+  const before = readState(chartResult.chart);
+  const mutation = await mutate(chartResult.chart, before);
+  if (!mutation.ok) {
+    return mutation;
+  }
+  const after = command === "state" ? before : readState(chartResult.chart);
+  const value = { before, after };
+  if (mutation.entityId) {
+    value.entityId = mutation.entityId;
+  }
+  return { ok: true, value };
+}
+`;
+
+function chartControlExpression(
+  command: string,
+  args: Record<string, unknown>
+): string {
+  return `(${RAW_CHART_CONTROL_EVALUATOR})(${JSON.stringify(command)}, ${JSON.stringify(args)})`;
+}
+
+function isChartControlPayload(
+  value: unknown
+): value is {
+  ok: boolean;
+  value?: unknown;
+  before?: unknown;
+  error?: string;
+} {
+  return isRecord(value) && typeof value.ok === "boolean";
 }
 
 function boundedMaxMatches(maxMatches: number | undefined): number {
@@ -1150,7 +1608,10 @@ export async function runRawSelectorClick(
             strategy: options.strategy,
             value: options.value,
             matchIndex: options.matchIndex ?? 0
-          })
+          }),
+          {
+            throwOnSideEffect: false
+          }
         )
       );
 
@@ -1327,19 +1788,209 @@ export async function runRawScroll(
   }
 }
 
+async function runRawChartControl(
+  action: RawAutomationAction,
+  command: string,
+  args: Record<string, unknown>,
+  options: RawAutomationBaseOptions,
+  invalidMessage?: string | null
+): Promise<RawAutomationResult> {
+  const endpoint = endpointOptions(options);
+  const executedAt = (options.now ?? (() => new Date()))().toISOString();
+
+  if (invalidMessage) {
+    return failureResult(action, {
+      endpoint: formatCdpEndpoint(endpoint),
+      executedAt,
+      error: invalidMessage
+    });
+  }
+
+  const resolved = await resolveRawClient(action, options, executedAt);
+
+  if (!resolved.ok) {
+    return resolved.result;
+  }
+
+  try {
+    const rawValue = await resolved.client.evaluate(
+      chartControlExpression(command, args),
+      {
+        awaitPromise: true,
+        throwOnSideEffect: false
+      }
+    );
+    const payload = normalizeEvaluateResponse(rawValue);
+
+    if (!isChartControlPayload(payload)) {
+      return failureResult(action, {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: "TradingView chart control returned an unexpected response shape."
+      });
+    }
+
+    if (!payload.ok) {
+      return failureResult(action, {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: payload.error ?? "TradingView chart control failed.",
+        value: "before" in payload ? { before: payload.before } : undefined
+      });
+    }
+
+    if (
+      compactJsonByteLength(payload.value) >
+      DEFAULT_RAW_CHART_CONTROL_MAX_RESULT_BYTES
+    ) {
+      return failureResult(action, {
+        endpoint: resolved.endpoint,
+        executedAt,
+        target: resolved.target,
+        error: "Raw chart control result exceeded the compact output limit."
+      });
+    }
+
+    const targetFailure = await verifyRawTargetStillChart(action, options, {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target
+    });
+
+    if (targetFailure) {
+      return targetFailure;
+    }
+
+    return successResult(action, {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      value: payload.value
+    });
+  } catch (error: unknown) {
+    return failureResult(action, {
+      endpoint: resolved.endpoint,
+      executedAt,
+      target: resolved.target,
+      error: errorMessage(error)
+    });
+  } finally {
+    await resolved.client.close();
+  }
+}
+
+export function runRawChartState(
+  options: RawChartStateOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl("chart-state", "state", {}, options);
+}
+
+export function runRawSetSymbol(
+  options: RawSetSymbolOptions
+): Promise<RawAutomationResult> {
+  const symbol = options.symbol.trim();
+
+  return runRawChartControl(
+    "set-symbol",
+    "setSymbol",
+    { symbol },
+    options,
+    invalidSymbolMessage(options.symbol)
+  );
+}
+
+export function runRawSetTimeframe(
+  options: RawSetTimeframeOptions
+): Promise<RawAutomationResult> {
+  const timeframe = options.timeframe.trim();
+
+  return runRawChartControl(
+    "set-timeframe",
+    "setTimeframe",
+    { timeframe },
+    options,
+    invalidTimeframeMessage(options.timeframe)
+  );
+}
+
+export function runRawSetChartType(
+  options: RawSetChartTypeOptions
+): Promise<RawAutomationResult> {
+  const chartType =
+    typeof options.chartType === "string"
+      ? options.chartType.trim()
+      : options.chartType;
+
+  return runRawChartControl(
+    "set-chart-type",
+    "setChartType",
+    { chartType },
+    options,
+    invalidChartTypeMessage(options.chartType)
+  );
+}
+
+export function runRawSetVisibleRange(
+  options: RawSetVisibleRangeOptions
+): Promise<RawAutomationResult> {
+  return runRawChartControl(
+    "set-visible-range",
+    "setVisibleRange",
+    {
+      range: {
+        from: options.range.from,
+        to: options.range.to
+      }
+    },
+    options,
+    invalidRangeMessage(options.range)
+  );
+}
+
+export function runRawAddIndicator(
+  options: RawAddIndicatorOptions
+): Promise<RawAutomationResult> {
+  const name = options.name.trim();
+
+  return runRawChartControl(
+    "add-indicator",
+    "addIndicator",
+    { name },
+    options,
+    invalidIndicatorNameMessage(options.name)
+  );
+}
+
+export function runRawRemoveEntity(
+  options: RawRemoveEntityOptions
+): Promise<RawAutomationResult> {
+  const entityId = options.entityId.trim();
+
+  return runRawChartControl(
+    "remove-entity",
+    "removeEntity",
+    { entityId },
+    options,
+    invalidEntityIdMessage(options.entityId)
+  );
+}
+
 export class LiveRawTradingViewPageClient implements RawTradingViewPageClient {
   constructor(readonly client: CdpClient) {}
 
   async evaluate(
     expression: string,
     options?: {
+      awaitPromise?: boolean;
       throwOnSideEffect?: boolean;
     }
   ): Promise<unknown> {
     return this.client.send("Runtime.evaluate", {
       expression,
       returnByValue: true,
-      awaitPromise: false,
+      awaitPromise: options?.awaitPromise ?? false,
       userGesture: false,
       throwOnSideEffect: options?.throwOnSideEffect ?? true
     });

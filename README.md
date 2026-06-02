@@ -238,7 +238,12 @@ will not run without an active local `tradingview.com/chart` target. Raw
 evaluate returns compact structured output by default and rejects oversized
 expressions/results. Raw input primitives dispatch coordinate clicks, one
 keypress, bounded text insertion, visible element discovery, selector-based
-click/hover, or bounded scroll only against the active chart target.
+click/hover, or bounded scroll only against the active chart target. The MCP
+raw surface also exposes direct chart state/control tools for reading compact
+current chart state, setting symbol/timeframe/chart type/visible range, adding
+a named indicator, and removing a chart entity by id when TradingView exposes
+the required chart API. Those tools return before/after state or an explicit
+API-unavailable failure.
 
 Raw automation remains experimental local chart control. It must not operate on
 arbitrary browser pages, broker/order pages, TradingView account or security
@@ -295,6 +300,13 @@ browser controls. When the server process is started with
 - `tradingview_raw_selector_click`
 - `tradingview_raw_selector_hover`
 - `tradingview_raw_scroll`
+- `tradingview_raw_chart_state`
+- `tradingview_raw_set_symbol`
+- `tradingview_raw_set_timeframe`
+- `tradingview_raw_set_chart_type`
+- `tradingview_raw_set_visible_range`
+- `tradingview_raw_add_indicator`
+- `tradingview_raw_remove_entity`
 - `tradingview_draw_*` for later native drawing primitives behind the same gate
 
 These raw tools are experimental, scoped only to the active local TradingView

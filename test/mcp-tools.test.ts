@@ -435,6 +435,215 @@ void test("raw MCP evaluate and input tools call injected handlers when enabled"
   }
 });
 
+void test("raw MCP chart control tools call injected handlers when enabled", async () => {
+  const calls: string[] = [];
+  const chartStateValue = {
+    before: {
+      symbol: "NASDAQ:NVDA",
+      timeframe: "65",
+      chartType: "candles",
+      visibleRange: {
+        from: 1_780_000_000,
+        to: 1_780_086_400
+      },
+      studies: [
+        {
+          id: "study-1",
+          name: "Volume"
+        }
+      ],
+      warnings: []
+    },
+    after: {
+      symbol: "NASDAQ:AMD",
+      timeframe: "1D",
+      chartType: "line",
+      visibleRange: {
+        from: 1_780_100_000,
+        to: 1_780_200_000
+      },
+      studies: [],
+      warnings: []
+    }
+  };
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawChartState: (options) => {
+        calls.push(`state:${options.port ?? 0}`);
+        return Promise.resolve({
+          ok: true,
+          action: "chart-state",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: chartStateValue,
+          warnings: []
+        });
+      },
+      runRawSetSymbol: (options) => {
+        calls.push(`set-symbol:${options.symbol}`);
+        return Promise.resolve({
+          ok: true,
+          action: "set-symbol",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: chartStateValue,
+          warnings: []
+        });
+      },
+      runRawSetTimeframe: (options) => {
+        calls.push(`set-timeframe:${options.timeframe}`);
+        return Promise.resolve({
+          ok: true,
+          action: "set-timeframe",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: chartStateValue,
+          warnings: []
+        });
+      },
+      runRawSetChartType: (options) => {
+        calls.push(`set-chart-type:${options.chartType}`);
+        return Promise.resolve({
+          ok: true,
+          action: "set-chart-type",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: chartStateValue,
+          warnings: []
+        });
+      },
+      runRawSetVisibleRange: (options) => {
+        calls.push(`set-visible-range:${options.range.from}-${options.range.to}`);
+        return Promise.resolve({
+          ok: true,
+          action: "set-visible-range",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: chartStateValue,
+          warnings: []
+        });
+      },
+      runRawAddIndicator: (options) => {
+        calls.push(`add-indicator:${options.name}`);
+        return Promise.resolve({
+          ok: true,
+          action: "add-indicator",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: {
+            ...chartStateValue,
+            entityId: "study-2"
+          },
+          warnings: []
+        });
+      },
+      runRawRemoveEntity: (options) => {
+        calls.push(`remove-entity:${options.entityId}`);
+        return Promise.resolve({
+          ok: true,
+          action: "remove-entity",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          value: chartStateValue,
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const state = await client.callTool({
+      name: "tradingview_raw_chart_state",
+      arguments: {
+        port: 9223
+      }
+    });
+    const setSymbol = await client.callTool({
+      name: "tradingview_raw_set_symbol",
+      arguments: {
+        symbol: "NASDAQ:AMD"
+      }
+    });
+    const setTimeframe = await client.callTool({
+      name: "tradingview_raw_set_timeframe",
+      arguments: {
+        timeframe: "1D"
+      }
+    });
+    const setChartType = await client.callTool({
+      name: "tradingview_raw_set_chart_type",
+      arguments: {
+        chartType: "line"
+      }
+    });
+    const setVisibleRange = await client.callTool({
+      name: "tradingview_raw_set_visible_range",
+      arguments: {
+        from: 1_780_100_000,
+        to: 1_780_200_000
+      }
+    });
+    const addIndicator = await client.callTool({
+      name: "tradingview_raw_add_indicator",
+      arguments: {
+        name: "Relative Strength Index"
+      }
+    });
+    const removeEntity = await client.callTool({
+      name: "tradingview_raw_remove_entity",
+      arguments: {
+        entityId: "study-2"
+      }
+    });
+
+    assert.equal(callResult(state).structuredContent?.action, "chart-state");
+    assert.equal(callResult(setSymbol).structuredContent?.action, "set-symbol");
+    assert.equal(
+      callResult(setTimeframe).structuredContent?.action,
+      "set-timeframe"
+    );
+    assert.equal(
+      callResult(setChartType).structuredContent?.action,
+      "set-chart-type"
+    );
+    assert.equal(
+      callResult(setVisibleRange).structuredContent?.action,
+      "set-visible-range"
+    );
+    assert.equal(
+      callResult(addIndicator).structuredContent?.action,
+      "add-indicator"
+    );
+    assert.equal(
+      callResult(addIndicator).structuredContent?.value &&
+        (
+          callResult(addIndicator).structuredContent?.value as {
+            entityId?: string;
+          }
+        ).entityId,
+      "study-2"
+    );
+    assert.equal(
+      callResult(removeEntity).structuredContent?.action,
+      "remove-entity"
+    );
+    assert.deepEqual(calls, [
+      "state:9223",
+      "set-symbol:NASDAQ:AMD",
+      "set-timeframe:1D",
+      "set-chart-type:line",
+      "set-visible-range:1780100000-1780200000",
+      "add-indicator:Relative Strength Index",
+      "remove-entity:study-2"
+    ]);
+  } finally {
+    await close();
+  }
+});
+
 void test("profile-aware MCP tools expose accepted review profile schema", async () => {
   const { client, close } = await connectClient();
 
@@ -551,6 +760,61 @@ void test("tool input validation rejects invalid chart requests before handlers 
     assert.match(contentText(badTier), /Input validation error/i);
     assert.equal(callResult(badProfile).isError, true);
     assert.match(contentText(badProfile), /Input validation error/i);
+  } finally {
+    await close();
+  }
+});
+
+void test("raw chart-control validation rejects invalid MCP requests before handlers run", async () => {
+  let called = false;
+  const { client, close } = await connectClient({
+    env: {
+      [RAW_AUTOMATION_ENV]: "1"
+    },
+    handlers: {
+      runRawSetSymbol: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "set-symbol",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawSetVisibleRange: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "set-visible-range",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T15:30:00.000Z",
+          warnings: []
+        });
+      }
+    }
+  });
+
+  try {
+    const badSymbol = await client.callTool({
+      name: "tradingview_raw_set_symbol",
+      arguments: {
+        symbol: "NVDA"
+      }
+    });
+    const badRange = await client.callTool({
+      name: "tradingview_raw_set_visible_range",
+      arguments: {
+        from: 20,
+        to: 10
+      }
+    });
+
+    assert.equal(called, false);
+    assert.equal(callResult(badSymbol).isError, true);
+    assert.match(contentText(badSymbol), /Input validation error/i);
+    assert.equal(callResult(badRange).isError, true);
+    assert.match(contentText(badRange), /Input validation error/i);
   } finally {
     await close();
   }

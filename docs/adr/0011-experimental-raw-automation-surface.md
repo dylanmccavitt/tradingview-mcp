@@ -76,5 +76,9 @@ issues must port reference behavior in small slices.
   `tradingview_raw_selector_click`, `tradingview_raw_selector_hover`, and
   `tradingview_raw_scroll` as gated primitives for the active chart target
   only.
+- The direct chart-control slice adds MCP-only raw tools for compact chart
+  state, set symbol, set timeframe, set chart type, set visible range, add
+  indicator, and remove entity by id when TradingView exposes the required
+  chart API.
 - Future native drawing, chart manipulation, Pine editor, data extraction, and
   quant macro issues should build behind this boundary.
