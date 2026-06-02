@@ -9,6 +9,7 @@ import {
   type ChartbookResult,
   type RunChartbookOptions
 } from "../chartbook/chartbook.js";
+import { loadQuantScanHandoffInput } from "../chartbook/quant-scan-handoff.js";
 import {
   captureCurrentChart,
   type CaptureCurrentChartOptions,
@@ -515,6 +516,11 @@ const chartbookSchema = z.object({
   outputDir: nonEmptyString.optional(),
   sessionId: nonEmptyString.optional(),
   preset: nonEmptyString.optional(),
+  quantScanHandoffPath: nonEmptyString
+    .optional()
+    .describe(
+      "Optional Quant Scan setup-scan handoff path: run directory, scan.json, or chartbook.universe.local.json. Charts explicit candidates in handoff order only."
+    ),
   macroMetadata: macroMetadataSchema
 });
 
@@ -1557,19 +1563,29 @@ export function registerTradingViewMcpTools(
       }
     },
     async (args) => {
-      const { configPath, symbols } = await resolveUniverse(handlers, args);
+      const handoff = args.quantScanHandoffPath
+        ? await loadQuantScanHandoffInput(args.quantScanHandoffPath)
+        : undefined;
+      const universe = handoff ? undefined : await resolveUniverse(handlers, args);
       const chartbookOptions: RunChartbookOptions = {
-        symbols,
+        symbols: handoff?.symbols ?? universe?.symbols ?? [],
         ...endpointOptions(args),
         ...chartOutputOptions(args),
         preset: args.preset ?? DEFAULT_CHARTBOOK_PRESET,
-        selection: chartbookSelectionSummary(configPath, args),
+        selection:
+          handoff?.selection ??
+          chartbookSelectionSummary(
+            universe?.configPath ?? DEFAULT_UNIVERSE_CONFIG_PATH,
+            args
+          ),
         studyName: args.studyName ?? DEFAULT_PINE_DRAWING_STUDY_NAME,
         debug: args.debug ?? false
       };
 
       if (args.profile) {
         chartbookOptions.profile = args.profile;
+      } else if (handoff?.profile) {
+        chartbookOptions.profile = handoff.profile;
       }
 
       if (args.sessionId) {

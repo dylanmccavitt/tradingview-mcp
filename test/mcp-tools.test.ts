@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -2358,5 +2361,163 @@ void test("chartbook tool passes profile and ordered symbols without rank fields
     );
   } finally {
     await close();
+  }
+});
+
+void test("chartbook tool accepts Quant Scan handoff path and preserves explicit order", async () => {
+  const runDir = await mkdtemp(join(tmpdir(), "tvmcp-mcp-quant-scan-"));
+  let requestedProfile = "";
+  let requestedSymbols: string[] = [];
+  let requestedRanks: Array<number | undefined> = [];
+  let requestedSelection: unknown;
+
+  await writeFile(
+    join(runDir, "chartbook.universe.local.json"),
+    `${JSON.stringify({
+      version: 1,
+      groups: [
+        {
+          id: "scan-candidates",
+          label: "Quant Scan Candidates",
+          tags: ["quant-scan"],
+          core: [
+            {
+              symbol: "NASDAQ:AMD",
+              alias: "AMD",
+              tags: ["squeeze"]
+            },
+            {
+              symbol: "NASDAQ:NVDA",
+              alias: "NVDA",
+              tags: ["momentum"]
+            }
+          ],
+          extended: [
+            {
+              symbol: "NASDAQ:AMD",
+              alias: "AMD",
+              tags: ["squeeze"]
+            },
+            {
+              symbol: "NASDAQ:NVDA",
+              alias: "NVDA",
+              tags: ["momentum"]
+            }
+          ]
+        }
+      ]
+    })}\n`
+  );
+  await writeFile(
+    join(runDir, "scan.json"),
+    `${JSON.stringify({
+      metadata: {
+        run_id: "setup-scan-mcp",
+        artifact_paths: {
+          chartbook_universe_local_json: join(
+            runDir,
+            "chartbook.universe.local.json"
+          )
+        }
+      },
+      chartbook: {
+        status: "ready",
+        group_id: "scan-candidates",
+        tier: "core",
+        profile: "squeeze",
+        selected_symbols: ["NASDAQ:AMD", "NASDAQ:NVDA"]
+      },
+      selected_candidates: [
+        {
+          tradingview_metadata: {
+            symbol: "NASDAQ:AMD",
+            alias: "AMD"
+          },
+          matching_lanes: ["squeeze"],
+          primary_lane: "squeeze",
+          trigger: "AMD trigger",
+          invalidation: "AMD invalidation",
+          warnings: [],
+          score_breakdown: {
+            primary_score: 88
+          }
+        },
+        {
+          tradingview_metadata: {
+            symbol: "NASDAQ:NVDA",
+            alias: "NVDA"
+          },
+          matching_lanes: ["momentum"],
+          primary_lane: "momentum",
+          trigger: "NVDA trigger",
+          invalidation: "NVDA invalidation",
+          warnings: [],
+          score_breakdown: {
+            primary_score: 91
+          }
+        }
+      ]
+    })}\n`
+  );
+
+  const { client, close } = await connectClient({
+    handlers: {
+      loadUniverseConfig: () => {
+        throw new Error("local universe config should not load");
+      },
+      runChartbook: (options) => {
+        requestedProfile = options.profile ?? "";
+        requestedSymbols = options.symbols.map((symbol) => symbol.symbol);
+        requestedRanks = options.symbols.map(
+          (symbol) => symbol.quantScan?.scanRank
+        );
+        requestedSelection = options.selection;
+        return Promise.resolve({
+          ok: true,
+          schemaVersion: 2,
+          sessionId: options.sessionId ?? "setup-scan-mcp",
+          capturedAt: "2026-06-01T17:30:00.000Z",
+          preset: options.preset ?? "levels",
+          profile: options.profile ?? "focus",
+          sessionDirectory: "/tmp/chartbook/setup-scan-mcp",
+          indexPath: "/tmp/chartbook/setup-scan-mcp/index.md",
+          indexHtmlPath: "/tmp/chartbook/setup-scan-mcp/index.html",
+          endpoint: "http://127.0.0.1:9223",
+          ...(options.selection
+            ? {
+                selection: options.selection
+              }
+            : {}),
+          symbols: []
+        });
+      }
+    }
+  });
+
+  try {
+    const result = await client.callTool({
+      name: "tradingview_build_chartbook",
+      arguments: {
+        quantScanHandoffPath: join(runDir, "scan.json"),
+        port: 9223
+      }
+    });
+    const typedResult = callResult(result);
+
+    assert.equal(typedResult.isError, undefined);
+    assert.equal(requestedProfile, "squeeze");
+    assert.deepEqual(requestedSymbols, ["NASDAQ:AMD", "NASDAQ:NVDA"]);
+    assert.deepEqual(requestedRanks, [1, 2]);
+    assert.deepEqual(requestedSelection, {
+      configPath: join(runDir, "chartbook.universe.local.json"),
+      groups: ["scan-candidates"],
+      tier: "core"
+    });
+  } finally {
+    await close();
+    await rm(runDir, {
+      recursive: true,
+      force: true
+    });
   }
 });

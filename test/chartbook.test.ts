@@ -339,6 +339,76 @@ void test("chartbook planning builds deterministic session and symbol artifact p
   );
 });
 
+void test("chartbook artifacts preserve Quant Scan handoff metadata", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "tvmcp-chartbook-"));
+  const fakeChartClient = new FakeChartPageClient();
+  const fakeDrawingClient = new FakePineDrawingPageClient(fakeChartClient);
+  const quantScanSymbol = {
+    ...nvdaSymbol,
+    quantScan: {
+      runId: "setup-scan-fixture",
+      scanRank: 2,
+      setupLane: "momentum",
+      matchingLanes: ["squeeze", "momentum"],
+      score: 91.5,
+      trigger: "break above 186.00",
+      invalidation: "close below 178.00",
+      warnings: ["watch extended move"],
+      sourceArtifactPaths: {
+        runDir: "/tmp/setup-scan-fixture",
+        scanJson: "/tmp/setup-scan-fixture/scan.json",
+        chartbookUniverseLocalJson:
+          "/tmp/setup-scan-fixture/chartbook.universe.local.json",
+        chartbookCommandTxt: "/tmp/setup-scan-fixture/chartbook-command.txt"
+      }
+    }
+  };
+
+  try {
+    const result = await runChartbook({
+      symbols: [quantScanSymbol],
+      outputRoot,
+      sessionId: "quant-scan-session",
+      checkHealth: () => Promise.resolve(healthyResult),
+      chartClientFactory: () => Promise.resolve(fakeChartClient),
+      drawingClientFactory: () => Promise.resolve(fakeDrawingClient),
+      now: () => new Date("2026-06-01T17:30:00.000Z")
+    });
+
+    const symbolDirectory = join(outputRoot, "quant-scan-session", "NASDAQ-NVDA");
+    const weekly = parseLevelsArtifact(
+      await readFile(
+        join(symbolDirectory, "NASDAQ-NVDA-weekly-levels.json"),
+        "utf8"
+      )
+    );
+    const notes = await readFile(join(symbolDirectory, "notes.md"), "utf8");
+    const dashboard = await readFile(
+      join(outputRoot, "quant-scan-session", "index.html"),
+      "utf8"
+    );
+
+    assert.equal(result.symbols[0]?.quantScan?.scanRank, 2);
+    assert.equal(weekly.symbol.quantScan?.runId, "setup-scan-fixture");
+    assert.equal(weekly.symbol.quantScan?.setupLane, "momentum");
+    assert.equal(weekly.symbol.quantScan?.score, 91.5);
+    assert.equal(
+      weekly.symbol.quantScan?.sourceArtifactPaths.chartbookUniverseLocalJson,
+      "/tmp/setup-scan-fixture/chartbook.universe.local.json"
+    );
+    assert.match(notes, /- Quant Scan:/);
+    assert.match(notes, /- Setup lane: `momentum`/);
+    assert.match(notes, /- Trigger: break above 186\.00/);
+    assert.match(dashboard, /Quant Scan Handoff/);
+    assert.match(dashboard, /Lane<\/strong>momentum/);
+  } finally {
+    await rm(outputRoot, {
+      recursive: true,
+      force: true
+    });
+  }
+});
+
 void test("chartbook run writes screenshots, levels JSON, notes, index, and partial failures", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "tvmcp-chartbook-"));
   const fakeChartClient = new FakeChartPageClient(new Set(["daily"]));

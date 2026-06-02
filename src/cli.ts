@@ -13,6 +13,10 @@ import {
   type RunChartbookOptions
 } from "./chartbook/chartbook.js";
 import {
+  loadQuantScanHandoffInput,
+  QuantScanHandoffError
+} from "./chartbook/quant-scan-handoff.js";
+import {
   chartOneSymbol,
   type ChartOneSymbolOptions,
   type ChartOneSymbolResult
@@ -131,7 +135,7 @@ const USAGE = `Usage:
   tradingview-mcp-cli launch-command [--port 9222] [--app /Applications/TradingView.app]
   tradingview-mcp-cli chart --symbol NASDAQ:NVDA [--output-dir artifacts/tradingview-charts] [--port 9222] [--timeout-ms 2500] [--render-timeout-ms 15000] [--json]
   tradingview-mcp-cli chart-universe [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-charts] [--port 9222] [--json]
-  tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--profile focus|breakout|squeeze|momentum] [--port 9222] [--json]
+  tradingview-mcp-cli chartbook [--group semis,ai-software] [--tier core|extended|all] [--config config/universe.sample.json] [--quant-scan-handoff /path/to/scan.json|chartbook.universe.local.json|run-dir] [--output-dir artifacts/tradingview-chartbooks] [--session 20260601T133000Z] [--preset levels] [--profile focus|breakout|squeeze|momentum] [--port 9222] [--json]
   tradingview-mcp-cli drawings [--study-name "TVMCP Objective Drawing Overlay"] [--port 9222] [--timeout-ms 2500] [--json] [--debug]
   tradingview-mcp-cli raw evaluate --expression "document.title" [--max-result-bytes 4096] [--port 9222] [--json]
   tradingview-mcp-cli raw click --x 100 --y 200 [--button left|middle|right] [--port 9222] [--json]
@@ -152,6 +156,7 @@ npm scripts:
   npm run tv:chart-universe -- --group semis --tier core --port 9222
   npm run tv:chartbook -- --group semis --tier core --port 9222
   npm run tv:chartbook -- --group semis --tier core --profile breakout --port 9222
+  npm run tv:chartbook -- --quant-scan-handoff /tmp/setup-scan-run/scan.json --port 9222
   npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
   npm run tv:drawings -- --port 9222 --json
   TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1 npm run tv:raw -- evaluate --expression "document.title" --port 9222 --json
@@ -801,6 +806,9 @@ export async function runCli(
         profile: {
           type: "string"
         },
+        "quant-scan-handoff": {
+          type: "string"
+        },
         session: {
           type: "string"
         },
@@ -984,49 +992,68 @@ export async function runCli(
   if (command === "chartbook") {
     const configPath =
       getStringOption(parsed.values, "config") ?? DEFAULT_UNIVERSE_CONFIG_PATH;
+    const quantScanHandoffPath = getStringOption(
+      parsed.values,
+      "quant-scan-handoff"
+    );
+    const profileOption = getStringOption(parsed.values, "profile");
 
     let groupIds: string[] | undefined;
     let tier: UniverseSelectionTier;
-    let profile: ReturnType<typeof parseChartAnalysisProfile>;
+    let profile: ReturnType<typeof parseChartAnalysisProfile> | undefined;
 
     try {
       groupIds = parseGroupSelection(getStringOption(parsed.values, "group"));
       tier = parseUniverseTier(getStringOption(parsed.values, "tier"));
-      profile = parseChartAnalysisProfile(
-        getStringOption(parsed.values, "profile")
-      );
+      profile = profileOption ? parseChartAnalysisProfile(profileOption) : undefined;
     } catch (error: unknown) {
       const detail = error instanceof Error ? error.message : String(error);
       streams.stderr.write(`${detail}\n\n${USAGE}`);
       return 2;
     }
 
-    let config: UniverseConfig;
-
-    try {
-      config = await handlers.loadUniverseConfig(configPath);
-    } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : String(error);
-      streams.stderr.write(`${detail}\n`);
-      return error instanceof UniverseConfigError ? 2 : 1;
-    }
-
     let symbols: ResolvedUniverseSymbol[];
+    let selection: RunChartbookOptions["selection"];
+    let handoffProfile: ReturnType<typeof parseChartAnalysisProfile> | undefined;
 
-    try {
-      const selectionOptions: ResolveUniverseSelectionOptions = {
-        tier
-      };
+    if (quantScanHandoffPath) {
+      try {
+        const handoff = await loadQuantScanHandoffInput(quantScanHandoffPath);
+        symbols = handoff.symbols;
+        selection = handoff.selection;
+        handoffProfile = handoff.profile;
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        streams.stderr.write(`${detail}\n`);
+        return error instanceof QuantScanHandoffError ? 2 : 1;
+      }
+    } else {
+      let config: UniverseConfig;
 
-      if (groupIds) {
-        selectionOptions.groupIds = groupIds;
+      try {
+        config = await handlers.loadUniverseConfig(configPath);
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        streams.stderr.write(`${detail}\n`);
+        return error instanceof UniverseConfigError ? 2 : 1;
       }
 
-      symbols = resolveUniverseSelection(config, selectionOptions);
-    } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : String(error);
-      streams.stderr.write(`${detail}\n`);
-      return error instanceof UniverseConfigError ? 2 : 1;
+      try {
+        const selectionOptions: ResolveUniverseSelectionOptions = {
+          tier
+        };
+
+        if (groupIds) {
+          selectionOptions.groupIds = groupIds;
+        }
+
+        symbols = resolveUniverseSelection(config, selectionOptions);
+        selection = chartbookSelectionSummary(configPath, groupIds, tier);
+      } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error);
+        streams.stderr.write(`${detail}\n`);
+        return error instanceof UniverseConfigError ? 2 : 1;
+      }
     }
 
     let chartbookOptions: RunChartbookOptions;
@@ -1038,8 +1065,8 @@ export async function runCli(
         port: options.port,
         timeoutMs: options.timeoutMs,
         preset: getStringOption(parsed.values, "preset") ?? DEFAULT_CHARTBOOK_PRESET,
-        profile,
-        selection: chartbookSelectionSummary(configPath, groupIds, tier),
+        profile: profile ?? handoffProfile ?? parseChartAnalysisProfile(undefined),
+        selection,
         debug: getBooleanOption(parsed.values, "debug")
       };
     } catch (error: unknown) {

@@ -276,9 +276,11 @@ The repo does not inject Pine into TradingView. Manual install and visual inspec
 
 The chartbook runner uses the existing TradingView Desktop health check, chart page client, and Pine drawing page client. For each symbol/timeframe, it navigates the active chart target, waits for render, captures a screenshot, reads the objective overlay payload, writes compact structured drawing JSON with chart facts, and writes a per-symbol `notes.md` page with screenshot embeds, extraction warnings, and a profile-aware human review checklist. It writes a session `index.md` and `index.html` after the run. The HTML dashboard is the primary local review surface, showing profile/preset metadata, per-symbol warnings, generated Codex Analysis briefs from extracted facts, breakout/focus/squeeze/momentum review panels, screenshots, links to JSON/Markdown artifacts, and local manual-note fields.
 
+`src/chartbook/quant-scan-handoff.ts` accepts Quant Scan setup-scan handoff input from a run directory, `scan.json`, or `chartbook.universe.local.json`. It charts only the explicit handoff candidates in Quant Scan order and carries setup metadata into chartbook artifacts when `scan.json` is present: scan run id, scan order, setup lane, matching lanes, score, trigger, invalidation, warnings, and source artifact paths. TradingView MCP does not scan, rank, or generate candidates from this metadata; Quant Scan remains the ranking source.
+
 Partial failures are recorded in-place. A failed timeframe still gets a matching `*-levels.json` with the screenshot/extraction error when the symbol directory can be written, and later timeframes/symbols continue. Existing successful captures are not deleted.
 
-`src/cli.ts` exposes this as `chartbook`, with universe selection options plus `--session`, `--output-dir`, `--preset`, `--profile`, `--study-name`, and CDP/render timing options.
+`src/cli.ts` exposes this as `chartbook`, with universe selection options, `--quant-scan-handoff`, `--session`, `--output-dir`, `--preset`, `--profile`, `--study-name`, and CDP/render timing options.
 
 ### Tests
 

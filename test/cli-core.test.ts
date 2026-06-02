@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Writable } from "node:stream";
 import test from "node:test";
 
@@ -349,6 +352,155 @@ void test("CLI parses chartbook profile and preserves selected universe order", 
   assert.match(output, /Status: success/);
   assert.match(output, /Profile: momentum/);
   assert.doesNotMatch(output, /score|rank|recommend/i);
+});
+
+void test("CLI chartbook accepts Quant Scan handoff input without loading universe config", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const runDir = await mkdtemp(join(tmpdir(), "tvmcp-cli-quant-scan-"));
+  let configLoaded = false;
+  let capturedOptions: RunChartbookOptions | undefined;
+
+  await writeFile(
+    join(runDir, "chartbook.universe.local.json"),
+    `${JSON.stringify({
+      version: 1,
+      groups: [
+        {
+          id: "scan-candidates",
+          label: "Quant Scan Candidates",
+          tags: ["quant-scan"],
+          core: [
+            {
+              symbol: "NASDAQ:AMD",
+              alias: "AMD",
+              tags: ["squeeze"]
+            },
+            {
+              symbol: "NASDAQ:NVDA",
+              alias: "NVDA",
+              tags: ["momentum"]
+            }
+          ],
+          extended: [
+            {
+              symbol: "NASDAQ:AMD",
+              alias: "AMD",
+              tags: ["squeeze"]
+            },
+            {
+              symbol: "NASDAQ:NVDA",
+              alias: "NVDA",
+              tags: ["momentum"]
+            }
+          ]
+        }
+      ]
+    })}\n`
+  );
+  await writeFile(
+    join(runDir, "scan.json"),
+    `${JSON.stringify({
+      metadata: {
+        run_id: "setup-scan-cli",
+        artifact_paths: {
+          chartbook_universe_local_json: join(
+            runDir,
+            "chartbook.universe.local.json"
+          )
+        }
+      },
+      chartbook: {
+        status: "ready",
+        group_id: "scan-candidates",
+        tier: "core",
+        profile: "momentum",
+        selected_symbols: ["NASDAQ:AMD", "NASDAQ:NVDA"]
+      },
+      selected_candidates: [
+        {
+          tradingview_metadata: {
+            symbol: "NASDAQ:AMD",
+            alias: "AMD"
+          },
+          matching_lanes: ["squeeze"],
+          primary_lane: "squeeze",
+          trigger: "AMD trigger",
+          invalidation: "AMD invalidation",
+          warnings: [],
+          score_breakdown: {
+            primary_score: 88
+          }
+        },
+        {
+          tradingview_metadata: {
+            symbol: "NASDAQ:NVDA",
+            alias: "NVDA"
+          },
+          matching_lanes: ["momentum"],
+          primary_lane: "momentum",
+          trigger: "NVDA trigger",
+          invalidation: "NVDA invalidation",
+          warnings: [],
+          score_breakdown: {
+            primary_score: 91
+          }
+        }
+      ]
+    })}\n`
+  );
+
+  try {
+    const exitCode = await runCli(
+      [
+        "chartbook",
+        "--quant-scan-handoff",
+        join(runDir, "scan.json"),
+        "--session",
+        "manual-review"
+      ],
+      {
+        stdout: captureStream(stdout),
+        stderr: captureStream(stderr)
+      },
+      {
+        handlers: {
+          loadUniverseConfig: () => {
+            configLoaded = true;
+            return Promise.resolve(chartbookUniverseConfig);
+          },
+          runChartbook: (options) => {
+            capturedOptions = options;
+            return Promise.resolve(chartbookResultFromOptions(options));
+          }
+        }
+      }
+    );
+
+    assert.equal(exitCode, 0);
+    assert.equal(stderr.join(""), "");
+    assert.equal(configLoaded, false);
+    assert.equal(capturedOptions?.profile, "momentum");
+    assert.deepEqual(
+      capturedOptions?.symbols.map((symbol) => symbol.symbol),
+      ["NASDAQ:AMD", "NASDAQ:NVDA"]
+    );
+    assert.deepEqual(
+      capturedOptions?.symbols.map((symbol) => symbol.quantScan?.scanRank),
+      [1, 2]
+    );
+    assert.equal(capturedOptions?.symbols[0]?.quantScan?.setupLane, "squeeze");
+    assert.deepEqual(capturedOptions?.selection, {
+      configPath: join(runDir, "chartbook.universe.local.json"),
+      groups: ["scan-candidates"],
+      tier: "core"
+    });
+  } finally {
+    await rm(runDir, {
+      recursive: true,
+      force: true
+    });
+  }
 });
 
 void test("CLI rejects unsupported chartbook profiles before loading config", async () => {
