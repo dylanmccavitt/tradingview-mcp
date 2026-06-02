@@ -56,6 +56,7 @@ import type {
   UniverseSelectionTier,
   UniverseTier
 } from "../universe/config.js";
+import type { QuantScanSymbolMetadata } from "./quant-scan-handoff.js";
 
 export const DEFAULT_CHARTBOOK_OUTPUT_ROOT =
   "artifacts/tradingview-chartbooks";
@@ -87,6 +88,7 @@ export interface ChartbookSymbolMetadata {
   groups: string[];
   tiers: UniverseTier[];
   name?: string;
+  quantScan?: QuantScanSymbolMetadata;
 }
 
 export interface ChartbookTimeframeArtifactPlan {
@@ -123,7 +125,7 @@ export interface ChartbookPlan {
 }
 
 export interface BuildChartbookPlanOptions {
-  symbols: ResolvedUniverseSymbol[];
+  symbols: ChartbookInputSymbol[];
   outputRoot?: string;
   sessionId?: string;
   capturedAt?: Date;
@@ -222,7 +224,7 @@ export interface ChartbookResult {
 }
 
 export interface RunChartbookOptions {
-  symbols: ResolvedUniverseSymbol[];
+  symbols: ChartbookInputSymbol[];
   outputRoot?: string;
   sessionId?: string;
   preset?: string;
@@ -265,6 +267,10 @@ export class ChartbookPlanError extends Error {
     super(message);
     this.name = "ChartbookPlanError";
   }
+}
+
+export interface ChartbookInputSymbol extends ResolvedUniverseSymbol {
+  quantScan?: QuantScanSymbolMetadata;
 }
 
 function errorMessage(error: unknown): string {
@@ -328,7 +334,20 @@ function macroMetadataCopy(
     : undefined;
 }
 
-function symbolMetadata(symbol: ResolvedUniverseSymbol): ChartbookSymbolMetadata {
+function copyQuantScanMetadata(
+  metadata: QuantScanSymbolMetadata
+): QuantScanSymbolMetadata {
+  return {
+    ...metadata,
+    matchingLanes: [...metadata.matchingLanes],
+    warnings: [...metadata.warnings],
+    sourceArtifactPaths: {
+      ...metadata.sourceArtifactPaths
+    }
+  };
+}
+
+function symbolMetadata(symbol: ChartbookInputSymbol): ChartbookSymbolMetadata {
   const metadata: ChartbookSymbolMetadata = {
     symbol: normalizeTradingViewSymbol(symbol.symbol),
     alias: symbol.alias,
@@ -339,6 +358,10 @@ function symbolMetadata(symbol: ResolvedUniverseSymbol): ChartbookSymbolMetadata
 
   if (symbol.name) {
     metadata.name = symbol.name;
+  }
+
+  if (symbol.quantScan) {
+    metadata.quantScan = copyQuantScanMetadata(symbol.quantScan);
   }
 
   return metadata;
@@ -535,6 +558,10 @@ function buildLevelsArtifact(
     symbolData.name = symbol.name;
   }
 
+  if (symbol.quantScan) {
+    symbolData.quantScan = copyQuantScanMetadata(symbol.quantScan);
+  }
+
   const artifact: ChartbookLevelsArtifact = {
     schemaVersion: CHARTBOOK_SCHEMA_VERSION,
     ok: screenshot.ok && extraction.ok,
@@ -579,6 +606,75 @@ function htmlEscape(value: string | number | boolean | undefined): string {
 
 function displayName(symbol: ChartbookSymbolMetadata): string {
   return symbol.name ? `${symbol.alias} - ${symbol.name}` : symbol.alias;
+}
+
+function quantScanMetadataLines(symbol: ChartbookSymbolMetadata): string[] {
+  if (!symbol.quantScan) {
+    return [];
+  }
+
+  const lines = [
+    "- Quant Scan:",
+    ...(symbol.quantScan.runId ? [`  - Run id: \`${symbol.quantScan.runId}\``] : []),
+    ...(typeof symbol.quantScan.scanRank === "number"
+      ? [`  - Scan order: ${symbol.quantScan.scanRank}`]
+      : []),
+    ...(symbol.quantScan.setupLane
+      ? [`  - Setup lane: \`${symbol.quantScan.setupLane}\``]
+      : []),
+    `  - Matching lanes: ${markdownList(symbol.quantScan.matchingLanes)}`,
+    ...(typeof symbol.quantScan.score === "number"
+      ? [`  - Score: ${symbol.quantScan.score}`]
+      : []),
+    ...(symbol.quantScan.trigger ? [`  - Trigger: ${symbol.quantScan.trigger}`] : []),
+    ...(symbol.quantScan.invalidation
+      ? [`  - Invalidation: ${symbol.quantScan.invalidation}`]
+      : []),
+    `  - Warnings: ${markdownList(symbol.quantScan.warnings)}`
+  ];
+
+  const sourcePaths = symbol.quantScan.sourceArtifactPaths;
+  const pathLines = [
+    sourcePaths.runDir ? `  - Source run dir: \`${sourcePaths.runDir}\`` : undefined,
+    sourcePaths.scanJson ? `  - Source scan.json: \`${sourcePaths.scanJson}\`` : undefined,
+    sourcePaths.chartbookUniverseLocalJson
+      ? `  - Source chartbook universe: \`${sourcePaths.chartbookUniverseLocalJson}\``
+      : undefined,
+    sourcePaths.chartbookCommandTxt
+      ? `  - Source chartbook command: \`${sourcePaths.chartbookCommandTxt}\``
+      : undefined
+  ].filter((line): line is string => typeof line === "string");
+
+  return [...lines, ...pathLines];
+}
+
+function renderQuantScanMetadataHtml(symbol: ChartbookSymbolMetadata): string {
+  if (!symbol.quantScan) {
+    return "";
+  }
+
+  const fields: Array<[string, string | number | undefined]> = [
+    ["Run", symbol.quantScan.runId],
+    ["Order", symbol.quantScan.scanRank],
+    ["Lane", symbol.quantScan.setupLane],
+    ["Score", symbol.quantScan.score],
+    ["Trigger", symbol.quantScan.trigger],
+    ["Invalidation", symbol.quantScan.invalidation],
+    ["Warnings", symbol.quantScan.warnings.join("; ") || "none"]
+  ];
+
+  return `<section class="review-panel">
+    <h3>Quant Scan Handoff</h3>
+    <div class="meta-grid">
+      ${fields
+        .filter(([, value]) => typeof value !== "undefined" && value !== "")
+        .map(
+          ([label, value]) =>
+            `<span><strong>${htmlEscape(label)}</strong>${htmlEscape(value)}</span>`
+        )
+        .join("")}
+    </div>
+  </section>`;
 }
 
 function formatPrice(value: number): string {
@@ -1165,6 +1261,7 @@ function renderSymbolDashboardHtml(
     </header>
     <div class="tag-row">${tags.map((tag) => `<span>${htmlEscape(tag)}</span>`).join("")}</div>
     ${renderHtmlWarnings(symbol)}
+    ${renderQuantScanMetadataHtml(symbol)}
     ${renderCodexAnalysisHtml(symbol, profile)}
     ${renderProfileReviewHtml(profile, symbol)}
     <section class="screenshots-grid" aria-label="${htmlEscape(`${symbol.alias} screenshots`)}">
@@ -1356,6 +1453,7 @@ export function renderSymbolNotesMarkdown(
     `- Tags: ${markdownList(symbol.tags)}`,
     `- Groups: ${markdownList(symbol.groups)}`,
     `- Tiers: ${markdownList(symbol.tiers)}`,
+    ...quantScanMetadataLines(symbol),
     `- Preset: \`${plan.preset}\``,
     `- Profile: \`${plan.profile}\``,
     `- Captured at: \`${plan.capturedAt}\``,
@@ -2060,6 +2158,10 @@ function buildSymbolResult(
 
   if (symbol.name) {
     result.name = symbol.name;
+  }
+
+  if (symbol.quantScan) {
+    result.quantScan = copyQuantScanMetadata(symbol.quantScan);
   }
 
   return result;

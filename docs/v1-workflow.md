@@ -372,6 +372,7 @@ visible, run:
 ```bash
 npm run tv:chartbook -- --group semis --tier core --session manual-smoke --port 9222
 npm run tv:chartbook -- --group semis --tier core --profile breakout --session manual-breakout --port 9222
+npm run tv:chartbook -- --quant-scan-handoff /tmp/setup-scan-run/scan.json --port 9222
 npm run tv:breakout-dashboard -- --group semis --tier core --session manual-breakout --port 9333
 ```
 
@@ -398,6 +399,15 @@ overlay preset in the chartbook metadata, and
 `--profile focus|breakout|squeeze|momentum` to choose the objective chart-facts
 emphasis.
 
+Use `--quant-scan-handoff <path>` when Quant Scan has already produced a setup
+scan handoff. The path may be the setup-scan run directory, `scan.json`, or
+`chartbook.universe.local.json`. TradingView MCP charts only the explicit
+handoff candidates in Quant Scan order. When `scan.json` is available,
+chartbook artifacts preserve the Quant Scan run id, scan order, setup lane,
+score, trigger, invalidation, warnings, and source artifact paths. Quant Scan
+remains the source of ranking and setup metadata; this project only records
+that context for manual chart review.
+
 For the common Codex breakout dashboard workflow, prefer
 `npm run tv:breakout-dashboard -- --group <group> --tier <tier> --session <id>
 --port <port>`. It fixes the chartbook profile to `breakout`, records the
@@ -421,10 +431,11 @@ How to read chartbook artifacts:
   counts, warnings, chart context, a `facts` object for breakout references,
   compression state, AVWAP, timing levels, and nearest support/resistance when
   TradingView exposes a current chart price, plus extraction or screenshot
-  errors when a partial failure happened.
+  errors when a partial failure happened. Quant Scan handoff runs also include
+  the preserved per-symbol Quant Scan setup metadata when present.
 - Each `notes.md` file embeds that symbol's screenshots, surfaces extraction
-  warnings, and includes a profile-aware human review checklist for the
-  selected focus.
+  warnings, includes any preserved Quant Scan setup context, and includes a
+  profile-aware human review checklist for the selected focus.
 
 Partial failures are recorded in `index.html`, `index.md`, `notes.md`, and the
 matching `*-levels.json` files. Successful captures are kept.
