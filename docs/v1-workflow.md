@@ -155,6 +155,7 @@ Current enabled MCP raw tools are:
 - `tradingview_draw_properties`
 - `tradingview_draw_remove`
 - `tradingview_draw_clear_all`
+- `tradingview_draw_fib_retracement`
 - `tradingview_draw_fib_levels`
 - `tradingview_draw_projection`
 - `tradingview_pine_open_editor`
@@ -170,11 +171,15 @@ list drawing ids/types/names when available, inspect drawing points and
 properties when exposed, remove one drawing by id, and clear all native drawings
 only when `confirmClearAll` is explicitly true. They fail with clear
 unsupported-API reasons when TradingView does not expose the required chart
-API. Macro drawing tools use those same native drawing APIs to create
-mechanical Fib-style, measured-move, and range-projection review levels from
-explicit anchors or caller-selected extracted range facts. They return created
-drawing ids, anchor metadata, levels used, and warnings; outputs are review
-context only, not predictions, recommendations, rankings, or advice.
+API. Quant drawing tools use those same native drawing APIs to create one
+native TradingView Fib Retracement object plus mechanical line-based Fib-style,
+measured-move, and range-projection review levels from explicit anchors or
+caller-selected extracted range facts. They return created drawing ids, anchor
+metadata, levels used, and warnings; outputs are review context only, not
+predictions, recommendations, rankings, or advice. Preset-aware drawing tools
+accept `drawingPreset` values `clean-thesis`, `minimal-levels`, and `risk-map`.
+The default `clean-thesis` keeps drawn lines at 1px and uses low-opacity shaded
+areas for support boxes and Fib backgrounds.
 Pine Editor tools can open or focus the editor, set bounded source without
 compiling or saving, read bounded source with truncation warnings, read compact
 compile markers and console/output rows, and run explicit compile or save calls

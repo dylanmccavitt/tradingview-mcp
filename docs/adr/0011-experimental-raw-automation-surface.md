@@ -123,6 +123,16 @@ issues must port reference behavior in small slices.
   review context only; they must not output predictions, recommendations,
   rankings, or advice. Current-chart and chartbook artifact requests may record
   returned macro metadata through an explicit `macroMetadata` field.
+- The native Fib slice adds MCP-only `tradingview_draw_fib_retracement` behind
+  the same gate. This tool creates one native TradingView `fib_retracement`
+  object from explicit low/high anchors when `createMultipointShape()` supports
+  it, returns compact entity id, anchor, ratio/level, and warning metadata, and
+  keeps `tradingview_draw_fib_levels` as the line-based fallback macro.
+- Preset-aware drawing calls accept `drawingPreset` values `clean-thesis`,
+  `minimal-levels`, and `risk-map`. The default `clean-thesis` keeps drawn
+  lines at 1px and uses low-opacity shaded areas. Presets are visual chart
+  review styling only; they do not add scanner, ranking, alert, broker/order,
+  or advice behavior.
 - The Pine Editor slice adds MCP-only `tradingview_pine_open_editor`,
   `tradingview_pine_set_source`, `tradingview_pine_get_source`,
   `tradingview_pine_get_errors`, `tradingview_pine_get_console`,

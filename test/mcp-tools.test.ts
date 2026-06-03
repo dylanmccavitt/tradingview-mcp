@@ -1077,7 +1077,9 @@ void test("raw MCP native drawing tools call injected handlers when enabled", as
     },
     handlers: {
       runRawDrawShape: (options) => {
-        calls.push(`${options.shapeType}:${options.points.length}:${options.port ?? 0}`);
+        calls.push(
+          `${options.shapeType}:${options.points.length}:${options.port ?? 0}:${options.drawingPreset ?? "default"}`
+        );
         return Promise.resolve({
           ok: true,
           action: "draw-shape",
@@ -1165,6 +1167,7 @@ void test("raw MCP native drawing tools call injected handlers when enabled", as
       arguments: {
         shapeType: "trend-line",
         points: drawValue.drawing.points,
+        drawingPreset: "clean-thesis",
         port: 9223
       }
     });
@@ -1205,7 +1208,7 @@ void test("raw MCP native drawing tools call injected handlers when enabled", as
       "draw-clear-all"
     );
     assert.deepEqual(calls, [
-      "trend-line:2:9223",
+      "trend-line:2:9223:clean-thesis",
       "list:9223",
       "properties:shape-1",
       "remove:shape-1",
@@ -1225,7 +1228,7 @@ void test("raw MCP drawing macro tools call injected handlers when enabled", asy
     handlers: {
       runRawDrawFibLevels: (options) => {
         calls.push(
-          `fib:${options.low.price}-${options.high.price}:${options.ratios?.join(",") ?? "default"}`
+          `fib:${options.low.price}-${options.high.price}:${options.ratios?.join(",") ?? "default"}:${options.drawingPreset ?? "default"}`
         );
         return Promise.resolve({
           ok: true,
@@ -1239,8 +1242,52 @@ void test("raw MCP drawing macro tools call injected handlers when enabled", asy
           warnings: []
         });
       },
+      runRawDrawFibRetracement: (options) => {
+        calls.push(
+          `native-fib:${options.low.price}-${options.high.price}:${options.ratios?.join(",") ?? "default"}:${options.drawingPreset ?? "default"}`
+        );
+        return Promise.resolve({
+          ok: true,
+          action: "draw-fib-retracement",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T17:30:00.000Z",
+          value: {
+            entityId: "shape-native-fib",
+            drawing: {
+              id: "shape-native-fib",
+              type: "fib_retracement",
+              points: [
+                {
+                  time: 1_780_000_000,
+                  price: 500
+                },
+                {
+                  time: 1_780_086_400,
+                  price: 540
+                }
+              ]
+            },
+            anchors: {
+              direction: "low-to-high"
+            },
+            levels: [
+              {
+                label: "Fib 50%",
+                price: 520,
+                role: "retracement",
+                source: "explicit-anchors",
+                ratio: 0.5
+              }
+            ],
+            warnings: ["Review context only."]
+          },
+          warnings: []
+        });
+      },
       runRawDrawProjection: (options) => {
-        calls.push(`projection:${options.mode}:${options.direction ?? "default"}`);
+        calls.push(
+          `projection:${options.mode}:${options.direction ?? "default"}:${options.drawingPreset ?? "default"}`
+        );
         return Promise.resolve({
           ok: true,
           action: "draw-projection",
@@ -1272,6 +1319,7 @@ void test("raw MCP drawing macro tools call injected handlers when enabled", asy
           price: 540
         },
         ratios: [0, 0.5, 1],
+        drawingPreset: "clean-thesis",
         port: 9223
       }
     });
@@ -1290,7 +1338,24 @@ void test("raw MCP drawing macro tools call injected handlers when enabled", asy
           label: "daily compression"
         },
         direction: "up",
-        multipliers: [1]
+        multipliers: [1],
+        drawingPreset: "minimal-levels"
+      }
+    });
+    const nativeFib = await client.callTool({
+      name: "tradingview_draw_fib_retracement",
+      arguments: {
+        low: {
+          time: 1_780_000_000,
+          price: 500
+        },
+        high: {
+          time: 1_780_086_400,
+          price: 540
+        },
+        ratios: [0, 0.5, 1],
+        drawingPreset: "risk-map",
+        port: 9223
       }
     });
 
@@ -1299,9 +1364,14 @@ void test("raw MCP drawing macro tools call injected handlers when enabled", asy
       callResult(projection).structuredContent?.action,
       "draw-projection"
     );
+    assert.equal(
+      callResult(nativeFib).structuredContent?.action,
+      "draw-fib-retracement"
+    );
     assert.deepEqual(calls, [
-      "fib:500-540:0,0.5,1",
-      "projection:range-projection:up"
+      "fib:500-540:0,0.5,1:clean-thesis",
+      "projection:range-projection:up:minimal-levels",
+      "native-fib:500-540:0,0.5,1:risk-map"
     ]);
   } finally {
     await close();
@@ -2024,12 +2094,27 @@ void test("raw native drawing validation rejects invalid MCP requests before han
         confirmClearAll: false
       }
     });
+    const badPreset = await client.callTool({
+      name: "tradingview_draw_shape",
+      arguments: {
+        shapeType: "horizontal-line",
+        drawingPreset: "loud-default",
+        points: [
+          {
+            time: 1_780_000_000,
+            price: 510
+          }
+        ]
+      }
+    });
 
     assert.equal(called, false);
     assert.equal(callResult(badShape).isError, true);
     assert.match(contentText(badShape), /Input validation error/i);
     assert.equal(callResult(unconfirmedClear).isError, true);
     assert.match(contentText(unconfirmedClear), /Input validation error/i);
+    assert.equal(callResult(badPreset).isError, true);
+    assert.match(contentText(badPreset), /Input validation error/i);
   } finally {
     await close();
   }
@@ -2047,6 +2132,16 @@ void test("raw drawing macro validation rejects invalid MCP requests before hand
         return Promise.resolve({
           ok: true,
           action: "draw-fib-levels",
+          endpoint: "http://127.0.0.1:9223",
+          executedAt: "2026-06-02T17:30:00.000Z",
+          warnings: []
+        });
+      },
+      runRawDrawFibRetracement: () => {
+        called = true;
+        return Promise.resolve({
+          ok: true,
+          action: "draw-fib-retracement",
           endpoint: "http://127.0.0.1:9223",
           executedAt: "2026-06-02T17:30:00.000Z",
           warnings: []
@@ -2093,6 +2188,19 @@ void test("raw drawing macro validation rejects invalid MCP requests before hand
         }
       }
     });
+    const badNativeFib = await client.callTool({
+      name: "tradingview_draw_fib_retracement",
+      arguments: {
+        low: {
+          time: 1_780_000_000,
+          price: 540
+        },
+        high: {
+          time: 1_780_086_400,
+          price: 500
+        }
+      }
+    });
     const tooManyRangeLevels = await client.callTool({
       name: "tradingview_draw_projection",
       arguments: {
@@ -2113,6 +2221,8 @@ void test("raw drawing macro validation rejects invalid MCP requests before hand
     assert.equal(called, false);
     assert.equal(callResult(badFib).isError, true);
     assert.match(contentText(badFib), /Input validation error/i);
+    assert.equal(callResult(badNativeFib).isError, true);
+    assert.match(contentText(badNativeFib), /Input validation error/i);
     assert.equal(callResult(badProjection).isError, true);
     assert.match(contentText(badProjection), /Input validation error/i);
     assert.equal(callResult(tooManyRangeLevels).isError, true);

@@ -51,6 +51,10 @@ import {
   type DrawingMacroRange
 } from "../tradingview/drawing-macros.js";
 import {
+  DEFAULT_DRAWING_PRESET,
+  DRAWING_PRESET_NAMES
+} from "../tradingview/drawing-presets.js";
+import {
   DEFAULT_RAW_EVALUATE_MAX_RESULT_BYTES,
   DEFAULT_RAW_FIND_MAX_MATCHES,
   DEFAULT_RAW_CHART_DATA_BAR_COUNT,
@@ -87,6 +91,7 @@ import {
   runRawChartState,
   runRawClick,
   runRawDrawClearAll,
+  runRawDrawFibRetracement,
   runRawDrawFibLevels,
   runRawDrawList,
   runRawDrawProjection,
@@ -132,6 +137,7 @@ import {
   type RawChartStateOptions,
   type RawClickOptions,
   type RawDrawClearAllOptions,
+  type RawDrawFibRetracementOptions,
   type RawDrawFibLevelsOptions,
   type RawDrawListOptions,
   type RawDrawProjectionOptions,
@@ -236,6 +242,7 @@ export const RAW_TRADINGVIEW_MCP_TOOL_NAMES = [
   "tradingview_draw_properties",
   "tradingview_draw_remove",
   "tradingview_draw_clear_all",
+  "tradingview_draw_fib_retracement",
   "tradingview_draw_fib_levels",
   "tradingview_draw_projection",
   "tradingview_pine_open_editor",
@@ -362,6 +369,9 @@ export interface TradingViewMcpToolHandlers {
   ) => Promise<RawAutomationResult>;
   runRawDrawClearAll: (
     options: RawDrawClearAllOptions
+  ) => Promise<RawAutomationResult>;
+  runRawDrawFibRetracement: (
+    options: RawDrawFibRetracementOptions
   ) => Promise<RawAutomationResult>;
   runRawDrawFibLevels: (
     options: RawDrawFibLevelsOptions
@@ -780,6 +790,13 @@ const rawDrawingOverrides = z
     `Drawing overrides may include at most ${RAW_DRAWING_MAX_OVERRIDES} keys.`
   );
 
+const rawDrawingPreset = z
+  .enum(DRAWING_PRESET_NAMES)
+  .optional()
+  .describe(
+    `Optional visual preset for native drawings. Defaults to ${DEFAULT_DRAWING_PRESET}; presets keep lines at 1px and shaded areas low opacity.`
+  );
+
 const rawDrawShapeSchema = z
   .object({
     ...endpointShape,
@@ -788,6 +805,7 @@ const rawDrawShapeSchema = z
       .describe("Supported native TradingView drawing shape."),
     points: z.array(rawDrawingPoint).min(1).max(2),
     text: nonEmptyString.max(RAW_DRAWING_TEXT_MAX_CHARS).optional(),
+    drawingPreset: rawDrawingPreset,
     overrides: rawDrawingOverrides.optional(),
     lock: z.boolean().optional(),
     disableSelection: z.boolean().optional()
@@ -857,8 +875,28 @@ const rawDrawFibLevelsSchema = z
     ),
     labelPrefix: nonEmptyString.max(80).optional(),
     includeAnchorLine: z.boolean().optional(),
+    drawingPreset: rawDrawingPreset,
     overrides: rawDrawingOverrides.optional(),
     anchorOverrides: rawDrawingOverrides.optional(),
+    lock: z.boolean().optional(),
+    disableSelection: z.boolean().optional()
+  })
+  .refine((value) => value.high.price > value.low.price, {
+    message: "High anchor price must be greater than low anchor price.",
+    path: ["high", "price"]
+  });
+
+const rawDrawFibRetracementSchema = z
+  .object({
+    ...endpointShape,
+    high: rawMacroPoint.describe("Explicit high price/time anchor."),
+    low: rawMacroPoint.describe("Explicit low price/time anchor."),
+    direction: z.enum(["low-to-high", "high-to-low"]).optional(),
+    ratios: rawMacroRatios.describe(
+      "Optional Fib ratios to echo in compact review metadata. Defaults match the line-based Fib fallback."
+    ),
+    drawingPreset: rawDrawingPreset,
+    overrides: rawDrawingOverrides.optional(),
     lock: z.boolean().optional(),
     disableSelection: z.boolean().optional()
   })
@@ -895,6 +933,7 @@ const rawDrawProjectionSchema = z
     labelPrefix: nonEmptyString.max(80).optional(),
     includeAnchorLine: z.boolean().optional(),
     includeRangeBox: z.boolean().optional(),
+    drawingPreset: rawDrawingPreset,
     overrides: rawDrawingOverrides.optional(),
     anchorOverrides: rawDrawingOverrides.optional(),
     lock: z.boolean().optional(),
@@ -1165,6 +1204,8 @@ function handlersWithDefaults(
       handlers?.runRawDrawingProperties ?? runRawDrawingProperties,
     runRawDrawRemove: handlers?.runRawDrawRemove ?? runRawDrawRemove,
     runRawDrawClearAll: handlers?.runRawDrawClearAll ?? runRawDrawClearAll,
+    runRawDrawFibRetracement:
+      handlers?.runRawDrawFibRetracement ?? runRawDrawFibRetracement,
     runRawDrawFibLevels:
       handlers?.runRawDrawFibLevels ?? runRawDrawFibLevels,
     runRawDrawProjection:
@@ -2580,6 +2621,10 @@ export function registerTradingViewMcpTools(
         rawOptions.text = args.text;
       }
 
+      if (args.drawingPreset) {
+        rawOptions.drawingPreset = args.drawingPreset;
+      }
+
       if (args.overrides) {
         rawOptions.overrides = args.overrides;
       }
@@ -2717,6 +2762,61 @@ export function registerTradingViewMcpTools(
   );
 
   server.registerTool(
+    "tradingview_draw_fib_retracement",
+    {
+      title: "Draw Native Fib Retracement",
+      description: rawGuardrailedDescription(
+        "Create one native TradingView fib_retracement drawing object from explicit low/high price-time anchors when createMultipointShape is exposed."
+      ),
+      inputSchema: rawDrawFibRetracementSchema,
+      annotations: {
+        title: "Draw Native Fib Retracement",
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true
+      }
+    },
+    async (args) => {
+      const rawOptions: RawDrawFibRetracementOptions = {
+        high: macroPointFromArgs(args.high),
+        low: macroPointFromArgs(args.low),
+        ...endpointOptions(args)
+      };
+
+      if (args.direction) {
+        rawOptions.direction = args.direction;
+      }
+
+      if (args.ratios) {
+        rawOptions.ratios = args.ratios;
+      }
+
+      if (args.drawingPreset) {
+        rawOptions.drawingPreset = args.drawingPreset;
+      }
+
+      if (args.overrides) {
+        rawOptions.overrides = args.overrides;
+      }
+
+      if (typeof args.lock === "boolean") {
+        rawOptions.lock = args.lock;
+      }
+
+      if (typeof args.disableSelection === "boolean") {
+        rawOptions.disableSelection = args.disableSelection;
+      }
+
+      const result = await handlers.runRawDrawFibRetracement(rawOptions);
+
+      return textToolResult(
+        `Draw native Fib Retracement: ${result.ok ? "success" : "failed"}.`,
+        asToolData(result)
+      );
+    }
+  );
+
+  server.registerTool(
     "tradingview_draw_fib_levels",
     {
       title: "Draw Fib Levels",
@@ -2752,6 +2852,10 @@ export function registerTradingViewMcpTools(
 
       if (typeof args.includeAnchorLine === "boolean") {
         rawOptions.includeAnchorLine = args.includeAnchorLine;
+      }
+
+      if (args.drawingPreset) {
+        rawOptions.drawingPreset = args.drawingPreset;
       }
 
       if (args.overrides) {
@@ -2831,6 +2935,10 @@ export function registerTradingViewMcpTools(
 
       if (typeof args.includeRangeBox === "boolean") {
         rawOptions.includeRangeBox = args.includeRangeBox;
+      }
+
+      if (args.drawingPreset) {
+        rawOptions.drawingPreset = args.drawingPreset;
       }
 
       if (args.overrides) {

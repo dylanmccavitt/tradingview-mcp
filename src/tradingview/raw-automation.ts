@@ -23,6 +23,11 @@ import {
   type BuildProjectionMacroOptions
 } from "./drawing-macros.js";
 import {
+  applyDrawingPresetOverrides,
+  applyDrawingPresetToMacroPlan,
+  type DrawingPresetName
+} from "./drawing-presets.js";
+import {
   isTradingViewChartTarget,
   normalizeCdpTargets,
   type CdpTarget
@@ -66,6 +71,9 @@ export const RAW_PINE_GET_SOURCE_MAX_CHARS_LIMIT = 100_000;
 export const DEFAULT_RAW_PINE_COMPILE_SETTLE_MS = 2_500;
 export const DEFAULT_RAW_PINE_SAVE_SETTLE_MS = 800;
 export const RAW_PINE_ACTION_SETTLE_MS_LIMIT = 10_000;
+
+const RAW_NATIVE_FIB_REVIEW_CONTEXT_WARNING =
+  "Native Fib Retracement output is mechanical chart-review context only; it is not a prediction, recommendation, or financial advice.";
 
 const RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS = [
   /\baccount\b/i,
@@ -141,6 +149,7 @@ export type RawAutomationAction =
   | "draw-properties"
   | "draw-remove"
   | "draw-clear-all"
+  | "draw-fib-retracement"
   | "draw-fib-levels"
   | "draw-projection"
   | "pine-open-editor"
@@ -402,6 +411,7 @@ export interface RawDrawShapeOptions extends RawAutomationBaseOptions {
   shapeType: RawDrawingShapeType;
   points: RawDrawingPoint[];
   text?: string;
+  drawingPreset?: DrawingPresetName;
   overrides?: Record<string, RawDrawingOverrideValue>;
   lock?: boolean;
   disableSelection?: boolean;
@@ -421,13 +431,32 @@ export interface RawDrawClearAllOptions extends RawAutomationBaseOptions {
   confirmClearAll: boolean;
 }
 
+export interface RawDrawFibRetracementOptions
+  extends RawAutomationBaseOptions,
+    Pick<
+      BuildFibLevelsMacroOptions,
+      | "high"
+      | "low"
+      | "direction"
+      | "ratios"
+      | "overrides"
+      | "lock"
+      | "disableSelection"
+    > {
+  drawingPreset?: DrawingPresetName;
+}
+
 export interface RawDrawFibLevelsOptions
   extends RawAutomationBaseOptions,
-    BuildFibLevelsMacroOptions {}
+    BuildFibLevelsMacroOptions {
+  drawingPreset?: DrawingPresetName;
+}
 
 export interface RawDrawProjectionOptions
   extends RawAutomationBaseOptions,
-    BuildProjectionMacroOptions {}
+    BuildProjectionMacroOptions {
+  drawingPreset?: DrawingPresetName;
+}
 
 export type RawPineOpenEditorOptions = RawAutomationBaseOptions;
 
@@ -2228,6 +2257,9 @@ async (command, args) => {
     if (shapeType === "text") {
       return "text";
     }
+    if (shapeType === "fib-retracement") {
+      return "fib_retracement";
+    }
     return shapeType;
   }
 
@@ -2287,6 +2319,31 @@ async (command, args) => {
         return candidate;
       }
     }
+
+    const watchedChartValues = [
+      root.TradingViewApi?._activeChartWidgetWV,
+      root.TradingViewApi?._chartWidgetCollection?.activeChartWidget,
+      root.TradingViewApi?._chartWidgetCollection?._activeChartWidgetModel,
+      root._exposed_chartWidgetCollection?.activeChartWidget,
+      root._exposed_chartWidgetCollection?._activeChartWidgetModel
+    ];
+    for (const watchedValue of watchedChartValues) {
+      if (!watchedValue || typeof watchedValue.value !== "function") {
+        continue;
+      }
+
+      try {
+        const chart = watchedValue.value();
+        if (chart && typeof chart === "object") {
+          return {
+            activeChart: () => chart
+          };
+        }
+      } catch {
+        continue;
+      }
+    }
+
     return undefined;
   }
 
@@ -3164,6 +3221,38 @@ async (command, args) => {
         return { ok: true, before: drawingBefore };
       }
       return { ok: false, before: drawingBefore, error: "TradingView chart API does not expose removeAllShapes(), or removable drawing ids were unavailable." };
+    }
+    if (command === "drawFibRetracement") {
+      const drawingBefore = readDrawings(chart);
+      const created = await createNativeDrawing(chart, {
+        shapeType: "fib-retracement",
+        points: args.points,
+        overrides: args.overrides,
+        lock: args.lock,
+        disableSelection: args.disableSelection
+      });
+      if (created.error || !created.id) {
+        return {
+          ok: false,
+          before: drawingBefore,
+          after: readDrawings(chart),
+          error: created.error ?? "TradingView native Fib Retracement API did not return a drawing entity id."
+        };
+      }
+      return {
+        ok: true,
+        value: {
+          entityId: created.id,
+          drawing: {
+            id: created.id,
+            type: "fib_retracement",
+            points: args.points
+          },
+          anchors: args.anchors,
+          levels: args.levels,
+          warnings: args.warnings
+        }
+      };
     }
     if (command === "drawMacro") {
       const drawingBefore = readDrawings(chart);
@@ -5028,9 +5117,10 @@ export function runRawDrawShape(
     args.text = options.text.trim();
   }
 
-  if (options.overrides) {
-    args.overrides = options.overrides;
-  }
+  args.overrides = applyDrawingPresetOverrides(options.shapeType, {
+    preset: options.drawingPreset,
+    overrides: options.overrides
+  });
 
   if (typeof options.lock === "boolean") {
     args.lock = options.lock;
@@ -5097,11 +5187,81 @@ export function runRawDrawClearAll(
   );
 }
 
+export function runRawDrawFibRetracement(
+  options: RawDrawFibRetracementOptions
+): Promise<RawAutomationResult> {
+  const invalidMessage = invalidFibLevelsMacroMessage(options);
+  const macro = invalidMessage ? undefined : buildFibLevelsMacroPlan(options);
+  const anchors = macro?.anchors as
+    | {
+        start?: RawDrawingPoint;
+        end?: RawDrawingPoint;
+      }
+    | undefined;
+  const points = [anchors?.start, anchors?.end].filter(
+    (point): point is RawDrawingPoint =>
+      point !== undefined &&
+      Number.isInteger(point.time) &&
+      Number.isFinite(point.price)
+  );
+  const args: {
+    points: RawDrawingPoint[];
+    anchors?: Record<string, unknown>;
+    levels?: unknown[];
+    warnings: string[];
+    overrides?: Record<string, RawDrawingOverrideValue>;
+    lock?: boolean;
+    disableSelection?: boolean;
+  } = {
+    points,
+    warnings: [
+      ...new Set([
+        RAW_NATIVE_FIB_REVIEW_CONTEXT_WARNING,
+        ...(macro?.warnings ?? [])
+      ])
+    ]
+  };
+
+  if (macro?.anchors) {
+    args.anchors = macro.anchors;
+  }
+
+  if (macro?.levels) {
+    args.levels = macro.levels;
+  }
+
+  args.overrides = applyDrawingPresetOverrides("fib-retracement", {
+    preset: options.drawingPreset,
+    overrides: options.overrides
+  });
+
+  if (typeof options.lock === "boolean") {
+    args.lock = options.lock;
+  }
+
+  if (typeof options.disableSelection === "boolean") {
+    args.disableSelection = options.disableSelection;
+  }
+
+  return runRawChartControl(
+    "draw-fib-retracement",
+    "drawFibRetracement",
+    args,
+    options,
+    invalidMessage
+  );
+}
+
 export function runRawDrawFibLevels(
   options: RawDrawFibLevelsOptions
 ): Promise<RawAutomationResult> {
   const invalidMessage = invalidFibLevelsMacroMessage(options);
-  const macro = invalidMessage ? undefined : buildFibLevelsMacroPlan(options);
+  const macro = invalidMessage
+    ? undefined
+    : applyDrawingPresetToMacroPlan(
+        buildFibLevelsMacroPlan(options),
+        options.drawingPreset
+      );
 
   return runRawChartControl(
     "draw-fib-levels",
@@ -5118,7 +5278,12 @@ export function runRawDrawProjection(
   options: RawDrawProjectionOptions
 ): Promise<RawAutomationResult> {
   const invalidMessage = invalidProjectionMacroMessage(options);
-  const macro = invalidMessage ? undefined : buildProjectionMacroPlan(options);
+  const macro = invalidMessage
+    ? undefined
+    : applyDrawingPresetToMacroPlan(
+        buildProjectionMacroPlan(options),
+        options.drawingPreset
+      );
 
   return runRawChartControl(
     "draw-projection",
