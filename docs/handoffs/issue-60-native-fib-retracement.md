@@ -26,6 +26,34 @@ The inherited active-chart resolver patch is preserved: raw chart controls can
 fall back from `tvWidget.activeChart()` to watched TradingView chart values
 such as `TradingViewApi._activeChartWidgetWV.value()`.
 
+Later live chart-review update on 2026-06-03: TradingView was restarted through
+`npm run tv:launch -- --port 9333` after the app had been running without CDP.
+`npm run tv:health -- --port 9333` returned healthy, and the active chart was
+`BATS:GOOGL` on daily candles. The user manually adjusted the prior live Fib
+and annotations; the live chart still listed one native `fib_retracement`
+object, `ampg44`, plus the user's manually tweaked support/reclaim annotations.
+
+For the user's earlier-entry review context, a small light/dashed layer was
+added without clearing existing drawings:
+
+- `IYmY8K` rectangle: early review zone, `358.44-367.09`.
+- `hkX8GK` horizontal line: first reclaim check, `367.09`.
+- `XoIhqW` horizontal line: momentum proof/reclaim ladder, `375.97`.
+- `rLuPp6` horizontal line: `380-382` confirmation shelf, `382.20`.
+- `ZlV1my` rectangle: target band, `388.43-400.00`.
+- `LDCnvs` trend line: dashed review path from `365.82` to `396.14`.
+- `Emt1sU` text: early review label.
+- `34Hiiy` text: `380-382` confirmation label.
+
+An extra target text label `2M2jo2` was removed to reduce clutter. Final live
+capture screenshot:
+`artifacts/tradingview-current-chart/googl-reclaim-380-review-clean-20260603/current-chart.png`.
+The chart capture succeeded for the screenshot, but Pine overlay fact extraction
+reported no supported objective overlay drawing payload. Alpaca option data
+calls for the June 26 GOOGL chain failed with timeout/upstream transport errors,
+so the user's provided 385C context (`4.50`, `.23` delta) remained
+user-supplied rather than connector-verified.
+
 Live verification on port `9333` succeeded against the GOOGL chart. The
 target URL was `NASDAQ:GOOGL`; the exposed active chart API reported
 `BATS:GOOGL` after setting `NASDAQ:GOOGL`.
