@@ -14,6 +14,11 @@ Scan source metadata when available.
 The chartbook Markdown and HTML indexes summarize verdict counts and link to
 the setup review artifacts without ranking or recommending symbols.
 
+Independent review found two P2 issues after PR creation: current-price-only
+facts could avoid `insufficient_data`, and `setup-review-index.json` did not
+surface failed per-symbol setup-review writes. Both were addressed with code
+changes and regression tests.
+
 ## Next
 
 Push the branch, open a PR with `Closes #57`, run independent review, address
@@ -41,6 +46,7 @@ any findings, and merge if clean. After merge, sync canonical `main`.
 ## Checks
 
 - `npm test -- --test-name-pattern "chartbook|v1 workflow"`
+- `npm test -- --test-name-pattern "chartbook"`
 - `npm test`
 - `npm run lint`
 - `npm run typecheck`

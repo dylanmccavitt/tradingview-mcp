@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -30,6 +30,7 @@ import type { CdpTarget } from "../src/tradingview/targets.js";
 import type { ResolvedUniverseSymbol } from "../src/universe/config.js";
 import {
   SETUP_REVIEW_VERDICTS,
+  buildSetupReviewArtifact,
   type ChartbookSetupReviewArtifact,
   type ChartbookSetupReviewIndexArtifact
 } from "../src/chartbook/setup-review.js";
@@ -365,6 +366,34 @@ void test("chartbook planning builds deterministic session and symbol artifact p
   );
 });
 
+void test("setup review treats current price without extracted facts as insufficient data", () => {
+  const plan = buildChartbookPlan({
+    symbols: [nvdaSymbol],
+    outputRoot: "/tmp/chartbooks",
+    sessionId: "current-price-only",
+    capturedAt: new Date("2026-06-01T17:30:00.000Z"),
+    profile: "focus"
+  });
+  const symbol = plan.symbols[0] as ChartbookSymbolPlan;
+  const currentPriceOnlyFacts = testFacts("focus", {
+    referencePrice: 142
+  });
+  const result = resultFromPlan(symbol, {
+    weekly: currentPriceOnlyFacts,
+    daily: currentPriceOnlyFacts,
+    "65-minute": currentPriceOnlyFacts
+  });
+
+  const setupReview = buildSetupReviewArtifact(symbol, result, plan);
+
+  assert.equal(setupReview.verdict, "insufficient_data");
+  assert.ok(
+    setupReview.reasons.some(
+      (reason) => reason.code === "insufficient_visible_data"
+    )
+  );
+});
+
 void test("chartbook artifacts preserve Quant Scan handoff metadata", async () => {
   const outputRoot = await mkdtemp(join(tmpdir(), "tvmcp-chartbook-"));
   const fakeChartClient = new FakeChartPageClient();
@@ -650,6 +679,68 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.match(dashboard, /Manual Review/);
     assert.match(dashboard, /data-persist-key="NASDAQ-NVDA:breakout:notes"/);
     assert.match(dashboard, /not a scanner, ranking, recommendation, broker action, alert, or order workflow/);
+  } finally {
+    await rm(outputRoot, {
+      recursive: true,
+      force: true
+    });
+  }
+});
+
+void test("setup review index records per-symbol setup review write failures", async () => {
+  const outputRoot = await mkdtemp(join(tmpdir(), "tvmcp-chartbook-"));
+  const fakeChartClient = new FakeChartPageClient();
+  const fakeDrawingClient = new FakePineDrawingPageClient(fakeChartClient);
+
+  try {
+    const result = await runChartbook({
+      symbols: [nvdaSymbol],
+      outputRoot,
+      sessionId: "setup-review-write-failure",
+      checkHealth: () => Promise.resolve(healthyResult),
+      chartClientFactory: () => Promise.resolve(fakeChartClient),
+      drawingClientFactory: () => Promise.resolve(fakeDrawingClient),
+      fileSystem: {
+        mkdir,
+        writeFile: (path, data) => {
+          if (String(path).endsWith("setup-review.json")) {
+            return Promise.reject(new Error("setup review write failed"));
+          }
+
+          return writeFile(path, data);
+        }
+      },
+      now: () => new Date("2026-06-01T17:30:00.000Z")
+    });
+
+    const symbolDirectory = join(
+      outputRoot,
+      "setup-review-write-failure",
+      "NASDAQ-NVDA"
+    );
+    const setupReviewIndex = parseSetupReviewIndexArtifact(
+      await readFile(
+        join(outputRoot, "setup-review-write-failure", "setup-review-index.json"),
+        "utf8"
+      )
+    );
+
+    assert.equal(result.ok, false);
+    assert.equal(result.symbols[0]?.setupReview?.ok, false);
+    assert.match(
+      result.symbols[0]?.setupReview?.error ?? "",
+      /setup review write failed/
+    );
+    await assert.rejects(access(join(symbolDirectory, "setup-review.json")));
+    assert.equal(setupReviewIndex.symbols[0]?.setupReviewOk, false);
+    assert.match(
+      setupReviewIndex.symbols[0]?.setupReviewError ?? "",
+      /setup review write failed/
+    );
+    assert.equal(
+      setupReviewIndex.symbols[0]?.setupReviewPath,
+      "NASDAQ-NVDA/setup-review.json"
+    );
   } finally {
     await rm(outputRoot, {
       recursive: true,

@@ -113,6 +113,8 @@ export interface ChartbookSetupReviewIndexArtifact {
     alias: string;
     verdict: SetupReviewVerdict;
     setupReviewPath: string;
+    setupReviewOk: boolean;
+    setupReviewError?: string;
     notesPath: string;
     warningCount: number;
     source?: {
@@ -198,7 +200,6 @@ function usefulFacts(facts: ChartFacts): boolean {
     facts.extracted.levels > 0 ||
     facts.extracted.zones > 0 ||
     facts.breakout.referenceLevels.length > 0 ||
-    typeof facts.nearest.referencePrice === "number" ||
     typeof facts.nearest.support !== "undefined" ||
     typeof facts.nearest.resistance !== "undefined" ||
     Boolean(facts.compression.range) ||
@@ -544,9 +545,14 @@ export function buildSetupReviewIndexArtifact(
         alias: symbol.alias,
         verdict: symbol.setupReview?.verdict ?? "insufficient_data",
         setupReviewPath: relativeSetupReviewPath(symbol),
+        setupReviewOk: symbol.setupReview?.ok ?? false,
         notesPath: `${symbol.symbolSlug}/notes.md`,
         warningCount: uniqueWarnings(symbol).length
       };
+
+      if (symbol.setupReview?.error) {
+        entry.setupReviewError = symbol.setupReview.error;
+      }
 
       if (symbol.quantScan) {
         const source: NonNullable<typeof entry.source> = {};
