@@ -383,8 +383,10 @@ default timeframes, then writes an ignored local chartbook session under:
 artifacts/tradingview-chartbooks/manual-smoke/
   index.md
   index.html
+  setup-review-index.json
   NASDAQ-NVDA/
     notes.md
+    setup-review.json
     NASDAQ-NVDA-weekly.png
     NASDAQ-NVDA-weekly-levels.json
     NASDAQ-NVDA-daily.png
@@ -417,13 +419,17 @@ stable screenshot capture.
 How to read chartbook artifacts:
 
 - `index.html` is the primary local review dashboard. It shows session metadata,
-  profile/preset, per-symbol warnings, profile-specific review panels,
+  profile/preset, setup review verdict counts, per-symbol warnings, profile-specific review panels,
   generated Codex Analysis briefs from extracted chart facts,
   weekly/daily/65-minute screenshots, links to levels JSON, and local manual
   note fields. These briefs are review context only; they do not rank, recommend,
   alert, trade, or call brokers.
 - `index.md` is the session summary with the selected groups, tier, output
-  paths, and per-symbol/timeframe status.
+  paths, setup review verdict counts, and per-symbol/timeframe status.
+- `setup-review-index.json` is the machine-readable session setup review index.
+  It summarizes counts for `validated`, `invalidated`, `watch`, and
+  `insufficient_data` verdict labels and links to each per-symbol setup review
+  artifact without ranking or recommending symbols.
 - Each PNG is the captured TradingView chart screenshot for that symbol and
   timeframe.
 - Each `*-levels.json` file contains compact objective overlay extraction for
@@ -433,6 +439,11 @@ How to read chartbook artifacts:
   TradingView exposes a current chart price, plus extraction or screenshot
   errors when a partial failure happened. Quant Scan handoff runs also include
   the preserved per-symbol Quant Scan setup metadata when present.
+- Each `setup-review.json` file contains one chart-review verdict label,
+  objective reasons from existing chart facts, levels JSON, warnings, and
+  profile-specific review context, links to screenshots and levels JSON, the
+  timeframe coverage, and preserved Quant Scan source metadata when available.
+  Verdicts are chart-review evidence only, not trade instructions.
 - Each `notes.md` file embeds that symbol's screenshots, surfaces extraction
   warnings, includes any preserved Quant Scan setup context, and includes a
   profile-aware human review checklist for the selected focus.

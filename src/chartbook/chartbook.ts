@@ -57,6 +57,15 @@ import type {
   UniverseTier
 } from "../universe/config.js";
 import type { QuantScanSymbolMetadata } from "./quant-scan-handoff.js";
+import {
+  SETUP_REVIEW_FILE,
+  SETUP_REVIEW_INDEX_FILE,
+  buildSetupReviewArtifact,
+  buildSetupReviewIndexArtifact,
+  relativeSetupReviewPath,
+  setupReviewVerdictCounts,
+  type SetupReviewVerdict
+} from "./setup-review.js";
 
 export const DEFAULT_CHARTBOOK_OUTPUT_ROOT =
   "artifacts/tradingview-chartbooks";
@@ -106,6 +115,7 @@ export interface ChartbookSymbolPlan extends ChartbookSymbolMetadata {
   symbolSlug: string;
   directory: string;
   notesPath: string;
+  setupReviewPath: string;
   timeframes: ChartbookTimeframeArtifactPlan[];
 }
 
@@ -117,6 +127,7 @@ export interface ChartbookPlan {
   sessionDirectory: string;
   indexPath: string;
   indexHtmlPath: string;
+  setupReviewIndexPath: string;
   preset: string;
   profile: ChartAnalysisProfileName;
   selection?: ChartbookSelectionSummary;
@@ -202,6 +213,13 @@ export interface ChartbookSymbolResult extends ChartbookSymbolMetadata {
   symbolSlug: string;
   directory: string;
   notesPath: string;
+  setupReviewPath?: string;
+  setupReview?: {
+    path: string;
+    ok: boolean;
+    verdict: SetupReviewVerdict;
+    error?: string;
+  };
   timeframes: ChartbookTimeframeResult[];
 }
 
@@ -215,6 +233,7 @@ export interface ChartbookResult {
   sessionDirectory: string;
   indexPath: string;
   indexHtmlPath: string;
+  setupReviewIndexPath?: string;
   endpoint: string;
   selection?: ChartbookSelectionSummary;
   target?: CdpTarget;
@@ -385,6 +404,7 @@ export function buildChartbookPlan(
     const symbolSlug = slugifyTradingViewSymbol(metadata.symbol);
     const directory = join(sessionDirectory, symbolSlug);
     const notesPath = join(directory, "notes.md");
+    const setupReviewPath = join(directory, SETUP_REVIEW_FILE);
     const timeframes = DEFAULT_CHART_TIMEFRAMES.map((timeframe) => {
       const screenshotFile = `${symbolSlug}-${timeframe.id}.png`;
       const levelsJsonFile = `${symbolSlug}-${timeframe.id}-levels.json`;
@@ -410,6 +430,7 @@ export function buildChartbookPlan(
       symbolSlug,
       directory,
       notesPath,
+      setupReviewPath,
       timeframes
     };
   });
@@ -422,6 +443,7 @@ export function buildChartbookPlan(
     sessionDirectory,
     indexPath: join(sessionDirectory, "index.md"),
     indexHtmlPath: join(sessionDirectory, "index.html"),
+    setupReviewIndexPath: join(sessionDirectory, SETUP_REVIEW_INDEX_FILE),
     preset,
     profile,
     symbols
@@ -1256,6 +1278,8 @@ function renderSymbolDashboardHtml(
       </div>
       <div class="symbol-actions">
         ${renderHtmlBadge("Status", failures.length === 0 ? "OK" : `${failures.length} issue${failures.length === 1 ? "" : "s"}`, statusTone)}
+        ${renderHtmlBadge("Verdict", symbol.setupReview?.verdict ?? "insufficient_data", symbol.setupReview?.verdict === "validated" ? "ok" : symbol.setupReview?.verdict === "invalidated" || symbol.setupReview?.verdict === "insufficient_data" ? "error" : "neutral")}
+        <a class="button-link" href="${htmlEscape(relativeSetupReviewPath(symbol))}">setup-review.json</a>
         <a class="button-link" href="${htmlEscape(`${symbol.symbolSlug}/notes.md`)}">notes.md</a>
       </div>
     </header>
@@ -1457,6 +1481,7 @@ export function renderSymbolNotesMarkdown(
     `- Preset: \`${plan.preset}\``,
     `- Profile: \`${plan.profile}\``,
     `- Captured at: \`${plan.capturedAt}\``,
+    `- Setup review JSON: [${SETUP_REVIEW_FILE}](./${SETUP_REVIEW_FILE})`,
     "",
     "## Screenshots"
   );
@@ -1529,14 +1554,27 @@ export function renderChartbookIndexMarkdown(
     lines.push(`- Run error: ${result.error}`);
   }
 
+  const verdictCounts = setupReviewVerdictCounts(result.symbols);
+  lines.push(
+    `- Setup review index: \`${SETUP_REVIEW_INDEX_FILE}\``,
+    "",
+    "## Setup Review Verdict Counts",
+    "",
+    `- validated: ${verdictCounts.validated}`,
+    `- invalidated: ${verdictCounts.invalidated}`,
+    `- watch: ${verdictCounts.watch}`,
+    `- insufficient_data: ${verdictCounts.insufficient_data}`
+  );
+
   lines.push("", "## Symbols");
 
   for (const symbol of result.symbols) {
     const failures = symbol.timeframes.filter((timeframe) => !timeframe.ok);
     const status = failures.length === 0 ? "OK" : `FAILED ${failures.length}`;
+    const verdict = symbol.setupReview?.verdict ?? "insufficient_data";
 
     lines.push(
-      `- [${symbol.alias}](./${symbol.symbolSlug}/notes.md) - \`${symbol.symbol}\` - ${status}`
+      `- [${symbol.alias}](./${symbol.symbolSlug}/notes.md) - \`${symbol.symbol}\` - ${status} - setup review: [${verdict}](./${relativeSetupReviewPath(symbol)})`
     );
   }
 
@@ -1568,6 +1606,23 @@ function renderSelectionHtml(selection: ChartbookSelectionSummary | undefined): 
     <span><strong>Tier</strong>${htmlEscape(selection.tier)}</span>
     ${config}
   </div>`;
+}
+
+function renderSetupReviewSummaryHtml(
+  result: Pick<ChartbookResult, "symbols">
+): string {
+  const counts = setupReviewVerdictCounts(result.symbols);
+
+  return `<section class="review-panel">
+    <h2>Setup Review Summary</h2>
+    <div class="summary-grid">
+      <span><strong>validated</strong>${htmlEscape(counts.validated)}</span>
+      <span><strong>invalidated</strong>${htmlEscape(counts.invalidated)}</span>
+      <span><strong>watch</strong>${htmlEscape(counts.watch)}</span>
+      <span><strong>insufficient_data</strong>${htmlEscape(counts.insufficient_data)}</span>
+      <span><strong>Index JSON</strong><a href="${htmlEscape(SETUP_REVIEW_INDEX_FILE)}">${htmlEscape(SETUP_REVIEW_INDEX_FILE)}</a></span>
+    </div>
+  </section>`;
 }
 
 function renderDashboardStyles(): string {
@@ -1879,6 +1934,7 @@ export function renderChartbookIndexHtml(
     <p class="boundary">This dashboard is a local review/prep artifact for Codex and human review. It is not a scanner, ranking, recommendation, broker action, alert, or order workflow.</p>
   </header>
   <main>
+    ${renderSetupReviewSummaryHtml(result)}
     <nav class="symbol-nav" aria-label="Symbols">${symbolLinks}</nav>
     ${symbolSections}
   </main>
@@ -1891,7 +1947,7 @@ export function renderChartbookIndexHtml(
 async function writeJsonArtifact(
   fileSystem: ChartbookFileSystem,
   path: string,
-  artifact: ChartbookLevelsArtifact
+  artifact: unknown
 ): Promise<void> {
   await fileSystem.writeFile(path, `${JSON.stringify(artifact, null, 2)}\n`);
 }
@@ -2132,6 +2188,12 @@ async function writeFailedSymbolArtifacts(
   }
 
   const symbolResult = buildSymbolResult(options.symbol, timeframes);
+  await writeSetupReviewForSymbol(
+    options.fileSystem,
+    options.symbol,
+    symbolResult,
+    options.plan
+  );
   await options.fileSystem.writeFile(
     options.symbol.notesPath,
     renderSymbolNotesMarkdown(options.symbol, symbolResult, options.plan)
@@ -2153,6 +2215,7 @@ function buildSymbolResult(
     symbolSlug: symbol.symbolSlug,
     directory: symbol.directory,
     notesPath: symbol.notesPath,
+    setupReviewPath: symbol.setupReviewPath,
     timeframes
   };
 
@@ -2165,6 +2228,32 @@ function buildSymbolResult(
   }
 
   return result;
+}
+
+async function writeSetupReviewForSymbol(
+  fileSystem: ChartbookFileSystem,
+  symbol: ChartbookSymbolPlan,
+  result: ChartbookSymbolResult,
+  plan: Pick<ChartbookPlan, "capturedAt" | "preset" | "profile">
+): Promise<void> {
+  const setupReview = buildSetupReviewArtifact(symbol, result, plan);
+
+  try {
+    await writeJsonArtifact(fileSystem, symbol.setupReviewPath, setupReview);
+    result.setupReview = {
+      path: symbol.setupReviewPath,
+      ok: true,
+      verdict: setupReview.verdict
+    };
+  } catch (error: unknown) {
+    result.ok = false;
+    result.setupReview = {
+      path: symbol.setupReviewPath,
+      ok: false,
+      verdict: setupReview.verdict,
+      error: `Could not write setup review JSON: ${errorMessage(error)}`
+    };
+  }
 }
 
 export async function runChartbook(
@@ -2352,6 +2441,7 @@ export async function runChartbook(
       }
 
       const symbolResult = buildSymbolResult(symbol, timeframes);
+      await writeSetupReviewForSymbol(fileSystem, symbol, symbolResult, plan);
       await fileSystem.writeFile(
         symbol.notesPath,
         renderSymbolNotesMarkdown(symbol, symbolResult, plan)
@@ -2373,6 +2463,7 @@ export async function runChartbook(
     sessionDirectory: plan.sessionDirectory,
     indexPath: plan.indexPath,
     indexHtmlPath: plan.indexHtmlPath,
+    setupReviewIndexPath: plan.setupReviewIndexPath,
     endpoint: health?.endpoint ?? `http://${endpoint.host}:${endpoint.port}`,
     symbols
   };
@@ -2401,6 +2492,11 @@ export async function runChartbook(
   await fileSystem.writeFile(
     plan.indexHtmlPath,
     renderChartbookIndexHtml(plan, result)
+  );
+  await writeJsonArtifact(
+    fileSystem,
+    plan.setupReviewIndexPath,
+    buildSetupReviewIndexArtifact(plan, result.symbols)
   );
 
   return result;

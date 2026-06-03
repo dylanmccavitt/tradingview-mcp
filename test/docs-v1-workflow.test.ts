@@ -59,12 +59,17 @@ void test("v1 workflow explains chartbook artifacts", () => {
   assert.match(workflow, /artifacts\/tradingview-chartbooks\/manual-smoke/);
   assert.match(workflow, /index\.md/);
   assert.match(workflow, /index\.html/);
+  assert.match(workflow, /setup-review-index\.json/);
   assert.match(workflow, /notes\.md/);
+  assert.match(workflow, /setup-review\.json/);
   assert.match(workflow, /NASDAQ-NVDA-weekly\.png/);
   assert.match(workflow, /NASDAQ-NVDA-weekly-levels\.json/);
   assert.match(workflow, /primary local review dashboard/i);
+  assert.match(workflow, /validated.*invalidated.*watch.*insufficient_data/s);
   assert.match(workflow, /Codex Analysis briefs/i);
   assert.match(workflow, /horizontal levels, zones from boxes, labels, tables/);
+  assert.match(workflow, /chart-review verdict label/i);
+  assert.match(workflow, /without ranking or recommending symbols/i);
   assert.match(workflow, /Partial failures are recorded/);
 });
 

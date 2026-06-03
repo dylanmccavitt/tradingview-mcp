@@ -28,6 +28,11 @@ import { DEFAULT_PINE_DRAWING_STUDY_NAME } from "../src/tradingview/pine-drawing
 import type { TradingViewHealthResult } from "../src/tradingview/health.js";
 import type { CdpTarget } from "../src/tradingview/targets.js";
 import type { ResolvedUniverseSymbol } from "../src/universe/config.js";
+import {
+  SETUP_REVIEW_VERDICTS,
+  type ChartbookSetupReviewArtifact,
+  type ChartbookSetupReviewIndexArtifact
+} from "../src/chartbook/setup-review.js";
 
 const nvdaSymbol: ResolvedUniverseSymbol = {
   symbol: "NASDAQ:NVDA",
@@ -176,6 +181,18 @@ function parseLevelsArtifact(json: string): ChartbookLevelsArtifact {
   return parsed as ChartbookLevelsArtifact;
 }
 
+function parseSetupReviewArtifact(json: string): ChartbookSetupReviewArtifact {
+  const parsed: unknown = JSON.parse(json) as unknown;
+  return parsed as ChartbookSetupReviewArtifact;
+}
+
+function parseSetupReviewIndexArtifact(
+  json: string
+): ChartbookSetupReviewIndexArtifact {
+  const parsed: unknown = JSON.parse(json) as unknown;
+  return parsed as ChartbookSetupReviewIndexArtifact;
+}
+
 function testLevel(
   name: string,
   price: number,
@@ -268,6 +285,7 @@ function resultFromPlan(
     symbolSlug: symbol.symbolSlug,
     directory: symbol.directory,
     notesPath: symbol.notesPath,
+    setupReviewPath: symbol.setupReviewPath,
     timeframes: symbol.timeframes.map((timeframe) => ({
       symbol: symbol.symbol,
       timeframe: timeframe.id,
@@ -312,7 +330,15 @@ void test("chartbook planning builds deterministic session and symbol artifact p
   assert.equal(plan.sessionDirectory, resolve("/tmp/chartbooks/June-1-chartbook"));
   assert.equal(plan.indexPath, resolve("/tmp/chartbooks/June-1-chartbook/index.md"));
   assert.equal(plan.indexHtmlPath, resolve("/tmp/chartbooks/June-1-chartbook/index.html"));
+  assert.equal(
+    plan.setupReviewIndexPath,
+    resolve("/tmp/chartbooks/June-1-chartbook/setup-review-index.json")
+  );
   assert.equal(plan.symbols[0]?.directory, resolve("/tmp/chartbooks/June-1-chartbook/NASDAQ-NVDA"));
+  assert.equal(
+    plan.symbols[0]?.setupReviewPath,
+    resolve("/tmp/chartbooks/June-1-chartbook/NASDAQ-NVDA/setup-review.json")
+  );
   assert.deepEqual(
     plan.symbols[0]?.timeframes.map((timeframe) => timeframe.screenshotPath),
     [
@@ -382,6 +408,15 @@ void test("chartbook artifacts preserve Quant Scan handoff metadata", async () =
         "utf8"
       )
     );
+    const setupReview = parseSetupReviewArtifact(
+      await readFile(join(symbolDirectory, "setup-review.json"), "utf8")
+    );
+    const setupReviewIndex = parseSetupReviewIndexArtifact(
+      await readFile(
+        join(outputRoot, "quant-scan-session", "setup-review-index.json"),
+        "utf8"
+      )
+    );
     const notes = await readFile(join(symbolDirectory, "notes.md"), "utf8");
     const dashboard = await readFile(
       join(outputRoot, "quant-scan-session", "index.html"),
@@ -389,6 +424,58 @@ void test("chartbook artifacts preserve Quant Scan handoff metadata", async () =
     );
 
     assert.equal(result.symbols[0]?.quantScan?.scanRank, 2);
+    assert.equal(result.symbols[0]?.setupReview?.path, join(symbolDirectory, "setup-review.json"));
+    assert.ok(
+      SETUP_REVIEW_VERDICTS.includes(setupReview.verdict),
+      `Unexpected setup review verdict ${setupReview.verdict}`
+    );
+    assert.equal(setupReview.kind, "chartbook_setup_review");
+    assert.equal(setupReview.profile, "focus");
+    assert.equal(setupReview.references.notes, "notes.md");
+    assert.deepEqual(
+      setupReview.references.screenshots.map((reference) => reference.path),
+      [
+        "NASDAQ-NVDA-weekly.png",
+        "NASDAQ-NVDA-daily.png",
+        "NASDAQ-NVDA-65-minute.png"
+      ]
+    );
+    assert.deepEqual(
+      setupReview.references.levelsJson.map((reference) => reference.path),
+      [
+        "NASDAQ-NVDA-weekly-levels.json",
+        "NASDAQ-NVDA-daily-levels.json",
+        "NASDAQ-NVDA-65-minute-levels.json"
+      ]
+    );
+    assert.equal(setupReview.timeframeCoverage.length, 3);
+    assert.equal(setupReview.source?.quantScan?.runId, "setup-scan-fixture");
+    assert.equal(setupReview.source?.quantScan?.candidatePosition, 2);
+    assert.equal(setupReview.source?.quantScan?.setupLane, "momentum");
+    assert.equal(setupReview.source?.quantScan?.score, 91.5);
+    assert.equal(setupReview.source?.quantScan?.trigger, "break above 186.00");
+    assert.equal(setupReview.source?.quantScan?.invalidation, "close below 178.00");
+    assert.equal(
+      setupReview.source?.quantScan?.sourceArtifactPaths.chartbookUniverseLocalJson,
+      "/tmp/setup-scan-fixture/chartbook.universe.local.json"
+    );
+    assert.equal(setupReviewIndex.kind, "chartbook_setup_review_index");
+    assert.equal(
+      setupReviewIndex.verdictCounts[setupReview.verdict],
+      1
+    );
+    assert.equal(
+      setupReviewIndex.symbols[0]?.setupReviewPath,
+      "NASDAQ-NVDA/setup-review.json"
+    );
+    assert.equal(setupReviewIndex.symbols[0]?.source?.candidatePosition, 2);
+    assert.doesNotMatch(
+      JSON.stringify({
+        setupReview,
+        setupReviewIndex
+      }),
+      /ranking|rank|broker|recommend|buy|sell|order action|place order/i
+    );
     assert.equal(weekly.symbol.quantScan?.runId, "setup-scan-fixture");
     assert.equal(weekly.symbol.quantScan?.setupLane, "momentum");
     assert.equal(weekly.symbol.quantScan?.score, 91.5);
@@ -472,6 +559,12 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
         "utf8"
       )
     );
+    const setupReview = parseSetupReviewArtifact(
+      await readFile(join(symbolDirectory, "setup-review.json"), "utf8")
+    );
+    const setupReviewIndex = parseSetupReviewIndexArtifact(
+      await readFile(join(outputRoot, "session-a", "setup-review-index.json"), "utf8")
+    );
 
     assert.equal(weekly.ok, true);
     assert.equal(weekly.symbol.symbol, "NASDAQ:NVDA");
@@ -488,12 +581,35 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     assert.match(daily.extraction.error ?? "", /Skipped drawing extraction/);
     assert.equal(intraday.ok, true);
     assert.equal(intraday.extraction.drawings.levels[0]?.name, "65-minute-level");
+    assert.equal(setupReview.verdict, "insufficient_data");
+    assert.equal(setupReviewIndex.verdictCounts.insufficient_data, 1);
+    assert.equal(setupReviewIndex.verdictCounts.validated, 0);
+    assert.equal(setupReview.timeframeCoverage[1]?.id, "daily");
+    assert.equal(setupReview.timeframeCoverage[1]?.screenshot.ok, false);
+    assert.equal(setupReview.timeframeCoverage[1]?.levelsJson.ok, true);
+    assert.match(setupReview.warnings.join(" "), /AVWAP value was not available/i);
+    assert.ok(
+      setupReview.reasons.some(
+        (reason) =>
+          reason.code === "timeframe_failure" &&
+          reason.timeframe === "daily" &&
+          /render failed for daily/.test(reason.message)
+      )
+    );
+    assert.ok(
+      setupReview.reasons.some(
+        (reason) =>
+          reason.code === "timeframe_warning" &&
+          /AVWAP value was not available/.test(reason.message)
+      )
+    );
 
     const notes = await readFile(join(symbolDirectory, "notes.md"), "utf8");
     assert.match(notes, /# NVDA - NVIDIA/);
     assert.match(notes, /- Tags: semis, gpu/);
     assert.match(notes, /- Preset: `levels`/);
     assert.match(notes, /- Profile: `breakout`/);
+    assert.match(notes, /- Setup review JSON: \[setup-review\.json\]\(\.\/setup-review\.json\)/);
     assert.match(notes, /AVWAP value was not available/);
     assert.match(notes, /!\[Weekly screenshot\]\(\.\/NASDAQ-NVDA-weekly\.png\)/);
     assert.match(notes, /## Breakout Review Checklist/);
@@ -505,6 +621,10 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     const index = await readFile(join(outputRoot, "session-a", "index.md"), "utf8");
     assert.match(index, /# TradingView Chartbook session-a/);
     assert.match(index, /- Profile: `breakout`/);
+    assert.match(index, /## Setup Review Verdict Counts/);
+    assert.match(index, /- insufficient_data: 1/);
+    assert.match(index, /setup-review-index\.json/);
+    assert.match(index, /\[insufficient_data\]\(\.\/NASDAQ-NVDA\/setup-review\.json\)/);
     assert.match(index, /\[NVDA\]\(\.\/NASDAQ-NVDA\/notes\.md\)/);
     assert.match(index, /not a scanner, ranking, recommendation, broker action, or order workflow/);
 
@@ -514,6 +634,10 @@ void test("chartbook run writes screenshots, levels JSON, notes, index, and part
     );
     assert.match(dashboard, /<title>TradingView Chartbook session-a<\/title>/);
     assert.match(dashboard, /Profile<\/strong>breakout/);
+    assert.match(dashboard, /Setup Review Summary/);
+    assert.match(dashboard, /setup-review-index\.json/);
+    assert.match(dashboard, /setup-review\.json/);
+    assert.match(dashboard, /Verdict<\/span>insufficient_data/);
     assert.match(dashboard, /Codex Analysis/);
     assert.match(dashboard, /Objective Read/);
     assert.match(dashboard, /Breakout Review/);
