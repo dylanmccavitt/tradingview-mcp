@@ -688,7 +688,10 @@ function formatChartbookResult(result: ChartbookResult): string {
     `Endpoint: ${result.endpoint}`,
     `Output directory: ${result.sessionDirectory}`,
     `Index: ${result.indexPath}`,
-    `Dashboard: ${result.indexHtmlPath}`
+    `Dashboard: ${result.indexHtmlPath}`,
+    ...(result.setupReviewIndexPath
+      ? [`Setup review index: ${result.setupReviewIndexPath}`]
+      : [])
   ];
 
   if (result.target) {
@@ -705,6 +708,11 @@ function formatChartbookResult(result: ChartbookResult): string {
     lines.push(
       `- ${symbol.symbol} (${symbol.alias}): ${symbol.ok ? "OK" : "FAILED"} ${symbol.notesPath}`
     );
+    if (symbol.setupReview) {
+      lines.push(
+        `  setup review: ${symbol.setupReview.verdict} ${symbol.setupReview.path}`
+      );
+    }
 
     for (const timeframe of symbol.timeframes) {
       if (timeframe.ok) {
