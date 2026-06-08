@@ -453,6 +453,17 @@ How to read chartbook artifacts:
   warnings, includes any preserved Quant Scan setup context, and includes a
   profile-aware human review checklist for the selected focus.
 
+Review Session Artifact JSON is the versioned machine-readable source of truth
+for one manual review pass across one or more symbols. The v1 contract lives in
+`src/review-session/artifact.ts` with the fixture
+`test/fixtures/review-session-artifact.v1.json`; `docs/review-session-artifact.md`
+describes the fields. Existing chartbook outputs are unchanged. A future
+writer can add `review-session.json` beside the current artifacts, referencing
+chart captures, extracted objective evidence, setup evidence labels, drawing
+metadata artifacts, human-authored review marks, and human-authored thesis
+notes. Markdown and HTML dashboards are reader views over JSON artifacts, not
+the durable contract.
+
 Partial failures are recorded in `index.html`, `index.md`, `notes.md`, and the
 matching `*-levels.json` files. Successful captures are kept.
 

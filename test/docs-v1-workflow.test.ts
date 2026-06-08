@@ -69,6 +69,12 @@ void test("v1 workflow explains chartbook artifacts", () => {
   assert.match(workflow, /Codex Analysis briefs/i);
   assert.match(workflow, /horizontal levels, zones from boxes, labels, tables/);
   assert.match(workflow, /chart-review verdict label/i);
+  assert.match(workflow, /Review Session Artifact JSON/i);
+  assert.match(workflow, /src\/review-session\/artifact\.ts/);
+  assert.match(workflow, /test\/fixtures\/review-session-artifact\.v1\.json/);
+  assert.match(workflow, /Markdown and HTML dashboards are reader views over JSON artifacts/i);
+  assert.match(workflow, /human-authored review marks/);
+  assert.match(workflow, /human-authored thesis\s+notes/i);
   assert.match(workflow, /without ranking or recommending symbols/i);
   assert.match(workflow, /Partial failures are recorded/);
 });

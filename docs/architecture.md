@@ -285,6 +285,15 @@ The chartbook runner uses the existing TradingView Desktop health check, chart p
 
 `src/chartbook/quant-scan-handoff.ts` accepts Quant Scan setup-scan handoff input from a run directory, `scan.json`, or `chartbook.universe.local.json`. It charts only the explicit handoff candidates in Quant Scan order and carries setup metadata into chartbook artifacts when `scan.json` is present: scan run id, scan order, setup lane, matching lanes, score, trigger, invalidation, warnings, and source artifact paths. Per-symbol setup review artifacts copy that source metadata for traceability while deriving verdict reasons only from existing chart facts, levels, warnings, and selected profile context. TradingView MCP does not scan, rank, or generate candidates from this metadata; Quant Scan remains the ranking source.
 
+`src/review-session/artifact.ts` defines the additive v1 Review Session
+Artifact JSON contract. The contract records one manual review pass with
+session metadata, source artifact references, optional profile context,
+warnings, and one or more symbol entries. Symbol entries reference chart
+captures, extracted objective evidence, deterministic setup evidence labels,
+drawing metadata artifacts, human-authored review marks, human-authored thesis
+notes, and warnings. Markdown and HTML dashboards are reader views over this
+JSON contract and related JSON artifacts, not durable source-of-truth records.
+
 Partial failures are recorded in-place. A failed timeframe still gets a matching `*-levels.json` with the screenshot/extraction error when the symbol directory can be written, and later timeframes/symbols continue. Existing successful captures are not deleted.
 
 `src/cli.ts` exposes this as `chartbook`, with universe selection options, `--quant-scan-handoff`, `--session`, `--output-dir`, `--preset`, `--profile`, `--study-name`, and CDP/render timing options.
@@ -306,6 +315,11 @@ Partial failures are recorded in-place. A failed timeframe still gets a matching
 `test/chart-facts.test.ts` covers fixture-like breakout, squeeze, and momentum facts without scoring, ranking, or recommendation fields.
 
 `test/chartbook.test.ts` covers deterministic chartbook path generation, screenshot/levels JSON artifact creation, chart-facts artifact output, notes/index Markdown output, static HTML dashboard output, and partial failure recording with fake clients.
+
+`test/review-session-artifact.test.ts` validates the v1 Review Session
+Artifact fixture, keeps setup evidence labels deterministic, keeps review marks
+and thesis notes human-authored, and checks the contract shape avoids scanner,
+ranking, alert, broker, order, P&L, and recommendation fields.
 
 `test/mcp-tools.test.ts` uses in-memory MCP transports to verify the advertised v1 tool list, guardrail descriptions, server instructions, review-profile schema fields, structured status output, request validation, ordered universe charting, ordered chartbook symbol handoff, and absence of score/rank fields without a live TradingView session.
 
@@ -410,6 +424,10 @@ Root docs and `docs/` explain how agents should run the repo, what the system is
 - Current-chart capture must preserve the active chart context and avoid navigating the chart to a different symbol.
 - Chartbook output is a local review/prep artifact only and must keep generated files under ignored artifact directories by default.
 - Setup review verdicts are chart-review evidence labels derived from existing chartbook facts and warnings; verdict counts may be summarized in index artifacts but must not rank symbols or recommend actions.
+- Review Session Artifact JSON is the durable source-of-truth contract for a
+  manual review pass; Markdown and HTML surfaces are reader views over JSON.
+- Review marks and thesis notes must remain human-authored and separate from
+  deterministic setup evidence labels.
 - Chartbook universe selection preserves configured order and metadata without scanner, ranking, recommendation, or execution language.
 - Structured chart facts must stay objective and extraction-derived; unavailable fields should be represented with warnings instead of inferred from screenshots or pixels.
 - Chart-analysis profiles are review modes over user-selected charts or configured universe selections; they may produce objective facts, levels, checklist fields, notes, and prompts, but not rankings, watchlist scoring, financial advice, broker calls, order actions, unattended alerts, or generated candidates.
