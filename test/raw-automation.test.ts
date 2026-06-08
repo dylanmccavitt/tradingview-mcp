@@ -11,6 +11,7 @@ import {
   runRawChartState,
   runRawClick,
   runRawDrawClearAll,
+  runRawDrawFibRetracement,
   runRawDrawFibLevels,
   runRawDrawList,
   runRawDrawProjection,
@@ -405,6 +406,23 @@ function installFakeWidget(chart: FakeChartApi): () => void {
 
   return () => {
     globalRecord.tvWidget = previous;
+  };
+}
+
+function installFakeActiveWatchedChart(chart: FakeChartApi): () => void {
+  const globalRecord = globalThis as typeof globalThis & {
+    TradingViewApi?: unknown;
+  };
+  const previous = globalRecord.TradingViewApi;
+
+  globalRecord.TradingViewApi = {
+    _activeChartWidgetWV: {
+      value: () => chart
+    }
+  };
+
+  return () => {
+    globalRecord.TradingViewApi = previous;
   };
 }
 
@@ -1144,6 +1162,32 @@ void test("raw chart state reads compact chart API fields without a live Trading
     assert.match(value.before.warnings.join(" "), /truncated to 50/i);
     assert.equal(fakeClient.calls[0]?.awaitPromise, true);
     assert.equal(fakeClient.calls[0]?.throwOnSideEffect, false);
+    assert.equal(fakeClient.closed, true);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw chart state resolves TradingView active watched chart values", async () => {
+  const restore = installFakeActiveWatchedChart(fakeChartApi());
+  const fakeClient = new EvaluatingRawPageClient();
+
+  try {
+    const result = await runRawChartState({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(fakeClient)
+    });
+
+    const value = result.value as {
+      before: {
+        symbol: string;
+        timeframe: string;
+      };
+    };
+
+    assert.equal(result.ok, true);
+    assert.equal(value.before.symbol, "NASDAQ:NVDA");
+    assert.equal(value.before.timeframe, "65");
     assert.equal(fakeClient.closed, true);
   } finally {
     restore();
@@ -1932,6 +1976,10 @@ void test("raw native drawing tools create, list, inspect, remove, and clear sha
       ...common,
       entityId: "shape-2"
     });
+    const rectangleProperties = await runRawDrawingProperties({
+      ...common,
+      entityId: "shape-3"
+    });
     const remove = await runRawDrawRemove({
       ...common,
       entityId: "shape-2"
@@ -1977,12 +2025,21 @@ void test("raw native drawing tools create, list, inspect, remove, and clear sha
       (properties.value as { drawing: { locked: boolean } }).drawing.locked,
       true
     );
-    assert.deepEqual(
-      (properties.value as { drawing: { style: unknown } }).drawing.style,
-      {
-        linecolor: "#00ff00"
-      }
-    );
+    const horizontalStyle = (properties.value as { drawing: { style: Record<string, unknown> } })
+      .drawing.style;
+    assert.equal(horizontalStyle.linecolor, "#00ff00");
+    assert.equal(horizontalStyle.linewidth, 1);
+    assert.equal(horizontalStyle["linetoolhorzline.linewidth"], 1);
+    assert.equal(horizontalStyle["linetoolhorzline.linestyle"], 2);
+    assert.equal(rectangleProperties.ok, true);
+    const rectangleStyle = (
+      rectangleProperties.value as { drawing: { style: Record<string, unknown> } }
+    ).drawing.style;
+    assert.equal(rectangleStyle.linewidth, 1);
+    assert.equal(rectangleStyle["linetoolrectangle.linewidth"], 1);
+    assert.equal(rectangleStyle["linetoolrectangle.linestyle"], 2);
+    assert.equal(rectangleStyle.transparency, 90);
+    assert.match(String(rectangleStyle.backgroundColor), /0\.08/);
     assert.equal(remove.ok, true);
     assert.equal((remove.value as { entityId: string }).entityId, "shape-2");
     assert.equal(clearAll.ok, true);
@@ -2035,6 +2092,14 @@ void test("raw drawing macros create Fib and projection drawings with metadata",
       direction: "up",
       multipliers: [1]
     });
+    const fibAnchorProperties = await runRawDrawingProperties({
+      ...common,
+      entityId: "shape-2"
+    });
+    const fibLevelProperties = await runRawDrawingProperties({
+      ...common,
+      entityId: "shape-3"
+    });
 
     assert.equal(fib.ok, true);
     assert.equal(fib.action, "draw-fib-levels");
@@ -2082,6 +2147,98 @@ void test("raw drawing macros create Fib and projection drawings with metadata",
       ).macro.levels.map((level) => level.price),
       [540, 500, 580]
     );
+    const fibAnchorStyle = (
+      fibAnchorProperties.value as { drawing: { style: Record<string, unknown> } }
+    ).drawing.style;
+    const fibLevelStyle = (
+      fibLevelProperties.value as { drawing: { style: Record<string, unknown> } }
+    ).drawing.style;
+    assert.equal(fibAnchorStyle.linewidth, 1);
+    assert.equal(fibAnchorStyle["linetooltrendline.linewidth"], 1);
+    assert.equal(fibAnchorStyle["linetooltrendline.linestyle"], 2);
+    assert.equal(fibLevelStyle.linewidth, 1);
+    assert.equal(fibLevelStyle["linetoolhorzline.linewidth"], 1);
+    assert.equal(fibLevelStyle["linetoolhorzline.linestyle"], 2);
+  } finally {
+    restore();
+  }
+});
+
+void test("raw native Fib retracement creates one TradingView fib_retracement object", async () => {
+  const restore = installFakeWidget(
+    fakeChartApi({
+      withMutators: true,
+      withDrawingApi: true
+    })
+  );
+
+  try {
+    const result = await runRawDrawFibRetracement({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient()),
+      low: {
+        time: 1_780_000_000,
+        price: 500
+      },
+      high: {
+        time: 1_780_086_400,
+        price: 540
+      },
+      ratios: [0, 0.5, 1],
+      lock: true
+    });
+    const properties = await runRawDrawingProperties({
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient()),
+      entityId: "shape-2"
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.action, "draw-fib-retracement");
+    assert.equal(
+      (result.value as { entityId: string }).entityId,
+      "shape-2"
+    );
+    assert.deepEqual(
+      (result.value as { drawing: { type: string; points: unknown[] } }).drawing,
+      {
+        id: "shape-2",
+        type: "fib_retracement",
+        points: [
+          {
+            time: 1_780_000_000,
+            price: 500
+          },
+          {
+            time: 1_780_086_400,
+            price: 540
+          }
+        ]
+      }
+    );
+    assert.deepEqual(
+      (
+        result.value as {
+          levels: { price: number; ratio: number }[];
+        }
+      ).levels.map((level) => [level.ratio, level.price]),
+      [
+        [0, 500],
+        [0.5, 520],
+        [1, 540]
+      ]
+    );
+    assert.match(
+      (result.value as { warnings: string[] }).warnings.join(" "),
+      /not predictions/i
+    );
+    assert.equal(properties.ok, true);
+    const fibStyle = (
+      properties.value as { drawing: { style: Record<string, unknown> } }
+    ).drawing.style;
+    assert.equal(fibStyle["linetoolfibretracement.trendline.linewidth"], 1);
+    assert.equal(fibStyle["linetoolfibretracement.levelsStyle.linewidth"], 1);
+    assert.equal(fibStyle["linetoolfibretracement.transparency"], 92);
   } finally {
     restore();
   }
@@ -2135,6 +2292,18 @@ void test("raw native drawing validation and missing API failures are explicit",
       checkHealth: () => Promise.resolve(healthyResult),
       pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
     });
+    const missingNativeFibApi = await runRawDrawFibRetracement({
+      low: {
+        time: 1_780_000_000,
+        price: 500
+      },
+      high: {
+        time: 1_780_086_400,
+        price: 540
+      },
+      checkHealth: () => Promise.resolve(healthyResult),
+      pageClientFactory: () => Promise.resolve(new EvaluatingRawPageClient())
+    });
 
     assert.equal(missingApi.ok, false);
     assert.match(missingApi.error ?? "", /did not expose native drawing identifiers/i);
@@ -2145,6 +2314,8 @@ void test("raw native drawing validation and missing API failures are explicit",
       missingClearAllApi.error ?? "",
       /did not expose native drawing identifiers/i
     );
+    assert.equal(missingNativeFibApi.ok, false);
+    assert.match(missingNativeFibApi.error ?? "", /createMultipointShape/i);
   } finally {
     restore();
   }

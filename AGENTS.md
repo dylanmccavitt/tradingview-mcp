@@ -121,7 +121,8 @@ to the active local TradingView chart target. The current raw slice registers
 `tradingview_raw_remove_entity`, plus `tradingview_draw_shape`,
 `tradingview_draw_list`, `tradingview_draw_properties`,
 `tradingview_draw_remove`, `tradingview_draw_clear_all`,
-`tradingview_draw_fib_levels`, and `tradingview_draw_projection`, plus
+`tradingview_draw_fib_retracement`, `tradingview_draw_fib_levels`, and
+`tradingview_draw_projection`, plus
 `tradingview_pine_open_editor`, `tradingview_pine_set_source`,
 `tradingview_pine_get_source`, `tradingview_pine_get_errors`,
 `tradingview_pine_get_console`, `tradingview_pine_compile`, and
@@ -131,7 +132,10 @@ may return truncation warnings. Compact chart data tools return bounded OHLCV
 summary, quote/current-bar, and visible study values as review context only,
 never scans, rankings, alerts, recommendations, or advice. Quant drawing macros
 must return review context only: created drawing ids, anchors, levels, and warnings,
-never predictions, recommendations, rankings, or advice. `tradingview_draw_clear_all` is
+never predictions, recommendations, rankings, or advice. Preset-aware drawing
+calls accept `drawingPreset` values `clean-thesis`, `minimal-levels`, and
+`risk-map`; `clean-thesis` is the default and keeps drawn lines at 1px with
+low-opacity shaded areas. `tradingview_draw_clear_all` is
 destructive and must require an explicit clear-all confirmation in its schema
 and caller intent. Workspace tools may list/focus local chart tabs, list/focus
 panes, set common pane layouts, list/switch saved layouts when TradingView

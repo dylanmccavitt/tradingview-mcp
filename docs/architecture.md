@@ -90,6 +90,7 @@ The current gated raw MCP tools are:
 - `tradingview_draw_properties`
 - `tradingview_draw_remove`
 - `tradingview_draw_clear_all`
+- `tradingview_draw_fib_retracement`
 - `tradingview_draw_fib_levels`
 - `tradingview_draw_projection`
 - `tradingview_pine_open_editor`
@@ -193,15 +194,21 @@ returns compact drawing ids, types, and names when exposed.
 lock, and selectability when exposed. `tradingview_draw_remove` removes one
 drawing by id. `tradingview_draw_clear_all` is explicitly destructive and
 requires `confirmClearAll` before removing every native drawing on the active
-chart. `tradingview_draw_fib_levels` and `tradingview_draw_projection` are
-MCP-only macro tools that create native drawing sets for Fib-style
-retracement/extension levels, measured moves, and range projections from
-explicit anchors or caller-selected extracted range facts. They return compact
-macro metadata with created drawing ids, anchors, levels, and warnings. Macro
-metadata can be copied into current-chart or chartbook artifact requests so the
-local JSON records which macro context was associated with the capture.
-Projected macro levels are mechanical chart-review context only and must not be
-presented as predictions, recommendations, rankings, or financial advice.
+chart. `tradingview_draw_fib_retracement` creates one native TradingView
+`fib_retracement` object from explicit low/high anchors when
+`createMultipointShape()` supports it. `tradingview_draw_fib_levels` and
+`tradingview_draw_projection` remain MCP-only macro tools that create native
+drawing sets for line-based Fib-style fallback levels, measured moves, and
+range projections from explicit anchors or caller-selected extracted range
+facts. They return compact metadata with created drawing ids, anchors, levels,
+and warnings. Macro metadata can be copied into current-chart or chartbook
+artifact requests so the local JSON records which macro context was associated
+with the capture. Projected macro levels are mechanical chart-review context
+only and must not be presented as predictions, recommendations, rankings, or
+financial advice. Preset-aware drawing calls accept `drawingPreset` values
+`clean-thesis`, `minimal-levels`, and `risk-map`; the default `clean-thesis`
+enforces 1px line widths and low-opacity shaded areas for support boxes and Fib
+backgrounds.
 
 The same gated MCP surface exposes Pine Editor automation for explicit local
 Pine iteration. `tradingview_pine_open_editor` opens or focuses the Pine Editor

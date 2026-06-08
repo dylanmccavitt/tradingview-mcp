@@ -251,12 +251,16 @@ not scan, rank, score, recommend, alert, or generate candidates. MCP-only raw
 data tools read bounded OHLCV summary stats, quote/current-bar snapshots, and
 compact visible study values when TradingView exposes them; those outputs are
 local chart-review context only, not scans, rankings, alerts, recommendations,
-or advice. MCP-only quant drawing macros can also create Fib-style
-retracement/extension levels and measured-move or range-projection review levels
-from explicit anchors or caller-selected extracted range facts when native
-drawing APIs are exposed. Macro output records created drawing ids, anchor
-metadata, levels used, and warnings; it is review context only, not a
-prediction, recommendation, ranking, or advice.
+or advice. MCP-only quant drawing tools can also create one native TradingView
+Fib Retracement object, line-based Fib-style retracement/extension fallback
+levels, and measured-move or range-projection review levels from explicit
+anchors or caller-selected extracted range facts when native drawing APIs are
+exposed. Drawing output records created drawing ids, anchor metadata, levels
+used, and warnings; it is review context only, not a prediction,
+recommendation, ranking, or advice.
+Preset-aware drawing tools accept `drawingPreset` values `clean-thesis`,
+`minimal-levels`, and `risk-map`; the default `clean-thesis` keeps every drawn
+line at 1px and uses low-opacity shaded areas for boxes and Fib backgrounds.
 
 Raw automation remains experimental local chart control. It must not operate on
 arbitrary browser pages, broker/order pages, TradingView account or security
@@ -342,6 +346,7 @@ browser controls. When the server process is started with
 - `tradingview_draw_properties`
 - `tradingview_draw_remove`
 - `tradingview_draw_clear_all`
+- `tradingview_draw_fib_retracement`
 - `tradingview_draw_fib_levels`
 - `tradingview_draw_projection`
 - `tradingview_pine_*`
@@ -359,7 +364,10 @@ no scanner/ranking, no advice, no unattended-candidate guardrails. Native
 drawing tools use TradingView chart/drawing APIs only when exposed and report
 clear unsupported-API failures otherwise. The macro tools create native
 drawings for mechanical chart-review levels and return metadata that can be
-recorded in current-chart or chartbook artifacts via `macroMetadata`.
+recorded in current-chart or chartbook artifacts via `macroMetadata`. Preset
+aware drawing calls accept `drawingPreset` values `clean-thesis`,
+`minimal-levels`, and `risk-map`; `clean-thesis` is the default and enforces
+1px lines with low-opacity shaded areas.
 `tradingview_draw_clear_all` requires an explicit `confirmClearAll: true`
 argument because it removes every native drawing on the active chart.
 Chart data tools are MCP-only in this slice. They return bounded OHLCV
