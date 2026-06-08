@@ -129,10 +129,12 @@ charting-only boundary.
 
 ### Experimental Raw Automation
 
-`src/tradingview/raw-automation.ts` provides the first raw automation slice. It
-uses `checkTradingViewHealth` to require a healthy active
-`tradingview.com/chart` target, opens the target WebSocket through the existing
-CDP session client, and dispatches bounded primitives only to that page.
+`src/tradingview/raw-automation.ts` is a compatibility export facade for the
+raw automation surface. Shared raw session wiring lives in
+`src/tradingview/raw/session.ts`: it uses `checkTradingViewHealth` to require a
+healthy active `tradingview.com/chart` target, opens the target WebSocket
+through the existing CDP session client, and dispatches bounded primitives only
+to that page.
 
 The current raw primitives are compact JavaScript evaluation, coordinate mouse
 click, keyboard keypress, bounded text insertion, visible element discovery by
@@ -211,10 +213,13 @@ enforces 1px line widths and low-opacity shaded areas for support boxes and Fib
 backgrounds.
 
 The same gated MCP surface exposes Pine Editor automation for explicit local
-Pine iteration. `tradingview_pine_open_editor` opens or focuses the Pine Editor
-panel. `tradingview_pine_set_source` sets bounded source but does not compile
-or save. `tradingview_pine_get_source` reads bounded source and reports
-truncation warnings for larger scripts. `tradingview_pine_get_errors` and
+Pine iteration. Pine command wrappers live in
+`src/tradingview/raw/pine-editor.ts`, while shared page evaluation and
+target-validation behavior stays in `src/tradingview/raw/session.ts`.
+`tradingview_pine_open_editor` opens or focuses the Pine Editor panel.
+`tradingview_pine_set_source` sets bounded source but does not compile or save.
+`tradingview_pine_get_source` reads bounded source and reports truncation
+warnings for larger scripts. `tradingview_pine_get_errors` and
 `tradingview_pine_get_console` return compact editor markers and console/output
 rows. `tradingview_pine_compile` and `tradingview_pine_save` are explicit
 separate calls. These tools use exposed local TradingView/Monaco editor
@@ -224,9 +229,9 @@ surfaces only and report unsupported editor/API paths clearly.
 `raw type-text`, `raw find-element`, `raw selector-click`,
 `raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
 matching input/selector tools plus direct chart state/control, compact data,
-workspace controls, bounded batch chart actions, replay controls, drawing, and
-Pine MCP tools under `tradingview_raw_*`, `tradingview_draw_*`, and
-`tradingview_pine_*` only when
+workspace controls, bounded batch chart actions, replay controls, and drawing
+tools. `src/mcp/raw-pine-tools.ts` owns Pine MCP tool schemas and registrations
+under `tradingview_pine_*`. All raw tools are registered only when
 `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 

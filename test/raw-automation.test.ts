@@ -53,6 +53,15 @@ import {
   runRawTypeText,
   type RawTradingViewPageClient
 } from "../src/tradingview/raw-automation.js";
+import {
+  runRawPineCompile as runRawPineCompileFromModule,
+  runRawPineGetConsole as runRawPineGetConsoleFromModule,
+  runRawPineGetErrors as runRawPineGetErrorsFromModule,
+  runRawPineGetSource as runRawPineGetSourceFromModule,
+  runRawPineOpenEditor as runRawPineOpenEditorFromModule,
+  runRawPineSave as runRawPineSaveFromModule,
+  runRawPineSetSource as runRawPineSetSourceFromModule
+} from "../src/tradingview/raw/pine-editor.js";
 import type { TradingViewHealthResult } from "../src/tradingview/health.js";
 import type { CdpTarget } from "../src/tradingview/targets.js";
 
@@ -80,6 +89,16 @@ const healthyResult: TradingViewHealthResult = {
   target: chartTarget,
   targetCount: 1
 };
+
+void test("raw automation facade re-exports focused Pine editor handlers", () => {
+  assert.equal(runRawPineOpenEditor, runRawPineOpenEditorFromModule);
+  assert.equal(runRawPineSetSource, runRawPineSetSourceFromModule);
+  assert.equal(runRawPineGetSource, runRawPineGetSourceFromModule);
+  assert.equal(runRawPineGetErrors, runRawPineGetErrorsFromModule);
+  assert.equal(runRawPineGetConsole, runRawPineGetConsoleFromModule);
+  assert.equal(runRawPineCompile, runRawPineCompileFromModule);
+  assert.equal(runRawPineSave, runRawPineSaveFromModule);
+});
 
 const runExpressionInThisContext = runInThisContext as unknown as (
   expression: string
