@@ -73,6 +73,10 @@ horizontal lines. It is accompanied by support/projection annotations:
 Screenshot artifact:
 `artifacts/tradingview-current-chart/googl-gap-base-fib-reclaim-final/current-chart.png`.
 
+Validation rerun on 2026-06-08 from this worktree after `npm install` restored
+local dependencies. `npm test`, `npm run lint`, `npm run typecheck`, and
+`git diff --check` passed on `feat/issue-60-native-fib-retracement`.
+
 ## Next
 
 Open a PR for issue #60, run independent review, address findings, then merge
@@ -109,6 +113,8 @@ and sync canonical `main`.
 - `npm run lint`
 - `npm run typecheck`
 - `git diff --check`
+- 2026-06-08 rerun: `npm test`, `npm run lint`, `npm run typecheck`, and
+  `git diff --check`
 - `npm run tv:health -- --port 9333`
 - Live native Fib draw/list/capture script through `dist/src/tradingview/raw-automation.js`
 - Live GOOGL chart redraw/list/capture on port `9333`
