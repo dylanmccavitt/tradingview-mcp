@@ -28,7 +28,7 @@ It creates deterministic chart objects for:
 - premarket and opening-range levels on intraday charts
 - anchored VWAP reset from a major gap or confirmed pivot
 
-The labels use objective abbreviations such as `PDH`, `PWH`, `20D-H`, `SW-H`, and `OR-H`. Horizontal level lines extend across the chart like reference levels, while confirmed swing lines remain anchored from their pivot bar. The same level values are also published through scale-only Pine plots with `trackprice=true` so TradingView can show price markers on the right price axis. The overlay must not add subjective pattern labels.
+The labels use objective abbreviations such as `PDH`, `PWH`, `20D-H`, `SW-H`, and `OR-H`. Horizontal level lines extend across the chart like reference levels and now render as 1 px solid horizontal lines, while confirmed swing lines remain anchored from their pivot bar. The default view uses short text-only labels without filled tag backgrounds. The same level values are also published through scale-only Pine plots with `trackprice=true` so TradingView can show price markers on the right price axis. The overlay must not add subjective pattern labels.
 
 ## Manual Install
 
@@ -45,7 +45,7 @@ This repo does not inject Pine into TradingView in v1. Installation is manual so
 
 ## Style Presets
 
-- `focus`: default quieter review mode. Hides most inline labels, keeps price markers on the right axis, and shows a compact top-right context table.
+- `focus`: default quieter review mode. Shows short text-only labels on visible levels, keeps 1 px solid horizontal levels and price markers on the right axis, and shows a compact top-right table for timeframe, daily 21/50 EMA trend context, reclaim level, and support level.
 - `clean`: minimal context. Keeps the anchored VWAP and a reduced set of higher-timeframe levels.
 - `levels`: deeper review mode. Shows levels, gap zones, and compression range boxes without debug event markers.
 - `full-debug`: shows every supported object class plus debug markers for gap and VWAP anchor events.
@@ -55,8 +55,8 @@ This repo does not inject Pine into TradingView in v1. Installation is manual so
 Use the same installed study across the current v1 chart capture timeframes:
 
 - Weekly `focus`: inspect major context only: prior month levels, 50D high/low levels, anchored VWAP, and the compact context table.
-- Daily `focus`: inspect breakout context only: prior week levels, 20D/50D high levels, anchored VWAP, and the active compression range box when present.
-- 65-minute `focus`: inspect timing context only: prior day levels, opening range levels, anchored VWAP, and the compact context table.
+- Daily `focus`: inspect uptrend pullback/reclaim context only: prior week levels, 20D/50D high levels, confirmed swing high/low, anchored VWAP, and the compact context table.
+- 65-minute `focus`: inspect timing context only: prior day levels, confirmed swing high/low, opening range levels, anchored VWAP, and the compact context table.
 - `levels`: inspect the deeper prior day/week/month, 20D/50D, gap-zone, compression, confirmed-swing, premarket, opening-range, and anchored VWAP context across weekly, daily, and 65-minute charts.
 
 The Pine source uses `timeframe.isweekly`, `timeframe.isdaily`, and a 65-minute intraday check to emphasize different object classes on those charts.
@@ -71,7 +71,9 @@ Before changing extraction assumptions or overlay source, a human should inspect
 
 - the study is visible as `TVMCP Objective Drawing Overlay`
 - weekly, daily, and 65-minute charts remain readable in the default `focus` preset
-- `focus` hides most inline labels while keeping price markers and the compact table usable
+- `focus` keeps short text-only line labels readable while preserving price markers and the compact table
+- horizontal level and swing lines render as restrained 1 px solid lines
+- the focus table shows objective trend, reclaim, and support context without trade-action language
 - `levels` and `full-debug` remain available for deeper review and extraction debugging
 - key level values appear on the right price axis, not only inside small chart tags
 - horizontal reference levels extend across the chart rather than starting only near the latest candle

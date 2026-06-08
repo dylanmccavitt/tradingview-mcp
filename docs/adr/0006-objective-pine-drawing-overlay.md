@@ -8,13 +8,18 @@ Accepted
 
 Track the first Pine drawing overlay as `pine/objective-drawing-overlay.pine` and require manual installation into TradingView Desktop with the visible study name `TVMCP Objective Drawing Overlay`.
 
-The overlay draws deterministic objects from chart OHLCV and TradingView time/session context only. It includes prior day/week/month highs and lows, 20D/50D high-low levels, confirmed swing highs/lows, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, anchored VWAP from a major gap or confirmed pivot, and a compact focus table. It exposes `focus`, `clean`, `levels`, and `full-debug` style presets and emphasizes weekly, daily, and 65-minute charts differently.
+The overlay draws deterministic objects from chart OHLCV and TradingView time/session context only. It includes prior day/week/month highs and lows, 20D/50D high-low levels, confirmed swing highs/lows, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, anchored VWAP from a major gap or confirmed pivot, and a compact focus table. Horizontal reference and swing levels use restrained 1 px solid lines. It exposes `focus`, `clean`, `levels`, and `full-debug` style presets and emphasizes weekly, daily, and 65-minute charts differently.
 
 `focus` is the default quieter preset. It reduces visible object classes by timeframe while keeping plotted objective price-scale values available for extraction:
 
 - Weekly: prior month levels, 50D high/low levels, and anchored VWAP.
-- Daily: prior week levels, 20D/50D high levels, anchored VWAP, and active compression.
-- 65-minute: prior day levels, opening-range levels, and anchored VWAP.
+- Daily: prior week levels, 20D/50D high levels, confirmed swing high/low, and anchored VWAP.
+- 65-minute: prior day levels, confirmed swing high/low, opening-range levels, and anchored VWAP.
+
+The `focus` preset keeps short text-only labels on visible lines and uses a
+compact table for objective timeframe, daily 21/50 EMA trend context, reclaim
+level, and support level. It must remain chart-review context only and must not
+use trade-action, scanner, ranking, alert, or recommendation language.
 
 ## Why
 

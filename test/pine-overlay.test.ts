@@ -84,6 +84,15 @@ void test("Pine overlay extends horizontal reference levels across the chart", (
   assert.match(overlayDocs, /Horizontal level lines extend across the chart/i);
 });
 
+void test("Pine overlay keeps horizontal levels visually quiet", () => {
+  assert.match(overlaySource, /horizontalLineWidth = 1/);
+  assert.match(overlaySource, /line\.set_width\(nextLine, horizontalLineWidth\)/);
+  assert.match(overlaySource, /style=line\.style_solid/);
+  assert.doesNotMatch(overlaySource, /style=line\.style_dashed/);
+  assert.match(overlaySource, /label\.style_none/);
+  assert.match(overlayDocs, /1 px solid horizontal lines/i);
+});
+
 void test("Pine overlay restrains unsupported intraday timeframes", () => {
   assert.match(overlaySource, /isSupportedReviewChart = isWeeklyChart or isDailyChart or is65MinuteChart/);
   assert.match(overlaySource, /isUnsupportedIntradayChart = isIntradayChart and not is65MinuteChart/);
@@ -94,7 +103,7 @@ void test("Pine overlay restrains unsupported intraday timeframes", () => {
 void test("Pine overlay focus preset reduces visible chart objects by timeframe", () => {
   assert.match(
     overlaySource,
-    /showLevelText = \(not isFocus and not isClean and not isUnsupportedIntradayChart\) or isFullDebug/
+    /showLevelText = \(isFocus and isSupportedReviewChart\) or \(not isFocus and not isClean and not isUnsupportedIntradayChart\) or isFullDebug/
   );
   assert.match(
     overlaySource,
@@ -118,9 +127,20 @@ void test("Pine overlay focus preset reduces visible chart objects by timeframe"
   );
   assert.match(
     overlaySource,
+    /showSwingLevels = isFullDebug or \(isFocus \? \(isDailyChart or is65MinuteChart\) : \(not isClean and isSupportedReviewChart\)\)/
+  );
+  assert.match(
+    overlaySource,
+    /showRangeBoxes = isFullDebug or \(isLevels and \(isDailyChart or is65MinuteChart\)\)/
+  );
+  assert.match(
+    overlaySource,
     /showOpeningRangeLevels = isFullDebug or \(isFocus \? is65MinuteChart : showIntradayLevels\)/
   );
   assert.match(overlaySource, /table\.new\(position\.top_right, 2, 4/);
+  assert.match(overlaySource, /"Trend"/);
+  assert.match(overlaySource, /"Reclaim"/);
+  assert.match(overlaySource, /"Support"/);
   assert.match(overlayDocs, /`focus`: default quieter review mode/i);
 });
 

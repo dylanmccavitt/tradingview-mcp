@@ -316,6 +316,8 @@ that visible study name by default.
 
 Use `levels` for deeper level/zone review, `clean` for a sparse view, and
 `full-debug` only when reviewing source events or debugging extraction. The
+default `focus` view uses restrained 1 px horizontal levels, short text-only
+labels, and a compact trend/reclaim/support table for manual review. The
 overlay is Pine-generated objective output from chart OHLCV and TradingView
 time/session context; it is not native editable TradingView drawing automation.
 
