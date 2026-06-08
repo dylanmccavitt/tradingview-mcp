@@ -26,7 +26,9 @@ Shared raw MCP endpoint/result/guardrail helpers live in:
 
 ## Next
 
-Run the full required check set, commit, push, and open the PR with `Closes #69`.
+PR #70 is open with `Closes #69`. Independent review found no code blockers
+and one stale-handoff blocker; this handoff has been updated to clear it.
+Next step is merge after the updated handoff commit is pushed.
 
 ## Risks
 
