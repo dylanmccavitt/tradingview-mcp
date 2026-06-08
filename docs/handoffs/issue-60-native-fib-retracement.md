@@ -77,10 +77,12 @@ Validation rerun on 2026-06-08 from this worktree after `npm install` restored
 local dependencies. `npm test`, `npm run lint`, `npm run typecheck`, and
 `git diff --check` passed on `feat/issue-60-native-fib-retracement`.
 
+PR opened: https://github.com/DylanMcCavitt/tradingview-mcp/pull/66
+
 ## Next
 
-Open a PR for issue #60, run independent review, address findings, then merge
-and sync canonical `main`.
+Run independent review for PR #66, address findings if any, then merge and sync
+canonical `main`.
 
 ## Risks
 
