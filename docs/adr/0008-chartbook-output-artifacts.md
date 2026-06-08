@@ -12,6 +12,12 @@ Each chartbook session contains an `index.md` file, a static `index.html` review
 
 The HTML dashboard is the primary human review surface. It presents session metadata, profile/preset context, per-symbol warnings, generated Codex Analysis briefs from extracted facts, setup review verdict counts, profile-specific review panels, screenshots, links to JSON/Markdown artifacts, and local manual-note fields. The Markdown and JSON artifacts remain the durable machine-readable and fallback text surfaces for Codex review and debugging.
 
+Review Session Artifact JSON is the versioned durable contract for a full
+manual review pass. It can be written additively beside existing chartbook
+outputs in a later issue; the current chartbook files stay compatible. Markdown
+and HTML dashboards are reader views over JSON artifacts, not the source of
+truth.
+
 `setup-review.json` records one chart-review verdict label for the symbol:
 `validated`, `invalidated`, `watch`, or `insufficient_data`. Reasons are
 derived from existing screenshot status, extracted levels JSON, structured chart
@@ -44,4 +50,6 @@ Per-symbol directories produce more files, but they are easy to inspect, diff lo
 - Default output must stay under ignored artifact roots.
 - Dashboard, notes, and index copy must describe chartbooks as review/prep artifacts only.
 - Setup review verdict labels must remain chart-review evidence, not trade instructions.
+- Review marks and thesis notes must remain human-authored and separate from
+  deterministic setup evidence labels.
 - Chartbook generation must not rank symbols, recommend trades, place orders, call broker APIs, or bypass TradingView access controls.

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "kind": "review_session_artifact",
+  "session": {
+    "id": "manual-breakout-20260608",
+    "name": "Manual breakout review 2026-06-08",
+    "createdAt": "2026-06-08T13:45:00.000Z",
+    "sourceType": "chartbook",
+    "sourceArtifacts": [
+      {
+        "type": "chartbook_index",
+        "path": "artifacts/tradingview-chartbooks/manual-breakout-20260608/index.md",
+        "format": "markdown",
+        "description": "Reader summary generated from chartbook output."
+      },
+      {
+        "type": "chartbook_dashboard_view",
+        "path": "artifacts/tradingview-chartbooks/manual-breakout-20260608/index.html",
+        "format": "html",
+        "description": "Reader dashboard view over local JSON artifacts."
+      },
+      {
+        "type": "setup_review_index",
+        "path": "artifacts/tradingview-chartbooks/manual-breakout-20260608/setup-review-index.json",
+        "format": "json",
+        "description": "Session setup evidence label index."
+      }
+    ],
+    "profileContext": {
+      "profile": "breakout",
+      "preset": "focus",
+      "selectedBy": "user"
+    },
+    "warnings": [
+      "One intraday objective evidence artifact had extraction warnings."
+    ]
+  },
+  "symbols": [
+    {
+      "symbol": "NASDAQ:NVDA",
+      "alias": "NVDA",
+      "name": "NVIDIA",
+      "chartCaptures": [
+        {
+          "id": "nvda-daily-capture",
+          "timeframe": "daily",
+          "label": "Daily Setup",
+          "capturedAt": "2026-06-08T13:45:12.000Z",
+          "screenshot": {
+            "type": "current_chart_capture",
+            "path": "NASDAQ-NVDA/NASDAQ-NVDA-daily.png",
+            "format": "png"
+          },
+          "warnings": []
+        }
+      ],
+      "objectiveEvidence": [
+        {
+          "id": "nvda-daily-levels",
+          "timeframe": "daily",
+          "artifact": {
+            "type": "levels_json",
+            "path": "NASDAQ-NVDA/NASDAQ-NVDA-daily-levels.json",
+            "format": "json"
+          },
+          "studyName": "TVMCP Objective Drawing Overlay",
+          "factsProfile": "breakout",
+          "warnings": []
+        }
+      ],
+      "setupEvidenceLabels": [
+        {
+          "id": "nvda-setup-review",
+          "label": "watch",
+          "deterministic": true,
+          "sourceArtifact": {
+            "type": "setup_review",
+            "path": "NASDAQ-NVDA/setup-review.json",
+            "format": "json"
+          },
+          "reasons": [
+            "Daily breakout reference levels were extracted.",
+            "Manual review should inspect intraday timing context."
+          ],
+          "warnings": []
+        }
+      ],
+      "drawingMetadataArtifacts": [
+        {
+          "id": "nvda-fib-projection",
+          "artifact": {
+            "type": "drawing_metadata",
+            "path": "NASDAQ-NVDA/drawing-metadata/fib-projection.json",
+            "format": "json"
+          },
+          "sourceTool": "tradingview_draw_projection",
+          "drawingIds": [
+            "shape-9"
+          ],
+          "warnings": [
+            "Drawing metadata records review context only."
+          ]
+        }
+      ],
+      "reviewMarks": [
+        {
+          "id": "nvda-manual-mark-1",
+          "createdAt": "2026-06-08T13:52:00.000Z",
+          "author": "user",
+          "humanAuthored": true,
+          "mark": "needs_follow_up",
+          "body": "Recheck daily level reaction after the opening range forms.",
+          "linkedArtifacts": [
+            {
+              "type": "levels_json",
+              "path": "NASDAQ-NVDA/NASDAQ-NVDA-daily-levels.json",
+              "format": "json"
+            }
+          ]
+        }
+      ],
+      "thesisNotes": [
+        {
+          "id": "nvda-thesis-note-1",
+          "createdAt": "2026-06-08T13:53:00.000Z",
+          "author": "user",
+          "humanAuthored": true,
+          "body": "Daily context is constructive, but the session note depends on human inspection of the prepared chart evidence.",
+          "linkedArtifacts": [
+            {
+              "type": "setup_review",
+              "path": "NASDAQ-NVDA/setup-review.json",
+              "format": "json"
+            }
+          ]
+        }
+      ],
+      "warnings": []
+    }
+  ]
+}
