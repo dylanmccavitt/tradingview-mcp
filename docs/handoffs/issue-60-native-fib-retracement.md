@@ -79,10 +79,14 @@ local dependencies. `npm test`, `npm run lint`, `npm run typecheck`, and
 
 PR opened: https://github.com/DylanMcCavitt/tradingview-mcp/pull/66
 
+Independent review on 2026-06-08 tightened the native Fib review-only warning
+so the tool output explicitly says native Fib levels are not predictions,
+recommendations, or financial advice. `npm test`, `npm run lint`,
+`npm run typecheck`, and `git diff --check` passed after the change.
+
 ## Next
 
-Run independent review for PR #66, address findings if any, then merge and sync
-canonical `main`.
+Merge PR #66 after final GitHub review, then sync canonical `main`.
 
 ## Risks
 
@@ -117,6 +121,8 @@ canonical `main`.
 - `git diff --check`
 - 2026-06-08 rerun: `npm test`, `npm run lint`, `npm run typecheck`, and
   `git diff --check`
+- 2026-06-08 independent-review rerun: `npm test`, `npm run lint`,
+  `npm run typecheck`, and `git diff --check`
 - `npm run tv:health -- --port 9333`
 - Live native Fib draw/list/capture script through `dist/src/tradingview/raw-automation.js`
 - Live GOOGL chart redraw/list/capture on port `9333`

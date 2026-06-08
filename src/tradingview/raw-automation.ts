@@ -73,7 +73,7 @@ export const DEFAULT_RAW_PINE_SAVE_SETTLE_MS = 800;
 export const RAW_PINE_ACTION_SETTLE_MS_LIMIT = 10_000;
 
 const RAW_NATIVE_FIB_REVIEW_CONTEXT_WARNING =
-  "Native Fib Retracement output is mechanical chart-review context only; it is not a prediction, recommendation, or financial advice.";
+  "Native Fib Retracement output is mechanical chart-review context only; native Fib levels are not predictions, recommendations, or financial advice.";
 
 const RAW_SELECTOR_CLICK_FORBIDDEN_PATTERNS = [
   /\baccount\b/i,
