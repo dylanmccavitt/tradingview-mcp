@@ -19,6 +19,83 @@ levels, setup checklist fields, chartbook notes, and user-review prompts. It
 must not include rankings, watchlist scoring, financial advice, order actions,
 broker calls, unattended alerts, or generated candidates.
 
+## Language
+
+**Automated Charting**:
+The repo prepares TradingView charts, chart context, captures, and local review
+artifacts through deterministic local workflows.
+_Avoid_: Trading bot, scanner, signal engine
+
+**Manual Setup Review**:
+The user's discretionary inspection of the prepared chart evidence after
+automated charting has produced the context.
+_Avoid_: Automated trading decision, recommendation, advice
+
+**Review Session**:
+A durable local evidence packet for one manual review pass over one or more
+symbols. Each symbol in the session can have chart captures, extracted
+objective evidence, setup evidence labels, drawing metadata, warnings, and
+optional review notes.
+_Avoid_: Trade journal, P&L tracker, recommendation engine, broker workflow
+
+**Review Session Artifact**:
+The machine-readable JSON source of truth for a review session. Markdown, HTML,
+and other reader surfaces are views over this artifact, not the durable
+contract.
+_Avoid_: HTML as source of truth, Markdown-only session record
+
+**Workflow Outcome**:
+A user-facing result such as creating charts, building a chartbook, capturing
+current-chart evidence, drawing review context, iterating a Pine overlay, or
+running replay practice.
+_Avoid_: Generic tool bucket, raw feature pile
+
+**TradingView Control Surface**:
+A lower-level local TradingView interaction primitive or API wrapper that
+supports workflow outcomes but is not the product identity.
+_Avoid_: Product surface, strategy engine
+
+**Quant Scan Handoff**:
+An external input contract from Quant Scan containing ordered candidates,
+metadata, and source artifact links for chart preparation and manual review.
+_Avoid_: Scanner inside this repo, candidate generation
+
+**Setup Evidence Label**:
+A deterministic label from extracted chartbook evidence, currently represented
+in JSON as `verdict`, that summarizes evidence state without ranking or advice.
+_Avoid_: Trade verdict, buy signal, recommendation
+
+**Review Mark**:
+The user's manual mark or note after inspecting prepared chart evidence in a
+review session.
+_Avoid_: Machine-generated recommendation, broker action, automated signal
+
+**Thesis Note**:
+Human-authored interpretation or rationale recorded during a review session.
+It is distinct from objective evidence and must not be presented as generated
+advice.
+_Avoid_: Machine recommendation, automated signal, trade instruction
+
+**Objective Pine Overlay**:
+A manually installed TradingView Pine study whose deterministic output provides
+repeatable chart evidence for extraction and chartbook artifacts.
+_Avoid_: Editable annotation layer, generated scanner, broker signal
+
+**Native Drawing Tool**:
+A raw-gated tool for creating or inspecting editable TradingView chart
+annotations from explicit user or workflow inputs.
+_Avoid_: Replacement for deterministic Pine evidence, scanner, recommendation
+
+**Native Chart Annotation**:
+An editable drawing or object in TradingView chart state that helps the user
+inspect a setup during manual review.
+_Avoid_: Durable local artifact, persisted TradingView state
+
+**Drawing Metadata Artifact**:
+A durable local record of drawing context such as ids, anchors, levels, ratios,
+source macro, and warnings.
+_Avoid_: Guarantee that TradingView can later recreate the exact visual state
+
 ## Users
 
 The primary user is a local operator using Codex and TradingView Desktop on their own machine. The repo should optimize for inspectable local workflows, repeatable setup, and clear guardrails.
