@@ -227,11 +227,23 @@ surfaces only and report unsupported editor/API paths clearly.
 
 `src/cli.ts` exposes these as `raw evaluate`, `raw click`, `raw keypress`,
 `raw type-text`, `raw find-element`, `raw selector-click`,
-`raw selector-hover`, and `raw scroll`; `src/mcp/tradingview-tools.ts` exposes
-matching input/selector tools plus direct chart state/control, compact data,
-workspace controls, bounded batch chart actions, replay controls, and drawing
-tools. `src/mcp/raw-pine-tools.ts` owns Pine MCP tool schemas and registrations
-under `tradingview_pine_*`. All raw tools are registered only when
+`raw selector-hover`, and `raw scroll`. `src/mcp/tradingview-tools.ts` owns the
+default high-level tool registration and the raw env gate, then delegates gated
+raw MCP schemas and registrations to focused family modules:
+
+- `src/mcp/raw-input-tools.ts` for evaluate, click, keypress, type text,
+  element lookup, selector click/hover, and scroll tools
+- `src/mcp/raw-chart-tools.ts` for chart state/control and compact chart data
+  tools
+- `src/mcp/raw-workspace-tools.ts` for tab, pane, layout, and bounded batch
+  chart tools
+- `src/mcp/raw-replay-tools.ts` for explicit chart-practice replay controls
+- `src/mcp/raw-drawing-tools.ts` for native drawing and drawing macro tools
+- `src/mcp/raw-pine-tools.ts` for Pine Editor tools
+- `src/mcp/raw-common.ts` for shared raw endpoint, result, and guardrail helper
+  code used by family modules
+
+All raw tools are registered only when
 `TRADINGVIEW_MCP_ENABLE_RAW_AUTOMATION=1` is present in the server environment.
 The default high-level MCP surface remains unchanged when the gate is absent.
 
