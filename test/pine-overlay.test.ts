@@ -5,9 +5,20 @@ import test from "node:test";
 
 const overlayPath = resolve(process.cwd(), "pine/objective-drawing-overlay.pine");
 const docsPath = resolve(process.cwd(), "docs/pine/objective-drawing-overlay.md");
+const intradayOverlayPath = resolve(
+  process.cwd(),
+  "pine/intraday-9ema-chop-review.pine"
+);
+const intradayDocsPath = resolve(
+  process.cwd(),
+  "docs/pine/intraday-9ema-chop-review.md"
+);
 const overlaySource = readFileSync(overlayPath, "utf8");
 const overlayDocs = readFileSync(docsPath, "utf8");
+const intradayOverlaySource = readFileSync(intradayOverlayPath, "utf8");
+const intradayOverlayDocs = readFileSync(intradayDocsPath, "utf8");
 const requiredStudyName = "TVMCP Objective Drawing Overlay";
+const requiredIntradayStudyName = "TVMCP Intraday 9 EMA Chop Review";
 
 void test("Pine overlay declares the required visible study name and presets", () => {
   assert.match(
@@ -152,4 +163,114 @@ void test("manual install docs pin the visual inspection boundary", () => {
   assert.match(overlayDocs, /weekly, daily, and 65-minute/i);
   assert.match(overlayDocs, /Static repo tests only verify/i);
   assert.match(overlayDocs, /Do not mark live visual validation complete/i);
+});
+
+void test("intraday 9 EMA overlay declares the required visible study name", () => {
+  assert.match(
+    intradayOverlaySource,
+    /indicator\("TVMCP Intraday 9 EMA Chop Review"/
+  );
+  assert.match(
+    intradayOverlaySource,
+    /shorttitle="9EMA Rev"/
+  );
+  assert.match(intradayOverlayDocs, new RegExp(requiredIntradayStudyName));
+});
+
+void test("intraday 9 EMA overlay is scoped to SPY and QQQ 5m and 15m charts", () => {
+  assert.match(
+    intradayOverlaySource,
+    /isTargetSymbol = syminfo\.ticker == "SPY" or syminfo\.ticker == "QQQ"/
+  );
+  assert.match(
+    intradayOverlaySource,
+    /timeframe\.isminutes and \(timeframe\.multiplier == 5 or timeframe\.multiplier == 15\)/
+  );
+  assert.match(intradayOverlaySource, /table\.new\(position\.top_right, 2, 4/);
+  assert.match(intradayOverlaySource, /"SPY\/QQQ only"/);
+  assert.match(intradayOverlaySource, /"5m\/15m only"/);
+  assert.match(intradayOverlayDocs, /SPY 5-minute/);
+  assert.match(intradayOverlayDocs, /QQQ 15-minute/);
+});
+
+void test("intraday 9 EMA overlay plots only the 9 EMA", () => {
+  assert.match(intradayOverlaySource, /ema9 = ta\.ema\(close, 9\)/);
+  assert.equal(
+    intradayOverlaySource.match(/\bta\.ema\(/g)?.length,
+    1,
+    "The intraday timing overlay should calculate one EMA."
+  );
+  assert.equal(
+    intradayOverlaySource.match(/\bplot\(/g)?.length,
+    1,
+    "The intraday timing overlay should have one plotted line."
+  );
+  assert.doesNotMatch(intradayOverlaySource, /ta\.ema\([^)]*,\s*(21|50)\)/);
+  assert.doesNotMatch(intradayOverlaySource, /\bEMA\s*(21|50)\b/i);
+});
+
+void test("intraday 9 EMA overlay uses objective chop fragments and light shading", () => {
+  const requiredFragments = [
+    "ta.dmi(adxLength, adxSmoothing)",
+    "rangeEfficiency",
+    "ta.highest(high, compressionLookback)",
+    "ta.lowest(low, compressionLookback)",
+    "ta.cross(close, ema9)",
+    "lowAdx",
+    "lowRangeEfficiency",
+    "rangeCompression",
+    "repeatedEmaCrosses",
+    "chopConditionCount",
+    "bgcolor(isChop ? color.new(color.yellow, 92) : na"
+  ];
+
+  for (const fragment of requiredFragments) {
+    assert.ok(
+      intradayOverlaySource.includes(fragment),
+      `Expected intraday Pine source to contain ${fragment}`
+    );
+  }
+});
+
+void test("intraday 9 EMA overlay marks closed-bar review points only outside chop", () => {
+  assert.match(intradayOverlaySource, /isClosedBar = barstate\.isconfirmed/);
+  assert.match(
+    intradayOverlaySource,
+    /canMarkReviewPoint = isSupportedReviewChart and isClosedBar and not isChop/
+  );
+  assert.match(intradayOverlaySource, /ta\.crossover\(close, ema9\)/);
+  assert.match(intradayOverlaySource, /ta\.crossunder\(close, ema9\)/);
+  assert.match(intradayOverlaySource, /text="Bounce"/);
+  assert.match(intradayOverlaySource, /text="Reject"/);
+  assert.match(intradayOverlaySource, /text="Reclaim"/);
+  assert.match(intradayOverlaySource, /text="Loss"/);
+});
+
+void test("intraday 9 EMA overlay avoids automation, scanner, and trade-action language", () => {
+  const forbidden = [
+    /alertcondition/i,
+    /\balert\b/i,
+    /\bbuy\b/i,
+    /\bsell\b/i,
+    /\bentry\b/i,
+    /recommend/i,
+    /ranking/i,
+    /scanner/i,
+    /broker/i,
+    /\border\b/i
+  ];
+
+  for (const pattern of forbidden) {
+    assert.doesNotMatch(intradayOverlaySource, pattern);
+  }
+});
+
+void test("intraday 9 EMA docs pin manual install and visual validation boundaries", () => {
+  assert.match(intradayOverlayDocs, new RegExp(requiredIntradayStudyName));
+  assert.match(intradayOverlayDocs, /Manual Install/);
+  assert.match(intradayOverlayDocs, /Visual Inspection Boundary/);
+  assert.match(intradayOverlayDocs, /separate from `TVMCP Objective Drawing Overlay`/);
+  assert.match(intradayOverlayDocs, /not part\s+of the chartbook drawing-extraction contract/i);
+  assert.match(intradayOverlayDocs, /Static repo tests verify/i);
+  assert.match(intradayOverlayDocs, /Do not mark\s+live visual validation complete/i);
 });

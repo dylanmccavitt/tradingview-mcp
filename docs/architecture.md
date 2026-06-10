@@ -12,6 +12,8 @@ The current repo is a local TypeScript/Node MCP server for high-level TradingVie
 - a direct chart-universe CLI/MCP runner for smoke charting selected local universe symbols
 - a local universe config parser and CLI selection workflow
 - a manually installed objective Pine drawing overlay source for deterministic chart objects
+- a manually installed intraday 9 EMA Pine review overlay for SPY/QQQ 5-minute
+  and 15-minute timing review
 - a compact Pine drawing extraction path for the visible objective overlay study
 - a structured chart-facts layer for objective breakout, squeeze, and momentum review fields
 - a current-chart capture workflow that writes a screenshot plus compact drawing JSON for the visible chart
@@ -277,6 +279,23 @@ order and reports per-symbol chart results without scoring or ranking.
 The overlay is self-contained from chart OHLCV and TradingView time/session context. It creates line, label, box, table, plot, and plotshape output for prior day/week/month levels, 20D/50D high-low levels, confirmed swing highs/lows, gap zones, ATR compression range boxes, intraday premarket/opening-range levels, and anchored VWAP from a major gap or confirmed pivot. It exposes `focus`, `clean`, `levels`, and `full-debug` style presets and uses timeframe checks to emphasize weekly, daily, and 65-minute review contexts. `focus` is the default quieter preset: weekly charts show major context, daily charts show breakout context, and 65-minute charts show timing context while preserving price-scale plot output for extraction.
 
 The repo does not inject Pine into TradingView. Manual install and visual inspection instructions live in `docs/pine/objective-drawing-overlay.md`.
+
+### Intraday 9 EMA Chop Review Overlay
+
+`pine/intraday-9ema-chop-review.pine` is a standalone manually installed Pine
+source for SPY and QQQ 5-minute and 15-minute chart review. Its required
+visible TradingView study name is `TVMCP Intraday 9 EMA Chop Review`.
+
+The overlay is self-contained from the visible chart's OHLCV and TradingView
+timeframe context. It plots only the 9 EMA, shows a compact table for
+symbol/timeframe support plus chop and 9 EMA slope state, lightly shades
+objective chop areas, and marks closed-bar 9 EMA bounce, rejection, reclaim, or
+loss review points only when the chop filter is inactive. It is not part of the
+objective drawing-extraction contract and must keep marker language manual,
+not instructional.
+
+Manual install and visual inspection instructions live in
+`docs/pine/intraday-9ema-chop-review.md`.
 
 ### Pine Drawing Extraction
 

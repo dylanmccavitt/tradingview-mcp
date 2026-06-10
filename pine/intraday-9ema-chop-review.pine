@@ -1,0 +1,75 @@
+//@version=5
+indicator("TVMCP Intraday 9 EMA Chop Review", shorttitle="9EMA Rev", overlay=true, max_labels_count=80)
+
+// Required visible study name for manual install:
+// TVMCP Intraday 9 EMA Chop Review
+
+adxLength = input.int(14, "ADX length", minval=5, maxval=50)
+adxSmoothing = input.int(14, "ADX smoothing", minval=5, maxval=50)
+adxChopThreshold = input.float(18.0, "Low ADX threshold", minval=5.0, maxval=40.0, step=0.5)
+rangeEfficiencyLookback = input.int(12, "Range efficiency lookback", minval=5, maxval=50)
+rangeEfficiencyThreshold = input.float(0.32, "Low range efficiency threshold", minval=0.05, maxval=0.90, step=0.01)
+compressionLookback = input.int(12, "Range compression lookback", minval=5, maxval=50)
+rangeCompressionAtrMultiple = input.float(2.4, "Range compression ATR multiple", minval=0.5, maxval=8.0, step=0.1)
+emaCrossLookback = input.int(12, "9 EMA cross lookback", minval=5, maxval=50)
+minEmaCrosses = input.int(4, "Repeated 9 EMA crosses", minval=2, maxval=12)
+requiredChopConditions = input.int(2, "Required chop conditions", minval=1, maxval=4)
+slopeLookback = input.int(4, "9 EMA slope lookback", minval=1, maxval=20)
+slopeAtrRatio = input.float(0.03, "Flat 9 EMA slope ATR ratio", minval=0.005, maxval=0.20, step=0.005)
+
+isTargetSymbol = syminfo.ticker == "SPY" or syminfo.ticker == "QQQ"
+isTargetTimeframe = timeframe.isminutes and (timeframe.multiplier == 5 or timeframe.multiplier == 15)
+isSupportedReviewChart = isTargetSymbol and isTargetTimeframe
+
+ema9 = ta.ema(close, 9)
+atr14 = ta.atr(14)
+[plusDi, minusDi, adxValue] = ta.dmi(adxLength, adxSmoothing)
+
+rangeDistance = math.abs(close - close[rangeEfficiencyLookback])
+rangeTotal = ta.sma(high - low, rangeEfficiencyLookback) * rangeEfficiencyLookback
+rangeEfficiency = rangeTotal > 0 ? rangeDistance / rangeTotal : na
+
+recentRange = ta.highest(high, compressionLookback) - ta.lowest(low, compressionLookback)
+emaCrossEvent = ta.cross(close, ema9) ? 1.0 : 0.0
+emaCrossCount = ta.sma(emaCrossEvent, emaCrossLookback) * emaCrossLookback
+
+lowAdx = not na(adxValue) and adxValue <= adxChopThreshold
+lowRangeEfficiency = not na(rangeEfficiency) and rangeEfficiency <= rangeEfficiencyThreshold
+rangeCompression = not na(atr14) and recentRange <= atr14 * rangeCompressionAtrMultiple
+repeatedEmaCrosses = not na(emaCrossCount) and emaCrossCount >= minEmaCrosses
+
+chopConditionCount = (lowAdx ? 1 : 0) + (lowRangeEfficiency ? 1 : 0) + (rangeCompression ? 1 : 0) + (repeatedEmaCrosses ? 1 : 0)
+isChop = isSupportedReviewChart and chopConditionCount >= requiredChopConditions
+
+emaSlope = ema9 - ema9[slopeLookback]
+isSlopeFlat = not na(atr14) and math.abs(emaSlope) <= atr14 * slopeAtrRatio
+emaSlopeState = isSlopeFlat ? "Flat" : emaSlope > 0 ? "Rising" : "Falling"
+emaLineColor = isSlopeFlat ? color.new(color.silver, 0) : emaSlope > 0 ? color.new(color.teal, 0) : color.new(color.orange, 0)
+
+plot(isSupportedReviewChart ? ema9 : na, title="9 EMA", color=emaLineColor, linewidth=2)
+bgcolor(isChop ? color.new(color.yellow, 92) : na, title="Chop review background")
+
+isClosedBar = barstate.isconfirmed
+canMarkReviewPoint = isSupportedReviewChart and isClosedBar and not isChop
+reclaimReview = canMarkReviewPoint and ta.crossover(close, ema9)
+lossReview = canMarkReviewPoint and ta.crossunder(close, ema9)
+bounceReview = canMarkReviewPoint and not reclaimReview and low <= ema9 and close > ema9 and close[1] > ema9[1] and close >= open
+rejectionReview = canMarkReviewPoint and not lossReview and high >= ema9 and close < ema9 and close[1] < ema9[1] and close <= open
+
+plotshape(bounceReview, title="Closed-bar 9 EMA bounce review", style=shape.triangleup, location=location.belowbar, color=color.new(color.teal, 0), size=size.tiny, text="Bounce", textcolor=color.white)
+plotshape(rejectionReview, title="Closed-bar 9 EMA rejection review", style=shape.triangledown, location=location.abovebar, color=color.new(color.orange, 0), size=size.tiny, text="Reject", textcolor=color.white)
+plotshape(reclaimReview, title="Closed-bar 9 EMA reclaim review", style=shape.circle, location=location.belowbar, color=color.new(color.blue, 0), size=size.tiny, text="Reclaim", textcolor=color.white)
+plotshape(lossReview, title="Closed-bar 9 EMA loss review", style=shape.circle, location=location.abovebar, color=color.new(color.gray, 0), size=size.tiny, text="Loss", textcolor=color.white)
+
+var table reviewTable = na
+if barstate.islast
+    if na(reviewTable)
+        reviewTable := table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 88), frame_color=color.new(color.gray, 70), frame_width=1)
+    table.cell(reviewTable, 0, 0, "Symbol", text_color=color.white, text_size=size.tiny)
+    table.cell(reviewTable, 1, 0, isTargetSymbol ? syminfo.ticker : "SPY/QQQ only", text_color=isTargetSymbol ? color.white : color.orange, text_size=size.tiny)
+    table.cell(reviewTable, 0, 1, "TF", text_color=color.silver, text_size=size.tiny)
+    table.cell(reviewTable, 1, 1, isTargetTimeframe ? str.format("{0}m", timeframe.multiplier) : "5m/15m only", text_color=isTargetTimeframe ? color.white : color.orange, text_size=size.tiny)
+    table.cell(reviewTable, 0, 2, "Chop", text_color=color.silver, text_size=size.tiny)
+    table.cell(reviewTable, 1, 2, isSupportedReviewChart ? (isChop ? str.format("Active {0}/4", chopConditionCount) : str.format("Inactive {0}/4", chopConditionCount)) : "Unsupported", text_color=isChop ? color.yellow : color.silver, text_size=size.tiny)
+    table.cell(reviewTable, 0, 3, "9 EMA", text_color=color.silver, text_size=size.tiny)
+    table.cell(reviewTable, 1, 3, isSupportedReviewChart ? emaSlopeState : "n/a", text_color=emaLineColor, text_size=size.tiny)
